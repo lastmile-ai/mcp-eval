@@ -1,5 +1,5 @@
-from mcpeval import task
-from mcpeval.assertions import (
+from mcp_eval import task
+from mcp_eval.assertions import (
     contains,
     tool_was_called,
     objective_succeeded,

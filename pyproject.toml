@@ -38,12 +38,9 @@ jaeger = [
     "opentelemetry-exporter-jaeger>=1.21.0",
 ]
 
-# TODO: saqadri - fix the paths
 [project.scripts]
-mcp-eval = "mcp_eval.runner.__main__:app"
-mcp_eval = "mcp_eval.runner.__main__:app"
-mcpeval = "mcp_eval.runner.__main__:app"
-gen-mcp-evals = "mcp_eval.gen_tests.__main__:app"
+mcp-eval = "mcp_eval.cli:app"
+mcpeval = "mcp_eval.cli:app"
 
 
 [build-system]

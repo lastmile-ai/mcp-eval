@@ -150,7 +150,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
                 finally:
                     session.cleanup()
             
-            if semaphore:
+            if semaphore is not None:
                 async with semaphore:
                     return await _eval()
             else:

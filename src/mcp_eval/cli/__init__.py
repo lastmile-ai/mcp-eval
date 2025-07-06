@@ -15,8 +15,12 @@ app.add_typer(runner_app, name="run", help="Run tests")
 @app.command()
 def version():
     """Show version information."""
-    from . import __version__
-    console.print(f"MCP-Eval {__version__}")
+    try:
+        import importlib.metadata
+        version = importlib.metadata.version("mcp-eval")
+    except importlib.metadata.PackageNotFoundError:
+        version = "unknown (development)"
+    console.print(f"MCP-Eval {version}")
 
 @app.command()
 def init(
@@ -102,12 +106,12 @@ reporting:
     
     # Example test file
     test_content = """
-import mcpeval
-from mcpeval import task, setup, ToolWasCalled, ResponseContains
+import mcp_eval
+from mcp_eval import task, setup, ToolWasCalled, ResponseContains
 
 @setup
 def configure_tests():
-    mcpeval.use_server("my_server")
+    mcp_eval.use_server("my_server")
 
 @task("Basic functionality test")
 async def test_basic_functionality(agent):
@@ -134,7 +138,7 @@ def _create_advanced_template(project_path: Path):
     # Example dataset file
     dataset_content = """
 import asyncio
-from mcpeval import Case, Dataset, ToolWasCalled, ResponseContains, LLMJudge, test_session
+from mcp_eval import Case, Dataset, ToolWasCalled, ResponseContains, LLMJudge, test_session
 from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
 
 # Define test cases
