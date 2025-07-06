@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Optional, Callable, Union
 from functools import wraps
 from dataclasses import dataclass, field
 
-from .session import TestSession, TestAgent
-from .config import get_current_config
+from mcp_eval.session import TestSession, TestAgent
+from mcp_eval.config import get_current_config
 
 
 @dataclass
@@ -52,7 +52,11 @@ def parametrize(param_name: str, values: List[Any]):
 
 
 def task(description: str = "", server: str = None):
-    """Mark a function as an MCP evaluation task using unified session."""
+    """Mark a function as an MCP evaluation task.
+    
+    The decorated function will receive (agent: TestAgent, session: TestSession)
+    as arguments, making all dependencies explicit.
+    """
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -79,9 +83,14 @@ def task(description: str = "", server: str = None):
                 start_time = asyncio.get_event_loop().time()
                 
                 async with session as test_agent:
-                    # Call the test function with the test agent
-                    if 'agent' in inspect.signature(func).parameters:
+                    # Call the test function with explicit arguments
+                    sig = inspect.signature(func)
+                    if 'session' in sig.parameters and 'agent' in sig.parameters:
+                        await func(test_agent, session, **kwargs)
+                    elif 'agent' in sig.parameters:
                         await func(test_agent, **kwargs)
+                    elif 'session' in sig.parameters:
+                        await func(session, **kwargs)
                     else:
                         await func(**kwargs)
                 

@@ -34,6 +34,10 @@ dev = [
     "pytest-cov>=6.1.1",
     "httpx>=0.28.1",
 ]
+pytest = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.1",
+]
 jaeger = [
     "opentelemetry-exporter-jaeger>=1.21.0",
 ]
@@ -42,6 +46,14 @@ jaeger = [
 mcp-eval = "mcp_eval.cli:app"
 mcpeval = "mcp_eval.cli:app"
 
+[project.entry-points."pytest11"]
+mcpeval = "mcp_eval.pytest_plugin"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [build-system]
 requires = ["hatchling"]

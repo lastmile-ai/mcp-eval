@@ -5,7 +5,6 @@ import yaml
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypeVar, Generic, Callable, Union
 from dataclasses import dataclass, field
-from pydantic import BaseModel, Field
 
 from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
 from mcp_eval.evaluators.builtin import EqualsExpected
@@ -38,7 +37,10 @@ class Case(Generic[InputType, OutputType, MetadataType]):
 
 
 class Dataset(Generic[InputType, OutputType, MetadataType]):
-    """A collection of test cases for systematic evaluation."""
+    """
+    A collection of test cases for systematic evaluation.
+    Uses the same unified TestSession as @task decorators.
+    """
     
     def __init__(
         self,
@@ -70,7 +72,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         max_concurrency: Optional[int] = None,
         agent_config: Optional[Dict[str, Any]] = None,
     ) -> EvaluationReport:
-        """Evaluate the task function against all cases in the dataset."""
+        """Evaluate the task function against all cases using unified TestSession."""
         import asyncio
         
         # Merge agent configurations
@@ -81,6 +83,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         
         async def evaluate_case(case: Case) -> CaseResult:
             async def _eval():
+                # Use the same unified TestSession as @task decorators
                 session = TestSession(
                     server_name=self.server_name or 'default',
                     test_name=case.name,
@@ -236,8 +239,8 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
             with open(path, 'r') as f:
                 data = json.load(f)
         
-        # Reconstruct evaluators (simplified - would need proper registry)
-        from .evaluators.builtin import get_evaluator_by_name
+        # Reconstruct evaluators
+        from mcp_eval.evaluators.builtin import get_evaluator_by_name
         
         cases = []
         for case_data in data.get('cases', []):

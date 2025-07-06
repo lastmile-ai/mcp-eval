@@ -3,7 +3,7 @@
 # Core testing paradigms (primary API)
 from mcp_eval.core import task, setup, teardown, parametrize
 from mcp_eval.datasets import Case, Dataset, generate_test_cases
-from mcp_eval.session import TestAgent, test_session
+from mcp_eval.session import TestAgent, TestSession, test_session
 
 # Configuration
 from mcp_eval.config import use_server, use_agent, use_llm_factory
@@ -46,6 +46,6 @@ __all__ = [
     # Extensibility
     "register_evaluator", "register_metric",
     
-    # Test agent and session
-    "TestAgent", "test_session",
+    # Session management
+    "TestSession", "TestAgent", "test_session",
 ]
