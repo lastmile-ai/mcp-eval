@@ -146,7 +146,17 @@ def load_config(config_path: Optional[str] = None) -> MCPEvalSettings:
 
     if config_path is None:
         # Look for config in standard locations
-        for path in ["mcpeval.yaml", "mcpeval.yml", ".mcpeval.yaml"]:
+        for path in [
+            "mcpeval.yaml",
+            "mcpeval.yml",
+            ".mcpeval.yaml",
+            "mcp_eval.yaml",
+            "mcp_eval.yml",
+            ".mcp_eval.yaml",
+            "mcp-eval.yaml",
+            "mcp-eval.yml",
+            ".mcp-eval.yaml",
+        ]:
             if os.path.exists(path):
                 config_path = path
                 break

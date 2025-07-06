@@ -1,0 +1,68 @@
+name: "MCP Fetch Server Test Suite"
+description: "Comprehensive evaluation of the MCP fetch server capabilities"
+
+# MCP Fetch Server Configuration
+servers:
+  fetch:
+    command: "uvx"
+    args: ["mcp-server-fetch"]
+    env:
+      # No specific environment restrictions for testing
+
+# Agent Configurations
+agents:
+  default:
+    name: "fetch_tester"
+    instruction: |
+      You are a web content fetching agent. You can fetch URLs and extract their content.
+      Be thorough in your responses and handle errors gracefully.
+    llm_factory: "AnthropicAugmentedLLM"
+    model: "claude-3-haiku-20240307"
+    max_iterations: 5
+
+  advanced:
+    name: "advanced_fetch_tester"
+    instruction: |
+      You are an expert web scraping agent. You can fetch content from multiple URLs,
+      handle various content types, and process large documents efficiently using chunking.
+    llm_factory: "AnthropicAugmentedLLM"
+    model: "claude-3-sonnet-20240229"
+    max_iterations: 10
+
+# Enhanced Judge Configuration
+judge:
+  model: "claude-3-haiku-20240307"
+  min_score: 0.8
+  max_tokens: 2000
+  system_prompt: |
+    You are an expert evaluator of web content fetching tasks.
+    Consider accuracy, completeness, error handling, and efficiency.
+
+# Metrics Configuration
+metrics:
+  collect:
+    - "response_time"
+    - "tool_coverage"
+    - "iteration_count" 
+    - "token_usage"
+    - "cost_estimate"
+    - "error_recovery"
+    - "content_extraction_quality"
+  
+  # Custom golden paths for fetch operations
+  golden_paths:
+    basic_fetch: ["fetch"]
+    chunked_fetch: ["fetch", "fetch", "fetch"]  # For large documents
+    multi_url_fetch: ["fetch", "fetch"]
+
+# Reporting
+reporting:
+  formats: ["json", "markdown"]
+  output_dir: "./test-reports"
+  include_traces: true
+
+# Execution
+execution:
+  max_concurrency: 3
+  timeout_seconds: 120
+  retry_failed: false

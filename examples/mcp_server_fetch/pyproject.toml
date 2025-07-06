@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-fetch-tests"
+version = "0.1.0"
+description = "Comprehensive test suite for MCP fetch server using mcp-eval"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp-eval[pytest] @ file://../..",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "mypy",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "mcpeval: MCP evaluation tests",
+    "mcp_eval: MCP evaluation tests",
+    "mcp-eval: MCP evaluation tests",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "network: marks tests as requiring network access",
+]

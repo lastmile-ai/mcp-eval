@@ -45,9 +45,12 @@ jaeger = [
 [project.scripts]
 mcp-eval = "mcp_eval.cli:app"
 mcpeval = "mcp_eval.cli:app"
+mcp_eval = "mcp_eval.cli:app"
 
 [project.entry-points."pytest11"]
+mcp-eval = "mcp_eval.pytest_plugin"
 mcpeval = "mcp_eval.pytest_plugin"
+mcp_eval = "mcp_eval.pytest_plugin"
 
 [tool.setuptools.packages.find]
 where = ["src"]

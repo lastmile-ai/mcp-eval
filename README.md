@@ -22,7 +22,7 @@ MCP-Eval is a developer-first testing framework for Model Context Protocol (MCP)
 
 ### 1. Installation
 
-Install `mcpeval` and its dependencies. Make sure `mcp-agent` is also installed in your environment.
+Install `mcp_eval` and its dependencies. Make sure `mcp-agent` is also installed in your environment.
 
 ```bash
 pip install "typer[all]" rich pydantic jinja2

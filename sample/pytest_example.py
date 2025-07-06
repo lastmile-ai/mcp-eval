@@ -3,13 +3,13 @@ import mcp_eval
 from mcp_eval import ToolWasCalled, ResponseContains
 
 
-# Configure mcpeval for pytest
+# Configure mcp-eval for pytest
 @mcp_eval.setup
 def configure_for_pytest():
     mcp_eval.use_server("fetch")
 
 
-# Standard pytest test with mcpeval fixtures
+# Standard pytest test with mcp-eval fixtures
 @pytest.mark.asyncio
 async def test_fetch_with_pytest_agent(mcp_agent):
     """Test using the mcp_agent fixture."""
@@ -45,7 +45,7 @@ async def test_fetch_with_pytest_session(mcp_session):
     ],
 )
 async def test_fetch_parametrized(mcp_agent, url, expected):
-    """Parametrized test combining pytest and mcpeval."""
+    """Parametrized test combining pytest and mcp-eval."""
     response = await mcp_agent.generate_str(f"Fetch {url}")
 
     mcp_agent.session.evaluate_now(

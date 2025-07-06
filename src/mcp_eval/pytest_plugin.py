@@ -1,7 +1,7 @@
-"""Pytest plugin for mcpeval framework.
+"""Pytest plugin for mcp-eval framework.
 
-This plugin enables seamless integration between mcpeval and pytest,
-allowing users to write mcpeval tests that run natively in pytest.
+This plugin enables seamless integration between mcp-eval and pytest,
+allowing users to write mcp-eval tests that run natively in pytest.
 """
 
 import asyncio
@@ -72,12 +72,12 @@ async def mcp_agent(mcp_session: MCPEvalPytestSession) -> TestAgent:
 
 
 def pytest_configure(config):
-    """Configure pytest to work with mcpeval."""
-    config.addinivalue_line("markers", "mcpeval: mark test as an mcpeval test")
+    """Configure pytest to work with mcp-eval."""
+    config.addinivalue_line("markers", "mcp-eval: mark test as an mcp-eval test")
 
 
 def pytest_collection_modifyitems(config, items):
-    """Automatically mark async tests that use mcp fixtures as mcpeval tests."""
+    """Automatically mark async tests that use mcp fixtures as mcp-eval tests."""
     for item in items:
         if hasattr(item, "function"):
             # Check if test function uses mcp fixtures
@@ -87,10 +87,14 @@ def pytest_collection_modifyitems(config, items):
 
 
 def pytest_runtest_setup(item):
-    """Setup for mcpeval tests."""
-    if "mcpeval" in item.keywords:
-        # Run any mcpeval setup functions
-        from .core import _setup_functions
+    """Setup for mcp-eval tests."""
+    if (
+        "mcpeval" in item.keywords
+        or "mcp-eval" in item.keywords
+        or "mcp_eval" in item.keywords
+    ):
+        # Run any mcp-eval setup functions
+        from mcp_eval.core import _setup_functions
 
         for setup_func in _setup_functions:
             if not asyncio.iscoroutinefunction(setup_func):
@@ -98,10 +102,14 @@ def pytest_runtest_setup(item):
 
 
 def pytest_runtest_teardown(item):
-    """Teardown for mcpeval tests."""
-    if "mcpeval" in item.keywords:
-        # Run any mcpeval teardown functions
-        from .core import _teardown_functions
+    """Teardown for mcp-eval tests."""
+    if (
+        "mcpeval" in item.keywords
+        or "mcp-eval" in item.keywords
+        or "mcp_eval" in item.keywords
+    ):
+        # Run any mcp-eval teardown functions
+        from mcp_eval.core import _teardown_functions
 
         for teardown_func in _teardown_functions:
             if not asyncio.iscoroutinefunction(teardown_func):

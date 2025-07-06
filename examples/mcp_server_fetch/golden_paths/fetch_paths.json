@@ -1,0 +1,7 @@
+{
+  "basic_fetch": ["fetch"],
+  "chunked_fetch": ["fetch", "fetch"],
+  "multi_url_fetch": ["fetch", "fetch"],
+  "error_retry_fetch": ["fetch", "fetch"],
+  "comprehensive_fetch": ["fetch", "fetch", "fetch", "fetch"]
+}

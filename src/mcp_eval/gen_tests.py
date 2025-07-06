@@ -148,7 +148,7 @@ def generate(
         console.print(f"[bold red]Failed to generate tests from LLM: {e}[/bold red]")
         raise typer.Exit(1)
 
-    env = Environment(loader=PackageLoader("mcpeval", "templates"))
+    env = Environment(loader=PackageLoader("mcp_eval", "templates"))
     template = env.get_template("test_file.py.j2")
 
     output_code = template.render(server_name=server_name, tests=generated_tests.tests)

@@ -3,7 +3,7 @@
 # (e.g., export OPENAI_API_KEY="sk-...")
 
 mcp_servers:
-  # This key 'sample_server' is used in the @mcpeval.task decorator
+  # This key 'sample_server' is used in the @mcp_eval.task decorator
   sample_server:
     transport: stdio
     command: "python"

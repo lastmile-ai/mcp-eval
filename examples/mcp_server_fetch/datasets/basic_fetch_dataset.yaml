@@ -1,0 +1,51 @@
+name: "Basic Fetch Dataset"
+description: "Fundamental fetch server functionality tests"
+server_name: "fetch"
+
+agent_config:
+  name: "yaml_dataset_tester"
+  instruction: "You are a web content fetching agent. Handle all requests professionally."
+  llm_factory: "AnthropicAugmentedLLM"
+  max_iterations: 5
+
+cases:
+  - name: "simple_fetch"
+    inputs: "Fetch https://example.com"
+    expected_output: "Example Domain"
+    metadata:
+      difficulty: "easy"
+      category: "basic"
+    evaluators:
+      - ToolWasCalled:
+          tool_name: "fetch"
+      - ResponseContains:
+          text: "Example Domain"
+
+  - name: "json_fetch"
+    inputs: "Fetch https://httpbin.org/json and describe the content"
+    metadata:
+      difficulty: "medium"
+      category: "content_processing"
+    evaluators:
+      - ToolWasCalled:
+          tool_name: "fetch"
+      - ResponseContains:
+          text: "json"
+          case_sensitive: false
+
+  - name: "error_handling"
+    inputs: "Try to fetch https://invalid-domain-xyz.com"
+    metadata:
+      difficulty: "medium"
+      category: "error_handling"
+    evaluators:
+      - ToolWasCalled:
+          tool_name: "fetch"
+      - LLMJudge:
+          rubric: "Response should handle the fetch error appropriately"
+          min_score: 0.7
+
+evaluators:
+  - ToolSuccessRate:
+      min_rate: 0.7
+      tool_name: "fetch"
