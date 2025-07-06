@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from .metrics import TestMetrics
+from mcp_eval.metrics import TestMetrics
 
 
 @dataclass

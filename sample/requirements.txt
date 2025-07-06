@@ -1,0 +1,4 @@
+# Core framework dependency
+mcp-eval @ file://../  # Link to the local mcp-eval project root
+
+# Additional dependencies specific to this example

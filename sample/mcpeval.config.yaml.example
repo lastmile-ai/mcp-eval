@@ -1,0 +1,52 @@
+name: "Comprehensive MCP Server Evaluation"
+description: "Advanced test suite showcasing both decorator and dataset approaches"
+
+# Server configurations (inherits from mcp_agent.config.yaml)
+servers:
+  fetch:
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-fetch"]
+    env:
+      ALLOWED_DOMAINS: "example.com,github.com,python.org"
+
+# Agent configurations for dataset evaluations
+agents:
+  default:
+    name: "default_tester"
+    instruction: "You are a comprehensive test agent. Complete tasks efficiently and accurately."
+    llm_factory: "AnthropicAugmentedLLM"
+    model: "claude-3-haiku-20240307"
+    max_iterations: 5
+
+# LLM Judge configuration
+judge:
+  model: "claude-3-haiku-20240307"
+  min_score: 0.8
+
+# Metrics configuration
+metrics:
+  collect:
+    - response_time
+    - tool_coverage
+    - iteration_count
+    - token_usage
+    - cost_estimate
+
+# Reporting configuration
+reporting:
+  formats: ["json", "markdown"]
+  output_dir: "./test-reports"
+  include_traces: true
+
+# OpenTelemetry configuration
+otel:
+  enabled: true
+  exporter:
+    type: "file"
+    path: "./traces"
+  service_name: "mcp-eval"
+
+# Test execution configuration
+execution:
+  max_concurrency: 5
+  timeout_seconds: 300

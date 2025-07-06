@@ -1,133 +1,357 @@
+"""Enhanced test runner supporting both decorator and dataset approaches."""
+
 import asyncio
 import importlib.util
 import inspect
-import json
+import itertools
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 import typer
 from rich.console import Console
-from mcp_eval.core import TestResult
-from mcp_eval.reporting import generate_console_report, generate_json_report, generate_coverage_report
-from mcp_agent.app import MCPApp
-from mcp_agent.agents.agent import Agent
-import dataclasses
+from rich.table import Table
+from rich.progress import Progress, TaskID
+
+from .core import TestResult
+from .datasets import Dataset
+from .reports import EvaluationReport
 
 app = typer.Typer()
 console = Console()
 
-def discover_tasks(path: Path):
-    """Discovers all functions decorated with @mcpeval.task."""
+def discover_tests_and_datasets(path: Path) -> Dict[str, List]:
+    """Discover both decorator-style tests and dataset-style evaluations."""
     tasks = []
+    datasets = []
+    
     for py_file in path.rglob("*.py"):
-        spec = importlib.util.spec_from_file_location(py_file.stem, py_file)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        for name, obj in inspect.getmembers(module):
-            if callable(obj) and hasattr(obj, "_is_mcpeval_task"):
-                tasks.append(obj)
-    return tasks
-
-async def get_available_tools(server_name: str) -> set:
-    """Connects to a server to get a list of its available tools."""
-    available_tools = set()
-    try:
-        temp_app = MCPApp()
-        await temp_app.initialize()
-        temp_agent = Agent(name=f"mcpeval-lister-{server_name}", server_names=[server_name], context=temp_app.context)
-        await temp_agent.initialize()
-        tools_result = await temp_agent.list_tools()
-        available_tools = {tool.name for tool in tools_result.tools}
-        await temp_agent.shutdown()
-        await temp_app.cleanup()
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] Could not list tools for server '{server_name}': {e}")
-    return available_tools
-
-async def main(test_dir: str, json_report_path: str):
-    test_path = Path(test_dir)
-    if not test_path.is_dir():
-        console.print(f"[bold red]Error:[/] Directory not found: {test_dir}")
-        raise typer.Exit(code=1)
-
-    tasks = discover_tasks(test_path)
-    if not tasks:
-        console.print(f"[bold yellow]Warning:[/] No tests found in {test_dir}")
-        raise typer.Exit()
-
-    tasks_by_server: Dict[str, List] = {}
-    for task in tasks:
-        server = task._server
-        if server not in tasks_by_server:
-            tasks_by_server[server] = []
-        tasks_by_server[server].append(task)
+        if py_file.name.startswith("__"):
+            continue
         
-    all_results: List[TestResult] = []
-    coverage_reports: Dict[str, Any] = {}
+        try:
+            spec = importlib.util.spec_from_file_location(py_file.stem, py_file)
+            if spec and spec.loader:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                
+                # Discover decorator-style tests
+                for name, obj in inspect.getmembers(module):
+                    if (callable(obj) and 
+                        hasattr(obj, "_is_mcpeval_task") and 
+                        obj._is_mcpeval_task):
+                        tasks.append(obj)
+                
+                # Discover datasets
+                for name, obj in inspect.getmembers(module):
+                    if isinstance(obj, Dataset):
+                        datasets.append(obj)
+        
+        except Exception as e:
+            console.print(f"[yellow]Warning:[/] Could not load {py_file}: {e}")
+    
+    return {"tasks": tasks, "datasets": datasets}
 
-    for server_name, tasks_for_server in tasks_by_server.items():
-        console.print(f"\n[bold blue]Running tests for server: '{server_name}'[/bold blue]")
+def expand_parametrized_tests(tasks: List[callable]) -> List[Dict[str, Any]]:
+    """Expand parametrized tests into individual test cases."""
+    expanded = []
+    
+    for task_func in tasks:
+        params = getattr(task_func, '_mcpeval_parameters', {})
+        if not params:
+            expanded.append({'func': task_func, 'kwargs': {}})
+            continue
         
-        available_tools = await get_available_tools(server_name)
+        # Create cartesian product of all parameters
+        param_names = list(params.keys())
+        param_values = list(params.values())
         
-        server_results = []
-        for task in tasks_for_server:
-            try:
-                result = await task()
-                server_results.append(result)
-            except Exception as e:
-                console.print(f"[bold red]FATAL ERROR[/] running test '{task.__name__}': {e}")
+        for combination in itertools.product(*param_values):
+            kwargs = dict(zip(param_names, combination))
+            expanded.append({'func': task_func, 'kwargs': kwargs})
+    
+    return expanded
+
+async def run_decorator_tests(test_cases: List[Dict[str, Any]]) -> List[TestResult]:
+    """Run decorator-style tests."""
+    results = []
+    
+    with Progress() as progress:
+        task_id = progress.add_task("[cyan]Running tests...", total=len(test_cases))
         
-        all_results.extend(server_results)
-        
-        called_tools = set()
-        for result in server_results:
-            if result and result.metrics:
-                for tool_name in result.metrics.tool_metrics.keys():
-                    called_tools.add(tool_name)
-                    
-        uncalled_tools = available_tools - called_tools
-        coverage_percentage = 0
-        if available_tools:
-            # Exclude the human input tool from coverage calculation
-            if "__human_input__" in available_tools:
-                available_tools.remove("__human_input__")
-            coverage_percentage = (len(called_tools) / len(available_tools)) * 100 if available_tools else 100
+        for test_case in test_cases:
+            func = test_case['func']
+            kwargs = test_case['kwargs']
             
-        coverage_reports[server_name] = {
-            "coverage": coverage_percentage,
-            "total_tools": len(available_tools),
-            "called_tools": len(called_tools),
-            "uncalled_tools": sorted(list(uncalled_tools))
-        }
+            # Create test name with parameters
+            test_name = func.__name__
+            if kwargs:
+                param_str = ",".join(f"{k}={v}" for k, v in kwargs.items())
+                test_name += f"[{param_str}]"
+            
+            try:
+                result = await func(**kwargs)
+                results.append(result)
+                
+                status = "[green]PASS[/]" if result.passed else "[red]FAIL[/]"
+                console.print(f"  {status} {test_name}")
+                
+                if not result.passed:
+                    if result.error:
+                        console.print(f"    Error: {result.error}")
+                    for eval_result in result.evaluation_results:
+                        if not eval_result.get('passed', True):
+                            console.print(f"    Failed: {eval_result['name']}")
+                            if eval_result.get('error'):
+                                console.print(f"      {eval_result['error']}")
+            
+            except Exception as e:
+                console.print(f"  [red]ERROR[/] {test_name}: {e}")
+                result = TestResult(
+                    test_name=test_name,
+                    description=getattr(func, '_description', ''),
+                    server_name=getattr(func, '_server', 'unknown'),
+                    parameters=kwargs,
+                    passed=False,
+                    evaluation_results=[],
+                    metrics=None,
+                    duration_ms=0,
+                    error=str(e)
+                )
+                results.append(result)
+            
+            progress.update(task_id, advance=1)
+    
+    return results
 
-    console.print("\n" + "="*20 + " TEST RESULTS " + "="*20)
-    generate_console_report(all_results, console)
-
-    generate_coverage_report(coverage_reports, console)
-
-    if json_report_path:
-        report_data = {
-            "results": [dataclasses.asdict(r) for r in all_results],
-            "coverage": coverage_reports
-        }
-        with open(json_report_path, "w") as f:
-            json.dump(report_data, f, cls=EnhancedJSONEncoder, indent=2)
-        console.print(f"\n[bold green]JSON report saved to:[/] {json_report_path}")
-
+async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationReport]:
+    """Run dataset-style evaluations."""
+    reports = []
+    
+    for dataset in datasets:
+        console.print(f"\n[blue]Evaluating dataset: {dataset.name}[/blue]")
+        
+        # Find the task function in the same module
+        # This is a simplified approach - in practice, would be more sophisticated
+        async def mock_task(inputs):
+            return f"Mock response for: {inputs}"
+        
+        try:
+            report = await dataset.evaluate(mock_task)
+            reports.append(report)
+            
+            console.print(f"[green]Completed:[/] {report.passed_cases}/{report.total_cases} cases passed")
+            
+            # Print brief summary
+            report.print(include_input=False, include_output=False, include_durations=True)
+            
+        except Exception as e:
+            console.print(f"[red]Error evaluating dataset {dataset.name}: {e}[/red]")
+    
+    return reports
 
 @app.command()
-def run(
-    test_dir: str = typer.Argument("tests", help="Directory to scan for tests."),
-    json_report: str = typer.Option(None, help="Path to save a JSON report."),
+async def run(
+    test_dir: str = typer.Argument("tests", help="Directory to scan for tests and datasets"),
+    json_report: str = typer.Option(None, "--json", help="Save JSON report"),
+    markdown_report: str = typer.Option(None, "--markdown", help="Save Markdown report"),
+    format: str = typer.Option("auto", help="Output format (auto, decorator, dataset)"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    max_concurrency: int = typer.Option(None, "--max-concurrency", help="Maximum concurrent evaluations"),
 ):
-    asyncio.run(main(test_dir, json_report))
+    """Run MCP-Eval tests and datasets."""
+    test_path = Path(test_dir)
+    
+    if not test_path.exists():
+        console.print(f"[red]Error:[/] Test directory '{test_dir}' not found")
+        raise typer.Exit(1)
+    
+    console.print(f"[blue]Discovering tests and datasets in {test_dir}...[/blue]")
+    discovered = discover_tests_and_datasets(test_path)
+    
+    tasks = discovered["tasks"]
+    datasets = discovered["datasets"]
+    
+    if not tasks and not datasets:
+        console.print("[yellow]No tests or datasets found[/]")
+        return
+    
+    console.print(f"Found {len(tasks)} test function(s) and {len(datasets)} dataset(s)")
+    
+    # Run tests and evaluations
+    test_results = []
+    dataset_reports = []
+    
+    if tasks and format in ["auto", "decorator"]:
+        console.print(f"\n[blue]Running {len(tasks)} decorator-style tests...[/blue]")
+        test_cases = expand_parametrized_tests(tasks)
+        test_results = await run_decorator_tests(test_cases)
+    
+    if datasets and format in ["auto", "dataset"]:
+        console.print(f"\n[blue]Running {len(datasets)} dataset evaluations...[/blue]")
+        dataset_reports = await run_dataset_evaluations(datasets)
+    
+    # Generate combined summary
+    if test_results or dataset_reports:
+        console.print(f"\n{'='*60}")
+        _generate_combined_summary(test_results, dataset_reports)
+    
+    # Generate reports
+    if json_report or markdown_report:
+        combined_report = {
+            "decorator_tests": [r.__dict__ for r in test_results],
+            "dataset_reports": [r.to_dict() for r in dataset_reports],
+            "summary": {
+                "total_decorator_tests": len(test_results),
+                "passed_decorator_tests": sum(1 for r in test_results if r.passed),
+                "total_dataset_cases": sum(r.total_cases for r in dataset_reports),
+                "passed_dataset_cases": sum(r.passed_cases for r in dataset_reports),
+            }
+        }
+        
+        if json_report:
+            import json
+            with open(json_report, 'w') as f:
+                json.dump(combined_report, f, indent=2, default=str)
+            console.print(f"JSON report saved to {json_report}")
+        
+        if markdown_report:
+            _generate_combined_markdown_report(combined_report, markdown_report)
+            console.print(f"Markdown report saved to {markdown_report}")
+    
+    # Exit with error if any tests failed
+    total_failed = (
+        sum(1 for r in test_results if not r.passed) +
+        sum(r.failed_cases for r in dataset_reports)
+    )
+    
+    if total_failed > 0:
+        raise typer.Exit(1)
 
-# Need a custom JSON encoder for the report
-class EnhancedJSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if dataclasses.is_dataclass(o):
-            return dataclasses.asdict(o)
-        return super().default(o)
+def _generate_combined_summary(
+    test_results: List[TestResult], 
+    dataset_reports: List[EvaluationReport]
+):
+    """Generate a combined summary of all results."""
+    table = Table(title="Combined Test Results Summary")
+    table.add_column("Type", style="cyan")
+    table.add_column("Name", style="magenta")
+    table.add_column("Status", justify="center")
+    table.add_column("Cases/Tests", justify="right")
+    table.add_column("Duration", justify="right")
+    
+    # Add decorator test results
+    for result in test_results:
+        status = "[green]PASS[/]" if result.passed else "[red]FAIL[/]"
+        duration = f"{result.duration_ms:.1f}ms" if result.duration_ms else "N/A"
+        
+        table.add_row(
+            "Test",
+            result.test_name,
+            status,
+            "1",
+            duration
+        )
+    
+    # Add dataset results
+    for report in dataset_reports:
+        status = f"[green]{report.passed_cases}/{report.total_cases}[/]"
+        duration = f"{report.average_duration_ms:.1f}ms"
+        
+        table.add_row(
+            "Dataset",
+            report.dataset_name,
+            status,
+            str(report.total_cases),
+            duration
+        )
+    
+    console.print(table)
+    
+    # Overall summary
+    total_decorator_tests = len(test_results)
+    passed_decorator_tests = sum(1 for r in test_results if r.passed)
+    
+    total_dataset_cases = sum(r.total_cases for r in dataset_reports)
+    passed_dataset_cases = sum(r.passed_cases for r in dataset_reports)
+    
+    total_tests = total_decorator_tests + total_dataset_cases
+    total_passed = passed_decorator_tests + passed_dataset_cases
+    
+    console.print(f"\n[bold]Overall Summary:[/]")
+    console.print(f"  Decorator Tests: {passed_decorator_tests}/{total_decorator_tests} passed")
+    console.print(f"  Dataset Cases: {passed_dataset_cases}/{total_dataset_cases} passed")
+    console.print(f"  [bold]Total: {total_passed}/{total_tests} passed ({total_passed/total_tests*100:.1f}%)[/]")
+
+def _generate_combined_markdown_report(report_data: Dict[str, Any], output_path: str):
+    """Generate a combined markdown report."""
+    summary = report_data["summary"]
+    
+    report = f"""# MCP-Eval Combined Test Report
+
+## Summary
+
+- **Decorator Tests**: {summary["passed_decorator_tests"]}/{summary["total_decorator_tests"]} passed
+- **Dataset Cases**: {summary["passed_dataset_cases"]}/{summary["total_dataset_cases"]} passed
+- **Overall Success Rate**: {(summary["passed_decorator_tests"] + summary["passed_dataset_cases"]) / (summary["total_decorator_tests"] + summary["total_dataset_cases"]) * 100:.1f}%
+
+## Decorator Test Results
+
+| Test | Status | Duration | Server |
+|------|--------|----------|--------|
+"""
+    
+    for test_data in report_data["decorator_tests"]:
+        status = "✅ PASS" if test_data["passed"] else "❌ FAIL"
+        duration = f"{test_data.get('duration_ms', 0):.1f}ms"
+        server = test_data.get("server_name", "unknown")
+        
+        report += f"| {test_data['test_name']} | {status} | {duration} | {server} |\n"
+    
+    report += "\n## Dataset Evaluation Results\n\n"
+    
+    for dataset_data in report_data["dataset_reports"]:
+        dataset_summary = dataset_data["summary"]
+        report += f"### {dataset_data['dataset_name']}\n\n"
+        report += f"- **Cases**: {dataset_summary['passed_cases']}/{dataset_summary['total_cases']} passed\n"
+        report += f"- **Success Rate**: {dataset_summary['success_rate'] * 100:.1f}%\n"
+        report += f"- **Average Duration**: {dataset_summary['average_duration_ms']:.1f}ms\n\n"
+    
+    with open(output_path, 'w') as f:
+        f.write(report)
+
+@app.command()
+def dataset(
+    dataset_file: str = typer.Argument(..., help="Path to dataset file"),
+    output: str = typer.Option("report", help="Output file prefix"),
+):
+    """Run evaluation on a specific dataset file."""
+    import asyncio
+    from .datasets import Dataset
+    
+    async def _run_dataset():
+        try:
+            dataset = Dataset.from_file(dataset_file)
+            console.print(f"Loaded dataset: {dataset.name}")
+            console.print(f"Cases: {len(dataset.cases)}")
+            
+            # Mock task function for demo
+            async def mock_task(inputs):
+                return f"Mock response for: {inputs}"
+            
+            report = await dataset.evaluate(mock_task)
+            report.print(include_input=True, include_output=True)
+            
+            # Save reports
+            import json
+            with open(f"{output}.json", 'w') as f:
+                json.dump(report.to_dict(), f, indent=2, default=str)
+            
+            console.print(f"Report saved to {output}.json")
+            
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            raise typer.Exit(1)
+    
+    asyncio.run(_run_dataset())
 
 if __name__ == "__main__":
     app()

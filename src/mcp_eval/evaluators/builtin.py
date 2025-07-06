@@ -4,7 +4,7 @@ import re
 from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass
 
-from .base import Evaluator, SyncEvaluator, EvaluatorContext
+from mcp_eval.evaluators.base import Evaluator, SyncEvaluator, EvaluatorContext
 
 
 @dataclass
@@ -188,7 +188,7 @@ class LLMJudge(Evaluator):
         
         # Use a simple LLM client (would be configurable)
         try:
-            from ..llm_client import get_judge_client
+            from mcp_eval.llm_client import get_judge_client
             client = get_judge_client(self.model)
             response = await client.generate_str(prompt)
             

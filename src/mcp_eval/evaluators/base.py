@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Generic, Optional, TypeVar, Union
 from dataclasses import dataclass
 
-from ..metrics import TestMetrics
-from ..otel.span_tree import SpanTree
+from mcp_eval.metrics import TestMetrics
+from mcp_eval.otel.span_tree import SpanTree
 
 
 InputType = TypeVar('InputType')

@@ -3,8 +3,8 @@
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
-from .datasets import Case, Dataset
-from .evaluators.builtin import ToolWasCalled, ResponseContains, LLMJudge
+from mcp_eval.datasets import Case, Dataset
+from mcp_eval.evaluators.builtin import ToolWasCalled, ResponseContains, LLMJudge
 
 
 @dataclass
@@ -39,7 +39,7 @@ class MCPCaseGenerator:
         )
         
         # Generate cases using LLM
-        from .llm_client import get_judge_client
+        from mcp_eval.llm_client import get_judge_client
         client = get_judge_client(self.model)
         
         try:

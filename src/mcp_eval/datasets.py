@@ -7,11 +7,11 @@ from typing import Any, Dict, List, Optional, TypeVar, Generic, Callable, Union
 from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 
-from .evaluators.base import Evaluator, EvaluatorContext
-from .evaluators.builtin import EqualsExpected
-from .metrics import TestMetrics
-from .reports import EvaluationReport, CaseResult
-from .session import TestSession
+from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
+from mcp_eval.evaluators.builtin import EqualsExpected
+from mcp_eval.metrics import TestMetrics
+from mcp_eval.reports import EvaluationReport, CaseResult
+from mcp_eval.session import TestSession
 
 
 InputType = TypeVar('InputType')

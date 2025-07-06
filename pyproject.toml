@@ -10,7 +10,7 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     "jinja2>=3.1.6",
-    "mcp-agent>=0.1.3",
+    "mcp-agent>=0.1.6",
     "opentelemetry-api>=1.34.1",
     "opentelemetry-exporter-otlp>=1.34.1",
     "opentelemetry-sdk>=1.34.1",
