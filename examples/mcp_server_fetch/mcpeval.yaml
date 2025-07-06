@@ -6,8 +6,7 @@ servers:
   fetch:
     command: "uvx"
     args: ["mcp-server-fetch"]
-    env:
-      # No specific environment restrictions for testing
+    env: {}
 
 # Agent Configurations
 agents:
@@ -48,12 +47,6 @@ metrics:
     - "cost_estimate"
     - "error_recovery"
     - "content_extraction_quality"
-  
-  # Custom golden paths for fetch operations
-  golden_paths:
-    basic_fetch: ["fetch"]
-    chunked_fetch: ["fetch", "fetch", "fetch"]  # For large documents
-    multi_url_fetch: ["fetch", "fetch"]
 
 # Reporting
 reporting:

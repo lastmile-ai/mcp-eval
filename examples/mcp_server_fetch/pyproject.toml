@@ -1,18 +1,17 @@
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "mcp-fetch-tests"
 version = "0.1.0"
 description = "Comprehensive test suite for MCP fetch server using mcp-eval"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp-eval[pytest] @ file://../..",
+    "mcp-eval[pytest]",
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "httpx>=0.24.0",
 ]
+
+[tool.uv.sources]
+mcp-eval = { path = "../..", editable = true }
 
 [project.optional-dependencies]
 dev = [
@@ -29,3 +28,13 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "network: marks tests as requiring network access",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["tests", "datasets"]

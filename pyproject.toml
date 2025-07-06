@@ -21,6 +21,27 @@ dependencies = [
     "typer>=0.16.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=4.0.1",
+    "pydantic>=2.10.4",
+    "pyyaml>=6.0.2",
+    "ruff>=0.8.4",
+    "tomli>=2.2.1",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.1",
+    "trio>=0.30.0",
+    "pytest-cov>=6.1.1",
+    "httpx>=0.28.1",
+]
+pytest = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.1",
+]
+jaeger = [
+    "opentelemetry-exporter-jaeger>=1.21.0",
+]
+
 [dependency-groups]
 dev = [
     "pre-commit>=4.0.1",
@@ -48,8 +69,6 @@ mcpeval = "mcp_eval.cli:app"
 mcp_eval = "mcp_eval.cli:app"
 
 [project.entry-points."pytest11"]
-mcp-eval = "mcp_eval.pytest_plugin"
-mcpeval = "mcp_eval.pytest_plugin"
 mcp_eval = "mcp_eval.pytest_plugin"
 
 [tool.setuptools.packages.find]
