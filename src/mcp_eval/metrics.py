@@ -62,32 +62,42 @@ class TestMetrics:
 class TraceSpan:
     """Represents a single OTEL span from trace file."""
     
-    trace_id: str
-    span_id: str
     name: str
-    start_time: int  # nanoseconds
-    end_time: int    # nanoseconds
-    attributes: Dict[str, Any]
-    events: List[Dict[str, Any]]
-    parent: Optional[Dict[str, str]] = None
-    context: Dict[str, str] = field(default_factory=dict)
+    context: Dict[str, str]
+    parent: Optional[Dict[str, str]]
+    start_time: int  # nanoseconds since epoch
+    end_time: int    # nanoseconds since epoch
+    attributes: Dict[str, Any] = field(default_factory=dict)
+    events: List[Dict[str, Any]] = field(default_factory=list)
     
     @classmethod
     def from_json(cls, json_line: str) -> 'TraceSpan':
         """Create TraceSpan from JSONL line."""
         data = json.loads(json_line)
         
-        return cls(
-            trace_id=data.get('traceID', ''),
-            span_id=data.get('spanID', ''),
-            name=data.get('operationName', ''),
-            start_time=data.get('startTime', 0),
-            end_time=data.get('startTime', 0) + data.get('duration', 0),
-            attributes=data.get('tags', {}),
-            events=data.get('logs', []),
-            parent=data.get('references', [{}])[0] if data.get('references') else None,
-            context={'span_id': data.get('spanID', ''), 'trace_id': data.get('traceID', '')},
-        )
+        # Handle both standard OTEL export format and Jaeger format
+        if 'name' in data:
+            # Standard OTEL format
+            return cls(
+                name=data.get('name', ''),
+                context=data.get('context', {}),
+                parent=data.get('parent'),
+                start_time=data.get('start_time', 0),
+                end_time=data.get('end_time', 0),
+                attributes=data.get('attributes', {}),
+                events=data.get('events', []),
+            )
+        else:
+            # Jaeger format fallback (from original implementation)
+            return cls(
+                name=data.get('operationName', ''),
+                context={'span_id': data.get('spanID', ''), 'trace_id': data.get('traceID', '')},
+                parent=data.get('references', [{}])[0] if data.get('references') else None,
+                start_time=data.get('startTime', 0),
+                end_time=data.get('startTime', 0) + data.get('duration', 0),
+                attributes=data.get('tags', {}),
+                events=data.get('logs', []),
+            )
 
 
 def process_spans(spans: List[TraceSpan]) -> TestMetrics:

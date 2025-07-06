@@ -1,10 +1,20 @@
 """Built-in evaluators for common evaluation patterns."""
 
 import re
+import json
 from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass
+from pydantic import BaseModel, Field
 
 from mcp_eval.evaluators.base import Evaluator, SyncEvaluator, EvaluatorContext
+
+
+class JudgeResult(BaseModel):
+    """Structured result from LLM judge evaluation."""
+    score: float = Field(ge=0.0, le=1.0, description="Score between 0.0 and 1.0")
+    reasoning: str = Field(description="Explanation of the score")
+    passed: bool = Field(description="Whether the response passes the rubric")
+    confidence: float = Field(ge=0.0, le=1.0, default=1.0, description="Confidence in the judgment")
 
 
 @dataclass
@@ -152,9 +162,10 @@ class LLMJudge(Evaluator):
     model: Optional[str] = None
     include_input: bool = False
     include_expected: bool = True
+    require_reasoning: bool = True
     
     async def evaluate(self, ctx: EvaluatorContext) -> Dict[str, Any]:
-        # Build prompt for LLM judge
+        # Build prompt for LLM judge with structured output request
         prompt_parts = [
             f"Evaluate the following response based on this rubric: {self.rubric}",
             "",
@@ -180,42 +191,106 @@ class LLMJudge(Evaluator):
         
         prompt_parts.extend([
             f"",
-            f"Rate the response on a scale from 0.0 to 1.0, where 1.0 means perfect adherence to the rubric.",
-            f"Respond with just the numeric score (e.g., 0.85)."
+            f"Provide your evaluation as a JSON object with the following structure:",
+            f"{{",
+            f'  "score": <float between 0.0 and 1.0>,',
+            f'  "reasoning": "<detailed explanation of your score>",',
+            f'  "passed": <boolean indicating if the response meets the rubric>,',
+            f'  "confidence": <float between 0.0 and 1.0 indicating your confidence>'
+            f"}}",
+            f"",
+            f"Ensure your JSON is valid and complete."
         ])
         
         prompt = "\n".join(prompt_parts)
         
-        # Use a simple LLM client (would be configurable)
         try:
             from mcp_eval.llm_client import get_judge_client
             client = get_judge_client(self.model)
             response = await client.generate_str(prompt)
             
-            # Extract score
-            score_str = response.strip()
-            score = float(score_str)
+            # Extract and parse JSON response
+            json_str = self._extract_json(response)
+            judge_data = json.loads(json_str)
             
-            if not (0.0 <= score <= 1.0):
-                raise ValueError(f"Score {score} not in range [0.0, 1.0]")
+            # Validate with Pydantic
+            judge_result = JudgeResult(**judge_data)
             
-            passed = score >= self.min_score
+            # Use the structured result
+            passed = judge_result.passed and judge_result.score >= self.min_score
             
             return {
                 'passed': passed,
-                'score': score,
+                'score': judge_result.score,
+                'reasoning': judge_result.reasoning,
+                'confidence': judge_result.confidence,
                 'min_score': self.min_score,
                 'rubric': self.rubric,
                 'judge_response': response
             }
             
         except Exception as e:
-            return {
-                'passed': False,
-                'score': 0.0,
-                'error': str(e),
-                'rubric': self.rubric
-            }
+            # Fallback to simple parsing if structured output fails
+            try:
+                score = self._extract_numeric_score(response)
+                passed = score >= self.min_score
+                
+                return {
+                    'passed': passed,
+                    'score': score,
+                    'reasoning': "Fallback parsing used",
+                    'confidence': 0.5,
+                    'min_score': self.min_score,
+                    'rubric': self.rubric,
+                    'judge_response': response,
+                    'parsing_error': str(e)
+                }
+            except Exception as fallback_error:
+                return {
+                    'passed': False,
+                    'score': 0.0,
+                    'reasoning': "Failed to parse judge response",
+                    'confidence': 0.0,
+                    'error': str(fallback_error),
+                    'rubric': self.rubric,
+                    'judge_response': response
+                }
+    
+    def _extract_json(self, response: str) -> str:
+        """Extract JSON from response, handling various formats."""
+        # Try to find JSON block
+        import re
+        
+        # Look for JSON between ``` markers
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
+        if json_match:
+            return json_match.group(1)
+        
+        # Look for JSON object directly
+        json_match = re.search(r'(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})', response, re.DOTALL)
+        if json_match:
+            return json_match.group(1)
+        
+        # If no JSON found, try the whole response
+        return response.strip()
+    
+    def _extract_numeric_score(self, response: str) -> float:
+        """Fallback method to extract numeric score."""
+        import re
+        
+        # Look for decimal numbers between 0 and 1
+        scores = re.findall(r'\b(0?\.\d+|1\.0|0\.0|1)\b', response)
+        if scores:
+            score = float(scores[0])
+            if 0.0 <= score <= 1.0:
+                return score
+        
+        # Look for percentages
+        percentages = re.findall(r'(\d+(?:\.\d+)?)%', response)
+        if percentages:
+            return float(percentages[0]) / 100.0
+        
+        raise ValueError("Could not extract numeric score from response")
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -223,7 +298,8 @@ class LLMJudge(Evaluator):
             'min_score': self.min_score,
             'model': self.model,
             'include_input': self.include_input,
-            'include_expected': self.include_expected
+            'include_expected': self.include_expected,
+            'require_reasoning': self.require_reasoning
         }
 
 
