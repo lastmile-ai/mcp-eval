@@ -12,36 +12,40 @@ console = Console()
 # Add the runner commands
 app.add_typer(runner_app, name="run", help="Run tests")
 
+
 @app.command()
 def version():
     """Show version information."""
     try:
         import importlib.metadata
+
         version = importlib.metadata.version("mcp-eval")
     except importlib.metadata.PackageNotFoundError:
         version = "unknown (development)"
     console.print(f"MCP-Eval {version}")
 
+
 @app.command()
 def init(
     directory: str = typer.Argument(".", help="Directory to initialize"),
-    template: str = typer.Option("basic", help="Template to use (basic, advanced)")
+    template: str = typer.Option("basic", help="Template to use (basic, advanced)"),
 ):
     """Initialize a new MCP-Eval project."""
     project_path = Path(directory)
     project_path.mkdir(exist_ok=True)
-    
+
     # Create basic structure
     (project_path / "tests").mkdir(exist_ok=True)
     (project_path / "datasets").mkdir(exist_ok=True)
-    
+
     # Create example files
     if template == "basic":
         _create_basic_template(project_path)
     elif template == "advanced":
         _create_advanced_template(project_path)
-    
+
     console.print(f"[green]Initialized MCP-Eval project in {project_path}[/green]")
+
 
 @app.command()
 def generate(
@@ -52,26 +56,29 @@ def generate(
     """Generate test cases for an MCP server."""
     import asyncio
     from mcp_eval.generation import generate_dataset
-    
+
     async def _generate():
         # Would introspect server to get available tools
         available_tools = ["example_tool"]  # Placeholder
-        
+
         dataset = await generate_dataset(
             dataset_type=None,  # Would be determined from server
             server_name=server_name,
             available_tools=available_tools,
             n_examples=n_examples,
         )
-        
+
         dataset.to_file(output)
-        console.print(f"[green]Generated {len(dataset.cases)} test cases in {output}[/green]")
-    
+        console.print(
+            f"[green]Generated {len(dataset.cases)} test cases in {output}[/green]"
+        )
+
     asyncio.run(_generate())
+
 
 def _create_basic_template(project_path: Path):
     """Create basic template files."""
-    
+
     # mcpeval.yaml
     config_content = """
 name: "My MCP Server Tests"
@@ -101,9 +108,9 @@ reporting:
   formats: ["json", "markdown"]
   output_dir: "./reports"
 """
-    
+
     (project_path / "mcpeval.yaml").write_text(config_content.strip())
-    
+
     # Example test file
     test_content = """
 import mcp_eval
@@ -128,13 +135,14 @@ async def test_error_handling(agent):
     
     agent.evaluate_now(ResponseContains("error"), response, "has_error")
 """
-    
+
     (project_path / "tests" / "test_my_server.py").write_text(test_content.strip())
+
 
 def _create_advanced_template(project_path: Path):
     """Create advanced template with dataset examples."""
     _create_basic_template(project_path)
-    
+
     # Example dataset file
     dataset_content = """
 import asyncio
@@ -195,8 +203,11 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
 """
-    
-    (project_path / "datasets" / "advanced_dataset.py").write_text(dataset_content.strip())
+
+    (project_path / "datasets" / "advanced_dataset.py").write_text(
+        dataset_content.strip()
+    )
+
 
 if __name__ == "__main__":
     app()

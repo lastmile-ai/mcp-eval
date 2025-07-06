@@ -9,6 +9,7 @@ server = FastMCP(
     description="A simple MCP server with time and summarization tools.",
 )
 
+
 @server.tool()
 def get_current_time(timezone: str = "UTC") -> str:
     """
@@ -22,6 +23,7 @@ def get_current_time(timezone: str = "UTC") -> str:
     except pytz.UnknownTimeZoneError:
         return f"Error: Unknown timezone '{timezone}'."
 
+
 @server.tool()
 def summarize_text(text: str, length: int = 30) -> str:
     """
@@ -33,6 +35,7 @@ def summarize_text(text: str, length: int = 30) -> str:
         return text
     summary = " ".join(words[:length])
     return summary + "..."
+
 
 if __name__ == "__main__":
     # This allows the server to be run directly for testing
