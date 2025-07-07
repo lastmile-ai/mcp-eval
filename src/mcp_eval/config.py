@@ -175,12 +175,16 @@ def get_current_config() -> Dict[str, Any]:
     if _current_settings is None:
         load_config()
 
+    if _current_settings is None:
+        raise RuntimeError("Configuration could not be loaded.")
+
     return {
         "default_server": _current_settings.default_server,
         "agent_config": _current_settings.agent_config
         or _current_settings.agents["default"].model_dump(),
         "servers": {
-            name: config.model_dump() for name, config in _current_settings.servers.items()
+            name: config.model_dump()
+            for name, config in _current_settings.servers.items()
         },
         "judge": _current_settings.judge.model_dump(),
         "metrics": _current_settings.metrics.model_dump(),
