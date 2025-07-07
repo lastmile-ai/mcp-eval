@@ -74,6 +74,11 @@ async def mcp_agent(mcp_session: MCPEvalPytestSession) -> TestAgent:
 def pytest_configure(config):
     """Configure pytest to work with mcp-eval."""
     config.addinivalue_line("markers", "mcp-eval: mark test as an mcp-eval test")
+    
+    # Suppress Pydantic serialization warnings from MCP library
+    # These warnings are due to MCP's internal union type handling and are not user-actionable
+    import warnings
+    warnings.filterwarnings("ignore", message="Pydantic serializer warnings.*", category=UserWarning, module="pydantic.main")
 
 
 def pytest_collection_modifyitems(config, items):

@@ -25,6 +25,9 @@ from .metrics import TestMetrics, process_spans, TraceSpan
 from .otel.span_tree import SpanTree, SpanNode
 from .evaluators.base import Evaluator, EvaluatorContext
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 # LLM Factory Registry
 LLM_FACTORIES = {
@@ -215,17 +218,31 @@ class TestSession:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Clean up session and process final metrics."""
-        if self.agent:
-            await self.agent.shutdown()
+        try:
+            # Process deferred evaluators before cleanup to ensure traces are available
+            await self._process_deferred_evaluators()
+            
+            # Shutdown agent first
+            if self.agent:
+                await self.agent.shutdown()
 
-        if self.app:
-            await self.app.cleanup()
-
-        # Small delay to ensure OTEL traces are fully written
-        await asyncio.sleep(0.1)
-
-        # Process all deferred evaluators using OTEL-derived metrics
-        await self._process_deferred_evaluators()
+            # Small delay to allow final spans to be written
+            await asyncio.sleep(0.5)
+            
+            # Force flush OTEL traces before app cleanup
+            from opentelemetry import trace
+            tracer_provider = trace.get_tracer_provider()
+            if hasattr(tracer_provider, 'force_flush'):
+                # Force flush all pending spans
+                tracer_provider.force_flush(timeout_millis=5000)
+            
+            # Now cleanup the app (which will shutdown OTEL)
+            if self.app:
+                await self.app.cleanup()
+                
+        except Exception as e:
+            logger.warning(f"Error during session cleanup: {e}")
+            # Continue with cleanup even if there's an error
 
     def add_deferred_evaluator(self, evaluator: Evaluator, name: str):
         """Add evaluator to run at session end with full metrics context."""
@@ -405,7 +422,13 @@ class TestSession:
 
     def cleanup(self):
         """Clean up temporary files."""
-        self.temp_dir.cleanup()
+        try:
+            # Ensure trace file exists and is readable before cleanup
+            if os.path.exists(self.trace_file):
+                logger.debug(f"Trace file exists at {self.trace_file}")
+            self.temp_dir.cleanup()
+        except Exception as e:
+            logger.warning(f"Error cleaning up temp directory: {e}")
 
 
 @asynccontextmanager
