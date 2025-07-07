@@ -74,7 +74,23 @@ class TraceSpan:
     @classmethod
     def from_json(cls, json_line: str) -> "TraceSpan":
         """Create TraceSpan from JSONL line."""
+        from datetime import datetime
+
         data = json.loads(json_line)
+
+        # Helper to parse timestamps
+        def parse_timestamp(ts):
+            if isinstance(ts, (int, float)):
+                return int(ts)
+            elif isinstance(ts, str):
+                # Parse ISO format timestamp to nanoseconds
+                if "T" in ts and ts.endswith("Z"):
+                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    return int(dt.timestamp() * 1e9)
+                else:
+                    # Try to parse as a number string
+                    return int(float(ts))
+            return 0
 
         # Handle both standard OTEL export format and Jaeger format
         if "name" in data:
@@ -83,8 +99,8 @@ class TraceSpan:
                 name=data.get("name", ""),
                 context=data.get("context", {}),
                 parent=data.get("parent"),
-                start_time=data.get("start_time", 0),
-                end_time=data.get("end_time", 0),
+                start_time=parse_timestamp(data.get("start_time", 0)),
+                end_time=parse_timestamp(data.get("end_time", 0)),
                 attributes=data.get("attributes", {}),
                 events=data.get("events", []),
             )
@@ -99,8 +115,9 @@ class TraceSpan:
                 parent=data.get("references", [{}])[0]
                 if data.get("references")
                 else None,
-                start_time=data.get("startTime", 0),
-                end_time=data.get("startTime", 0) + data.get("duration", 0),
+                start_time=parse_timestamp(data.get("startTime", 0)),
+                end_time=parse_timestamp(data.get("startTime", 0))
+                + data.get("duration", 0),
                 attributes=data.get("tags", {}),
                 events=data.get("logs", []),
             )

@@ -11,12 +11,38 @@ from contextlib import asynccontextmanager
 
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
-from mcp_agent.config import get_settings, TracePathSettings
+from mcp_agent.config import (
+    get_settings,
+    TracePathSettings,
+    MCPServerSettings,
+    MCPSettings,
+)
 from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM
+from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
+from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
 
 from .metrics import TestMetrics, process_spans, TraceSpan
 from .otel.span_tree import SpanTree, SpanNode
 from .evaluators.base import Evaluator, EvaluatorContext
+
+
+# LLM Factory Registry
+LLM_FACTORIES = {
+    "AnthropicAugmentedLLM": AnthropicAugmentedLLM,
+    "OpenAIAugmentedLLM": OpenAIAugmentedLLM,
+}
+
+
+def resolve_llm_factory(factory_name: Union[str, type]) -> type:
+    """Resolve LLM factory name to actual class."""
+    if isinstance(factory_name, str):
+        if factory_name not in LLM_FACTORIES:
+            raise ValueError(
+                f"Unknown LLM factory: {factory_name}. "
+                f"Available: {list(LLM_FACTORIES.keys())}"
+            )
+        return LLM_FACTORIES[factory_name]
+    return factory_name
 
 
 class TestAgent:
@@ -32,9 +58,10 @@ class TestAgent:
         self._session = session
         self._llm: Optional[AugmentedLLM] = None
 
-    async def attach_llm(self, llm_factory: type) -> AugmentedLLM:
+    async def attach_llm(self, llm_factory: Union[str, type]) -> AugmentedLLM:
         """Attach LLM to the underlying agent."""
-        self._llm = await self._agent.attach_llm(llm_factory)
+        llm_factory_class = resolve_llm_factory(llm_factory)
+        self._llm = await self._agent.attach_llm(llm_factory_class)
         return self._llm
 
     async def generate_str(self, prompt: str, **kwargs) -> str:
@@ -124,6 +151,43 @@ class TestSession:
         settings.otel.exporters = ["file"]
         settings.otel.path_settings = TracePathSettings(path_pattern=self.trace_file)
 
+        # Ensure LLM provider settings exist based on the llm_factory
+        llm_factory = self.agent_config.get("llm_factory")
+        if llm_factory:
+            if llm_factory == "AnthropicAugmentedLLM" and settings.anthropic is None:
+                from mcp_agent.config import AnthropicSettings
+
+                settings.anthropic = AnthropicSettings()
+                # API key will be picked up from environment variable ANTHROPIC_API_KEY
+            elif llm_factory == "OpenAIAugmentedLLM" and settings.openai is None:
+                from mcp_agent.config import OpenAISettings
+
+                settings.openai = OpenAISettings()
+                # API key will be picked up from environment variable OPENAI_API_KEY
+
+        # Load mcp-eval config to get server definitions
+        from .config import get_current_config
+
+        mcp_eval_config = get_current_config()
+
+        # Configure servers from mcp-eval config
+        if "servers" in mcp_eval_config and mcp_eval_config["servers"]:
+            # Ensure mcp settings exist
+            if settings.mcp is None:
+                settings.mcp = MCPSettings(servers={})
+
+            # Register each server from mcp-eval config
+            for server_name, server_config in mcp_eval_config["servers"].items():
+                # Convert mcp-eval server config to MCPServerSettings
+                mcp_server_settings = MCPServerSettings(
+                    name=server_name,
+                    command=server_config.get("command"),
+                    args=server_config.get("args", []),
+                    env=server_config.get("env", {}),
+                    transport=server_config.get("transport", "stdio"),
+                )
+                settings.mcp.servers[server_name] = mcp_server_settings
+
         # Initialize MCP app (sets up OTEL instrumentation automatically)
         self.app = MCPApp(settings=settings)
         await self.app.initialize()
@@ -139,13 +203,13 @@ class TestSession:
         )
         await self.agent.initialize()
 
-        # Configure LLM if specified
-        llm_factory = self.agent_config.get("llm_factory")
-        if llm_factory:
-            await self.agent.attach_llm(llm_factory)
-
         # Create clean test agent wrapper
         self.test_agent = TestAgent(self.agent, self)
+
+        # Configure LLM if specified (do this after creating TestAgent)
+        llm_factory = self.agent_config.get("llm_factory")
+        if llm_factory:
+            await self.test_agent.attach_llm(llm_factory)
 
         return self.test_agent
 
