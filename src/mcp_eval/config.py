@@ -178,15 +178,15 @@ def get_current_config() -> Dict[str, Any]:
     return {
         "default_server": _current_settings.default_server,
         "agent_config": _current_settings.agent_config
-        or _current_settings.agents["default"].dict(),
+        or _current_settings.agents["default"].model_dump(),
         "servers": {
-            name: config.dict() for name, config in _current_settings.servers.items()
+            name: config.model_dump() for name, config in _current_settings.servers.items()
         },
-        "judge": _current_settings.judge.dict(),
-        "metrics": _current_settings.metrics.dict(),
-        "reporting": _current_settings.reporting.dict(),
-        "otel": _current_settings.otel.dict(),
-        "execution": _current_settings.execution.dict(),
+        "judge": _current_settings.judge.model_dump(),
+        "metrics": _current_settings.metrics.model_dump(),
+        "reporting": _current_settings.reporting.model_dump(),
+        "otel": _current_settings.otel.model_dump(),
+        "execution": _current_settings.execution.model_dump(),
     }
 
 
