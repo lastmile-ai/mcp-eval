@@ -18,7 +18,7 @@ dependencies = [
     "pytest>=8.4.0",
     "pyyaml>=6.0.2",
     "rich>=13.9.4",
-    "typer>=0.16.0",
+    "typer[all]>=0.16.0",
 ]
 
 [project.optional-dependencies]

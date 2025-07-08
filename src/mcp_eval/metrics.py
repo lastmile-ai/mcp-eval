@@ -179,8 +179,7 @@ def process_spans(spans: List[TraceSpan]) -> TestMetrics:
 def _is_tool_call_span(span: TraceSpan) -> bool:
     """Determine if span represents a tool call."""
     return (
-        "tool" in span.name.lower()
-        or "call_tool" in span.name
+        span.attributes.get("gen_ai.tool.name") is not None
         or span.attributes.get("mcp.tool.name") is not None
     )
 
@@ -198,18 +197,44 @@ def _extract_tool_call(span: TraceSpan) -> Optional[ToolCall]:
     """Extract tool call information from span."""
     try:
         tool_name = (
+            span.attributes.get("gen_ai.tool.name") or
             span.attributes.get("mcp.tool.name")
             or span.attributes.get("tool.name")
-            or span.name.replace("call_tool_", "").replace("tool_", "")
         )
 
         arguments = span.attributes.get("mcp.tool.arguments", {})
+        if len(arguments) == 0:
+            # Fallback to gen_ai.tool.arguments if available
+            for attr_name, attr_val in span.attributes.items():
+                if attr_name.startswith("arguments."):
+                    arg_name = attr_name.split(".", 1)[1]
+                    arguments[arg_name] = attr_val
+
         result = span.attributes.get("mcp.tool.result")
+        if result is None:
+            result_content_map = {}
+            # Fallback to result.content.[idx].type/text if available
+            for attr_name, attr_val in span.attributes.items():
+                if attr_name.startswith("result.content."):
+                    idx = attr_name.split(".", 2)[2]
+                    if idx not in result_content_map:
+                        result_content_map[idx] = {}
+                    if attr_name.endswith(".type"):
+                        result_content_map[idx]["type"] = attr_val
+                    elif attr_name.endswith(".text"):
+                        result_content_map[idx]["text"] = attr_val
+            if result_content_map:
+                result = [
+                    {"type": v.get("type", ""), "text": v.get("text", "")}
+                    for v in result_content_map.values()
+                ]
 
         is_error = (
             span.attributes.get("error") is not None
+            or span.attributes.get("result.isError") is True
             or span.attributes.get("mcp.tool.error") is not None
             or any(event.get("level") == "error" for event in span.events)
+            or span.attributes.get("status", {}).get("status_code") == "ERROR"
         )
 
         error_message = span.attributes.get("error.message")
