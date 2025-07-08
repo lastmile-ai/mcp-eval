@@ -5,6 +5,8 @@ import json
 import time
 import tempfile
 import asyncio
+import shutil
+from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -236,6 +238,9 @@ class TestSession:
                 # Force flush all pending spans
                 tracer_provider.force_flush(timeout_millis=5000)
             
+            # Save traces if configured
+            await self._save_test_artifacts()
+            
             # Now cleanup the app (which will shutdown OTEL)
             if self.app:
                 await self.app.cleanup()
@@ -420,6 +425,59 @@ class TestSession:
 
         return metrics
 
+    async def _save_test_artifacts(self):
+        """Save test artifacts (traces, reports) based on configuration."""
+        from .config import get_current_config
+        
+        config = get_current_config()
+        reporting_config = config.get("reporting", {})
+        
+        # Check if we should save traces
+        if not reporting_config.get("include_traces", True):
+            return
+            
+        output_dir = Path(reporting_config.get("output_dir", "./test-reports"))
+        
+        try:
+            # Create output directory if it doesn't exist
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save trace file if it exists
+            if os.path.exists(self.trace_file):
+                trace_dest = output_dir / f"{self.test_name}_trace.jsonl"
+                shutil.copy2(self.trace_file, trace_dest)
+                logger.info(f"Saved trace file to {trace_dest}")
+                
+                # Also save test results/metrics as JSON
+                results_dest = output_dir / f"{self.test_name}.json"
+                test_data = {
+                    "test_name": self.test_name,
+                    "server_name": self.server_name,
+                    "timestamp": self._start_time,
+                    "duration_ms": self.get_duration_ms(),
+                    "results": self.get_results(),
+                    "metrics": self.get_metrics().__dict__ if self._metrics else {},
+                    "all_passed": self.all_passed(),
+                }
+                
+                # Convert metrics to serializable format
+                if test_data["metrics"]:
+                    # Handle nested objects
+                    if "llm_metrics" in test_data["metrics"] and hasattr(test_data["metrics"]["llm_metrics"], "__dict__"):
+                        test_data["metrics"]["llm_metrics"] = test_data["metrics"]["llm_metrics"].__dict__
+                    if "tool_calls" in test_data["metrics"]:
+                        test_data["metrics"]["tool_calls"] = [
+                            tc.__dict__ if hasattr(tc, "__dict__") else tc 
+                            for tc in test_data["metrics"]["tool_calls"]
+                        ]
+                
+                with open(results_dest, 'w') as f:
+                    json.dump(test_data, f, indent=2, default=str)
+                logger.info(f"Saved test results to {results_dest}")
+                
+        except Exception as e:
+            logger.warning(f"Failed to save test artifacts: {e}")
+    
     def cleanup(self):
         """Clean up temporary files."""
         try:

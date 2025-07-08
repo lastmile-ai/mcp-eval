@@ -162,3 +162,6 @@ examples/**/*.secrets.yaml
 
 # File generated from promptify script (to create an LLM-friendly prompt for the repo)
 prompt.md
+
+# mcp-eval test reports
+test-reports/
