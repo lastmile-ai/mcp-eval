@@ -3,7 +3,7 @@
 import os
 import yaml
 from typing import Dict, Any, Optional, List
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator
 
 
@@ -83,6 +83,13 @@ class ExecutionConfig(BaseSettings):
 class MCPEvalSettings(BaseSettings):
     """Complete MCP-Eval configuration with validation."""
 
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+        env_prefix="MCPEVAL_",
+        case_sensitive=False,
+    )
+
     # Basic info
     name: str = "MCP-Eval Test Suite"
     description: str = "Comprehensive evaluation of MCP servers"
@@ -127,11 +134,6 @@ class MCPEvalSettings(BaseSettings):
                 for name, config in v.items()
             }
         return v
-
-    class Config:
-        env_prefix = "MCPEVAL_"
-        env_file = ".env"
-        case_sensitive = False
 
 
 # Global configuration state
