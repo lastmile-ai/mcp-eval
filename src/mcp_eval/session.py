@@ -28,6 +28,7 @@ from .otel.span_tree import SpanTree, SpanNode
 from .evaluators.base import Evaluator, EvaluatorContext
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -150,6 +151,11 @@ class TestSession:
 
     async def __aenter__(self) -> TestAgent:
         """Initialize the test session with OTEL tracing as source of truth."""
+        # Register this test's trace file
+        from mcp_eval.tracing_patch import register_test_trace_file
+
+        register_test_trace_file(self.test_name, self.trace_file)
+
         # Configure OpenTelemetry tracing (single source of truth)
         settings = get_settings()
         settings.otel.enabled = True
@@ -220,31 +226,43 @@ class TestSession:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Clean up session and process final metrics."""
+        logger.info(f"TestSession.__aexit__ called for test {self.test_name}")
         try:
+            # Unregister this test's trace file
+            from mcp_eval.tracing_patch import unregister_test_trace_file
+
             # Process deferred evaluators before cleanup to ensure traces are available
             await self._process_deferred_evaluators()
-            
+
             # Shutdown agent first
             if self.agent:
                 await self.agent.shutdown()
 
             # Small delay to allow final spans to be written
             await asyncio.sleep(0.5)
-            
+
             # Force flush OTEL traces before app cleanup
             from opentelemetry import trace
+
             tracer_provider = trace.get_tracer_provider()
-            if hasattr(tracer_provider, 'force_flush'):
+            if hasattr(tracer_provider, "force_flush"):
                 # Force flush all pending spans
                 tracer_provider.force_flush(timeout_millis=5000)
-            
+
             # Save traces if configured
+            logger.info(f"About to save test artifacts for {self.test_name}")
             await self._save_test_artifacts()
-            
-            # Now cleanup the app (which will shutdown OTEL)
-            if self.app:
-                await self.app.cleanup()
-                
+            logger.info(f"Completed saving test artifacts for {self.test_name}")
+
+            # Note: We don't call app.cleanup() here because it shuts down the global
+            # OTEL infrastructure, preventing subsequent tests from saving traces.
+            # Instead, we only clean up the agent and let Python garbage collection
+            # handle the app instance. The OTEL infrastructure will remain active
+            # for other tests in the session.
+
+            # Unregister trace file after saving
+            unregister_test_trace_file(self.test_name)
+
         except Exception as e:
             logger.warning(f"Error during session cleanup: {e}")
             # Continue with cleanup even if there's an error
@@ -428,56 +446,68 @@ class TestSession:
     async def _save_test_artifacts(self):
         """Save test artifacts (traces, reports) based on configuration."""
         from .config import get_current_config
-        
+
         config = get_current_config()
         reporting_config = config.get("reporting", {})
-        
+
         # Check if we should save traces
         if not reporting_config.get("include_traces", True):
+            logger.info("Skipping trace save - include_traces is False")
             return
-            
+
         output_dir = Path(reporting_config.get("output_dir", "./test-reports"))
-        
+        logger.info(f"Saving test artifacts to {output_dir} for test {self.test_name}")
+        logger.info(f"Current working directory: {os.getcwd()}")
+        logger.info(f"Absolute output path: {output_dir.resolve()}")
+
         try:
             # Create output directory if it doesn't exist
             output_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Save trace file if it exists
             if os.path.exists(self.trace_file):
                 trace_dest = output_dir / f"{self.test_name}_trace.jsonl"
                 shutil.copy2(self.trace_file, trace_dest)
                 logger.info(f"Saved trace file to {trace_dest}")
-                
-                # Also save test results/metrics as JSON
-                results_dest = output_dir / f"{self.test_name}.json"
-                test_data = {
-                    "test_name": self.test_name,
-                    "server_name": self.server_name,
-                    "timestamp": self._start_time,
-                    "duration_ms": self.get_duration_ms(),
-                    "results": self.get_results(),
-                    "metrics": self.get_metrics().__dict__ if self._metrics else {},
-                    "all_passed": self.all_passed(),
-                }
-                
-                # Convert metrics to serializable format
-                if test_data["metrics"]:
-                    # Handle nested objects
-                    if "llm_metrics" in test_data["metrics"] and hasattr(test_data["metrics"]["llm_metrics"], "__dict__"):
-                        test_data["metrics"]["llm_metrics"] = test_data["metrics"]["llm_metrics"].__dict__
-                    if "tool_calls" in test_data["metrics"]:
-                        test_data["metrics"]["tool_calls"] = [
-                            tc.__dict__ if hasattr(tc, "__dict__") else tc 
-                            for tc in test_data["metrics"]["tool_calls"]
-                        ]
-                
-                with open(results_dest, 'w') as f:
-                    json.dump(test_data, f, indent=2, default=str)
-                logger.info(f"Saved test results to {results_dest}")
-                
+            else:
+                logger.warning(
+                    f"Trace file not found at {self.trace_file} for test {self.test_name}"
+                )
+
+            # Also save test results/metrics as JSON
+            results_dest = output_dir / f"{self.test_name}.json"
+            test_data = {
+                "test_name": self.test_name,
+                "server_name": self.server_name,
+                "timestamp": self._start_time,
+                "duration_ms": self.get_duration_ms(),
+                "results": self.get_results(),
+                "metrics": self.get_metrics().__dict__ if self._metrics else {},
+                "all_passed": self.all_passed(),
+            }
+
+            # Convert metrics to serializable format
+            if test_data["metrics"]:
+                # Handle nested objects
+                if "llm_metrics" in test_data["metrics"] and hasattr(
+                    test_data["metrics"]["llm_metrics"], "__dict__"
+                ):
+                    test_data["metrics"]["llm_metrics"] = test_data["metrics"][
+                        "llm_metrics"
+                    ].__dict__
+                if "tool_calls" in test_data["metrics"]:
+                    test_data["metrics"]["tool_calls"] = [
+                        tc.__dict__ if hasattr(tc, "__dict__") else tc
+                        for tc in test_data["metrics"]["tool_calls"]
+                    ]
+
+            with open(results_dest, "w") as f:
+                json.dump(test_data, f, indent=2, default=str)
+            logger.info(f"Saved test results to {results_dest}")
+
         except Exception as e:
-            logger.warning(f"Failed to save test artifacts: {e}")
-    
+            logger.warning(f"Failed to save test artifacts: {e}", exc_info=True)
+
     def cleanup(self):
         """Clean up temporary files."""
         try:

@@ -26,7 +26,7 @@ class MCPEvalPytestSession:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self._session.__aexit__(exc_type, exc_val, exc_tb)
-        self._session.cleanup()
+        # Note: cleanup is already handled by the test_session context manager
 
     @property
     def agent(self) -> TestAgent:
@@ -54,9 +54,11 @@ async def mcp_session(request) -> Generator[MCPEvalPytestSession, None, None]:
     test_name = request.node.name
 
     # Create and yield session
-    session = MCPEvalPytestSession(server_name, test_name, agent_config)
-    async with session:
-        yield session
+    pytest_session_wrapper = MCPEvalPytestSession(server_name, test_name, agent_config)
+    async with pytest_session_wrapper:
+        yield pytest_session_wrapper
+    # Cleanup happens after the context manager exits
+    pytest_session_wrapper.session.cleanup()
 
 
 @pytest.fixture
@@ -74,11 +76,20 @@ async def mcp_agent(mcp_session: MCPEvalPytestSession) -> TestAgent:
 def pytest_configure(config):
     """Configure pytest to work with mcp-eval."""
     config.addinivalue_line("markers", "mcp-eval: mark test as an mcp-eval test")
-    
+
     # Suppress Pydantic serialization warnings from MCP library
     # These warnings are due to MCP's internal union type handling and are not user-actionable
     import warnings
-    warnings.filterwarnings("ignore", message="Pydantic serializer warnings.*", category=UserWarning, module="pydantic.main")
+
+    warnings.filterwarnings(
+        "ignore",
+        message="Pydantic serializer warnings.*",
+        category=UserWarning,
+        module="pydantic.main",
+    )
+
+    # Track if we need to cleanup OTEL at the end
+    config._mcp_eval_needs_otel_cleanup = False
 
 
 def pytest_collection_modifyitems(config, items):
@@ -98,6 +109,9 @@ def pytest_runtest_setup(item):
         or "mcp-eval" in item.keywords
         or "mcp_eval" in item.keywords
     ):
+        # Mark that we're using mcp-eval and will need cleanup
+        item.config._mcp_eval_needs_otel_cleanup = True
+
         # Run any mcp-eval setup functions
         from mcp_eval.core import _setup_functions
 
@@ -127,3 +141,31 @@ def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Called after whole test run finished, right before returning the exit status."""
+    if (
+        hasattr(session.config, "_mcp_eval_needs_otel_cleanup")
+        and session.config._mcp_eval_needs_otel_cleanup
+    ):
+        # Clean up OTEL infrastructure after all tests complete
+        try:
+            from mcp_agent.core.context import cleanup_context
+            from mcp_agent.logging.logger import get_logger
+
+            logger = get_logger(__name__)
+            logger.info("Cleaning up MCP-Eval OTEL infrastructure after test session")
+
+            # Run cleanup in the event loop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(cleanup_context())
+            finally:
+                loop.close()
+        except Exception as e:
+            # Don't fail the test session due to cleanup errors
+            import warnings
+
+            warnings.warn(f"Failed to cleanup OTEL infrastructure: {e}")

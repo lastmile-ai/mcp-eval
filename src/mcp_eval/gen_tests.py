@@ -4,7 +4,6 @@ from mcp_agent.agents.agent import Agent
 from pydantic import BaseModel, Field
 from typing import List
 import asyncio
-import os
 from pathlib import Path
 from jinja2 import Environment, PackageLoader
 from rich.console import Console
@@ -65,19 +64,19 @@ async def list_tools_for_server(server_name: str) -> str:
 def find_gitignore(start_path: Path) -> Path:
     """Walk up the directory tree to find .gitignore file."""
     current = start_path.resolve()
-    
+
     # Walk up the tree until we find .gitignore or reach root
     while current != current.parent:
         gitignore_path = current / ".gitignore"
         if gitignore_path.exists():
             return gitignore_path
         current = current.parent
-    
+
     # Check root directory
     root_gitignore = current / ".gitignore"
     if root_gitignore.exists():
         return root_gitignore
-    
+
     return None
 
 
@@ -85,36 +84,35 @@ def update_gitignore(output_path: Path):
     """Updates .gitignore to exclude test-reports directory if .gitignore exists."""
     # Find .gitignore by walking up from the output file location
     gitignore_path = find_gitignore(output_path.parent if output_path else Path.cwd())
-    
+
     if not gitignore_path:
-        console.print("[yellow]No .gitignore found in project tree, skipping update[/yellow]")
+        console.print(
+            "[yellow]No .gitignore found in project tree, skipping update[/yellow]"
+        )
         return
-    
+
     # Lines to ensure are in .gitignore
-    gitignore_entries = [
-        "\n# MCP-Eval test reports",
-        "test-reports/"
-    ]
-    
+    gitignore_entries = ["\n# MCP-Eval test reports", "test-reports/"]
+
     # Read existing .gitignore
-    with open(gitignore_path, 'r') as f:
+    with open(gitignore_path, "r") as f:
         content = f.read()
-    
+
     # Check if test-reports is already ignored
     if "test-reports/" in content:
         return  # Already ignored
-    
+
     # Add our entries
-    if content and not content.endswith('\n'):
-        content += '\n'
-    
+    if content and not content.endswith("\n"):
+        content += "\n"
+
     for entry in gitignore_entries:
-        content += entry + '\n'
-    
+        content += entry + "\n"
+
     # Write updated content
-    with open(gitignore_path, 'w') as f:
+    with open(gitignore_path, "w") as f:
         f.write(content)
-    
+
     console.print(f"[green]Updated {gitignore_path} to exclude test-reports/[/green]")
 
 
@@ -217,7 +215,7 @@ def generate(
         console.print(
             f"\n[bold green]Successfully generated tests and saved to {output_file}[/bold green]"
         )
-        
+
         # Update .gitignore to exclude test-reports
         update_gitignore(Path(output_file))
     else:
@@ -226,7 +224,7 @@ def generate(
             output_code, "python", theme="solarized-dark", line_numbers=True
         )
         console.print(syntax)
-        
+
         # Update .gitignore in current directory
         update_gitignore(Path.cwd())
 
