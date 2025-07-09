@@ -154,29 +154,3 @@ def event_loop():
     loop.close()
 
 
-def pytest_sessionfinish(session, exitstatus):
-    """Called after whole test run finished, right before returning the exit status."""
-    if (
-        hasattr(session.config, "_mcp_eval_needs_otel_cleanup")
-        and session.config._mcp_eval_needs_otel_cleanup
-    ):
-        # Clean up OTEL infrastructure after all tests complete
-        try:
-            from mcp_agent.core.context import cleanup_context
-            from mcp_agent.logging.logger import get_logger
-
-            logger = get_logger(__name__)
-            logger.info("Cleaning up MCP-Eval OTEL infrastructure after test session")
-
-            # Run cleanup in the event loop
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(cleanup_context())
-            finally:
-                loop.close()
-        except Exception as e:
-            # Don't fail the test session due to cleanup errors
-            import warnings
-
-            warnings.warn(f"Failed to cleanup OTEL infrastructure: {e}")

@@ -155,16 +155,11 @@ class TestSession:
 
     async def __aenter__(self) -> TestAgent:
         """Initialize the test session with OTEL tracing as source of truth."""
-        # Register this test's trace file
-        from mcp_eval.tracing_patch import register_test_trace_file
-
-        register_test_trace_file(self.test_name, self.trace_file)
-
         # Configure OpenTelemetry tracing (single source of truth)
         settings = get_settings()
         settings.otel.enabled = True
         settings.otel.exporters = ["file"]
-        settings.otel.path_settings = TracePathSettings(path_pattern=self.trace_file)
+        settings.otel.path = self.trace_file
         settings.logger.transports = ["console"] if self.verbose else ["none"]
 
         # Ensure LLM provider settings exist based on the llm_factory
@@ -233,9 +228,6 @@ class TestSession:
         """Clean up session and process final metrics."""
         logger.info(f"TestSession.__aexit__ called for test {self.test_name}")
         try:
-            # Unregister this test's trace file
-            from mcp_eval.tracing_patch import unregister_test_trace_file
-
             # Process deferred evaluators before cleanup to ensure traces are available
             await self._process_deferred_evaluators()
 
@@ -243,30 +235,22 @@ class TestSession:
             if self.agent:
                 await self.agent.shutdown()
 
-            # Small delay to allow final spans to be written
-            await asyncio.sleep(0.5)
-
-            # Force flush OTEL traces before app cleanup
-            from opentelemetry import trace
-
-            tracer_provider = trace.get_tracer_provider()
-            if hasattr(tracer_provider, "force_flush"):
-                # Force flush all pending spans
-                tracer_provider.force_flush(timeout_millis=5000)
+            # Flush traces to ensure they're written to disk
+            if self.app and self.app._context and self.app._context.tracing_config:
+                logger.info(f"Flushing traces for {self.test_name}")
+                await self.app._context.tracing_config.flush()
+                # Small delay to ensure file is written
+                await asyncio.sleep(0.1)
 
             # Save traces if configured
             logger.info(f"About to save test artifacts for {self.test_name}")
             await self._save_test_artifacts()
             logger.info(f"Completed saving test artifacts for {self.test_name}")
 
-            # Note: We don't call app.cleanup() here because it shuts down the global
-            # OTEL infrastructure, preventing subsequent tests from saving traces.
-            # Instead, we only clean up the agent and let Python garbage collection
-            # handle the app instance. The OTEL infrastructure will remain active
-            # for other tests in the session.
-
-            # Unregister trace file after saving
-            unregister_test_trace_file(self.test_name)
+            # Now we can safely cleanup the app - the new mcp-agent version
+            # handles OTEL cleanup properly without affecting other apps
+            if self.app:
+                await self.app.cleanup()
 
         except Exception as e:
             logger.warning(f"Error during session cleanup: {e}")
