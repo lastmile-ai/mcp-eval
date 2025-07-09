@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 from contextlib import asynccontextmanager
+from opentelemetry import trace
+
 
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
@@ -401,6 +403,11 @@ class TestSession:
 
     def _process_otel_traces(self) -> TestMetrics:
         """Process OTEL traces into metrics and span tree (single source of truth)."""
+        # Force flush to ensure all batched spans are exported before processing
+        tracer_provider = trace.get_tracer_provider()
+        if hasattr(tracer_provider, "force_flush"):
+            tracer_provider.force_flush(timeout_millis=5000)
+
         spans = []
         if os.path.exists(self.trace_file):
             with open(self.trace_file, "r", encoding="utf-8") as f:
