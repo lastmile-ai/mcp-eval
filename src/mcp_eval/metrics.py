@@ -5,6 +5,34 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 
 
+def unflatten_arguments(attributes: Dict[str, Any], prefix: str = "mcp.request.argument.") -> Dict[str, Any]:
+    """Unflatten arguments from span attributes with dot notation support.
+    
+    Args:
+        attributes: Span attributes dictionary
+        prefix: Prefix to look for in attribute keys
+        
+    Returns:
+        Nested dictionary with unflattened arguments
+    """
+    arguments = {}
+    for full_key, value in attributes.items():
+        if not full_key.startswith(prefix):
+            continue
+        
+        # strip prefix and split into path components
+        keys = full_key[len(prefix):].split(".")
+        current = arguments
+        
+        # for each key except the last, descend (or create) a dict
+        for part in keys[:-1]:
+            current = current.setdefault(part, {})
+        # assign the final value
+        current[keys[-1]] = value
+
+    return arguments
+
+
 @dataclass
 class ToolCall:
     """Represents a single tool call."""
@@ -203,7 +231,8 @@ def _extract_tool_call(span: TraceSpan) -> Optional[ToolCall]:
             or span.name.replace("call_tool_", "").replace("tool_", "")
         )
 
-        arguments = span.attributes.get("mcp.tool.arguments", {})
+        # Extract arguments using the unflatten utility
+        arguments = unflatten_arguments(span.attributes)
         result = span.attributes.get("mcp.tool.result")
 
         is_error = (
