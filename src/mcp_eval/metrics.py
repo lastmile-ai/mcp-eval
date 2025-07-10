@@ -5,25 +5,25 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 
 
-def unflatten_arguments(attributes: Dict[str, Any], prefix: str = "mcp.request.argument.") -> Dict[str, Any]:
-    """Unflatten arguments from span attributes with dot notation support.
-    
+def unflatten_attributes(attributes: Dict[str, Any], prefix: str) -> Dict[str, Any]:
+    """Unflatten values from span attributes with dot notation support.
+
     Args:
         attributes: Span attributes dictionary
         prefix: Prefix to look for in attribute keys
-        
+
     Returns:
-        Nested dictionary with unflattened arguments
+        Nested dictionary with unflattened values
     """
     arguments = {}
     for full_key, value in attributes.items():
         if not full_key.startswith(prefix):
             continue
-        
+
         # strip prefix and split into path components
-        keys = full_key[len(prefix):].split(".")
+        keys = full_key[len(prefix) :].split(".")
         current = arguments
-        
+
         # for each key except the last, descend (or create) a dict
         for part in keys[:-1]:
             current = current.setdefault(part, {})
@@ -207,9 +207,8 @@ def process_spans(spans: List[TraceSpan]) -> TestMetrics:
 def _is_tool_call_span(span: TraceSpan) -> bool:
     """Determine if span represents a tool call."""
     return (
-        "tool" in span.name.lower()
-        or "call_tool" in span.name
-        or span.attributes.get("mcp.tool.name") is not None
+        span.attributes.get("mcp.tool.name") is not None
+        or span.attributes.get("gen_ai.tool.name") is not None
     )
 
 
@@ -232,14 +231,11 @@ def _extract_tool_call(span: TraceSpan) -> Optional[ToolCall]:
         )
 
         # Extract arguments using the unflatten utility
-        arguments = unflatten_arguments(span.attributes)
-        result = span.attributes.get("mcp.tool.result")
+        # TODO: jerron - Unflattened result.content is a dict instead of list
+        arguments = unflatten_attributes(span.attributes, "mcp.request.argument.")
+        result = unflatten_attributes(span.attributes, "result.")
 
-        is_error = (
-            span.attributes.get("error") is not None
-            or span.attributes.get("mcp.tool.error") is not None
-            or any(event.get("level") == "error" for event in span.events)
-        )
+        is_error = span.attributes.get("result.isError", False)
 
         error_message = span.attributes.get("error.message")
 
