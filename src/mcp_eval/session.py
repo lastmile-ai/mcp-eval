@@ -128,10 +128,12 @@ class TestSession:
         server_name: str,
         test_name: str,
         agent_config: Optional[Dict[str, Any]] = None,
+        verbose: bool = False,
     ):
         self.server_name = server_name
         self.test_name = test_name
         self.agent_config = agent_config or {}
+        self.verbose = verbose
 
         # Core objects
         self.app: Optional[MCPApp] = None
@@ -163,6 +165,7 @@ class TestSession:
         settings.otel.enabled = True
         settings.otel.exporters = ["file"]
         settings.otel.path_settings = TracePathSettings(path_pattern=self.trace_file)
+        settings.logger.transports = ["console"] if self.verbose else ["none"]
 
         # Ensure LLM provider settings exist based on the llm_factory
         llm_factory = self.agent_config.get("llm_factory")

@@ -6,7 +6,7 @@ allowing users to write mcp-eval tests that run natively in pytest.
 
 import asyncio
 import inspect
-from typing import Generator
+from typing import AsyncGenerator
 import pytest
 
 from mcp_eval import TestSession, TestAgent
@@ -16,9 +16,15 @@ from mcp_eval.config import get_current_config
 class MCPEvalPytestSession:
     """Pytest-compatible wrapper around TestSession."""
 
-    def __init__(self, server_name: str, test_name: str, agent_config: dict = None):
-        self._session = TestSession(server_name, test_name, agent_config)
-        self._agent = None
+    def __init__(
+        self,
+        server_name: str,
+        test_name: str,
+        agent_config: dict | None = None,
+        verbose: bool = False,
+    ):
+        self._session = TestSession(server_name, test_name, agent_config, verbose)
+        self._agent: TestAgent | None = None
 
     async def __aenter__(self):
         self._agent = await self._session.__aenter__()
@@ -29,7 +35,7 @@ class MCPEvalPytestSession:
         # Note: cleanup is already handled by the test_session context manager
 
     @property
-    def agent(self) -> TestAgent:
+    def agent(self) -> TestAgent | None:
         return self._agent
 
     @property
@@ -38,7 +44,7 @@ class MCPEvalPytestSession:
 
 
 @pytest.fixture
-async def mcp_session(request) -> Generator[MCPEvalPytestSession, None, None]:
+async def mcp_session(request) -> AsyncGenerator[MCPEvalPytestSession, None]:
     """Pytest fixture that provides an MCP test session.
 
     Usage:
@@ -53,8 +59,13 @@ async def mcp_session(request) -> Generator[MCPEvalPytestSession, None, None]:
 
     test_name = request.node.name
 
+    # Check if pytest is running in verbose mode
+    verbose = request.config.getoption("verbose") > 0
+
     # Create and yield session
-    pytest_session_wrapper = MCPEvalPytestSession(server_name, test_name, agent_config)
+    pytest_session_wrapper = MCPEvalPytestSession(
+        server_name, test_name, agent_config, verbose
+    )
     async with pytest_session_wrapper:
         yield pytest_session_wrapper
     # Cleanup happens after the context manager exits
@@ -62,7 +73,7 @@ async def mcp_session(request) -> Generator[MCPEvalPytestSession, None, None]:
 
 
 @pytest.fixture
-async def mcp_agent(mcp_session: MCPEvalPytestSession) -> TestAgent:
+async def mcp_agent(mcp_session: MCPEvalPytestSession) -> TestAgent | None:
     """Convenience fixture that provides just the agent.
 
     Usage:
