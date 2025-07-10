@@ -5,6 +5,7 @@ import mcp_eval
 from mcp_eval import ToolWasCalled, ResponseContains, LLMJudge
 from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
 from mcp_eval.metrics import TestMetrics
+from mcp_eval.session import TestAgent
 
 
 @mcp_eval.setup
@@ -15,7 +16,7 @@ def configure_for_pytest():
 
 @pytest.mark.asyncio
 @pytest.mark.network
-async def test_basic_fetch_with_pytest(mcp_agent):
+async def test_basic_fetch_with_pytest(mcp_agent: TestAgent):
     """Test basic URL fetching using pytest fixture."""
     response = await mcp_agent.generate_str(
         "Fetch the content from https://example.com"
@@ -32,7 +33,7 @@ async def test_basic_fetch_with_pytest(mcp_agent):
 
 @pytest.mark.asyncio
 @pytest.mark.network
-async def test_fetch_with_markdown_conversion(mcp_agent):
+async def test_fetch_with_markdown_conversion(mcp_agent: TestAgent):
     """Test that HTML is properly converted to markdown."""
     response = await mcp_agent.generate_str(
         "Fetch https://example.com and tell me about the content format"
@@ -62,7 +63,9 @@ async def test_fetch_with_markdown_conversion(mcp_agent):
         ("https://httpbin.org/json", "slideshow"),
     ],
 )
-async def test_fetch_multiple_urls(mcp_agent, url, expected_content):
+async def test_fetch_multiple_urls(
+    mcp_agent: TestAgent, url: str, expected_content: str
+):
     """Parametrized test for multiple URLs."""
     response = await mcp_agent.generate_str(f"Fetch content from {url}")
 
@@ -79,7 +82,7 @@ async def test_fetch_multiple_urls(mcp_agent, url, expected_content):
 
 @pytest.mark.asyncio
 @pytest.mark.network
-async def test_fetch_error_handling(mcp_agent):
+async def test_fetch_error_handling(mcp_agent: TestAgent):
     """Test error handling for invalid URLs."""
     response = await mcp_agent.generate_str(
         "Try to fetch content from https://this-domain-should-not-exist-12345.com"
@@ -100,7 +103,7 @@ async def test_fetch_error_handling(mcp_agent):
 
 @pytest.mark.asyncio
 @pytest.mark.network
-async def test_fetch_with_raw_content(mcp_agent):
+async def test_fetch_with_raw_content(mcp_agent: TestAgent):
     """Test fetching raw HTML content."""
     response = await mcp_agent.generate_str(
         "Fetch the raw HTML content from https://example.com without markdown conversion"
@@ -118,7 +121,7 @@ async def test_fetch_with_raw_content(mcp_agent):
 @pytest.mark.asyncio
 @pytest.mark.network
 @pytest.mark.slow
-async def test_large_content_chunking(mcp_agent):
+async def test_large_content_chunking(mcp_agent: TestAgent):
     """Test fetching large content with chunking."""
     response = await mcp_agent.generate_str(
         "Fetch content from https://httpbin.org/json and if it's truncated, "
@@ -181,7 +184,7 @@ class MetricsValidationEvaluator(Evaluator):
 
 @pytest.mark.asyncio
 @pytest.mark.network
-async def test_metrics_collection_single_fetch(mcp_agent):
+async def test_metrics_collection_single_fetch(mcp_agent: TestAgent):
     """Test that metrics are properly collected for a single fetch."""
     # Add metrics validation evaluator
     mcp_agent.session.add_deferred_evaluator(
@@ -203,7 +206,7 @@ async def test_metrics_collection_single_fetch(mcp_agent):
 
 @pytest.mark.asyncio
 @pytest.mark.network
-async def test_multiple_sequential_fetches_metrics(mcp_agent):
+async def test_multiple_sequential_fetches_metrics(mcp_agent: TestAgent):
     """Test metrics collection for multiple sequential fetches."""
     response = await mcp_agent.generate_str(
         "First fetch https://example.com, then fetch https://httpbin.org/json. "
@@ -229,7 +232,7 @@ async def test_multiple_sequential_fetches_metrics(mcp_agent):
 
 @pytest.mark.asyncio
 @pytest.mark.network
-async def test_parallel_fetches_detection(mcp_agent):
+async def test_parallel_fetches_detection(mcp_agent: TestAgent):
     """Test that parallel fetch calls are detected in metrics."""
     response = await mcp_agent.generate_str(
         "Fetch these URLs in parallel and tell me the title of each page: "
@@ -263,7 +266,7 @@ async def test_parallel_fetches_detection(mcp_agent):
 
 @pytest.mark.asyncio
 @pytest.mark.network
-async def test_span_tree_structure(mcp_agent):
+async def test_span_tree_structure(mcp_agent: TestAgent):
     """Test that span tree is properly constructed from OTEL traces."""
     _response = await mcp_agent.generate_str(
         "Fetch https://example.com and tell me about it"
@@ -289,7 +292,7 @@ async def test_span_tree_structure(mcp_agent):
 
 @pytest.mark.asyncio
 @pytest.mark.network
-async def test_error_metrics_tracking(mcp_agent):
+async def test_error_metrics_tracking(mcp_agent: TestAgent):
     """Test that errors are properly tracked in metrics."""
     response = await mcp_agent.generate_str(
         "Try to fetch these URLs: https://example.com (valid) and "
@@ -313,7 +316,7 @@ async def test_error_metrics_tracking(mcp_agent):
 
 @pytest.mark.asyncio
 @pytest.mark.network
-async def test_comprehensive_metrics_validation(mcp_agent):
+async def test_comprehensive_metrics_validation(mcp_agent: TestAgent):
     """Comprehensive test that validates all aspects of metrics collection."""
     # Add comprehensive metrics evaluator
     mcp_agent.session.add_deferred_evaluator(
