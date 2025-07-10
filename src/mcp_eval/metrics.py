@@ -208,7 +208,9 @@ def _is_tool_call_span(span: TraceSpan) -> bool:
     """Determine if span represents a tool call."""
     return (
         span.attributes.get("mcp.tool.name") is not None
-        or span.attributes.get("gen_ai.tool.name") is not None
+        # # TODO: jerron - This leads to duplicates from *.call_tool
+        # # but neccessary for non-MCP tools
+        # or span.attributes.get("gen_ai.tool.name") is not None
     )
 
 
