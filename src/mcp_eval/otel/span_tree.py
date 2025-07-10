@@ -256,6 +256,26 @@ class SpanTree:
 
         return recovery_sequences
 
+    def find_spans_by_attribute(self, attribute: str) -> List[SpanNode]:
+        """Find all spans that have the specified attribute."""
+        return [
+            span for span in self._all_spans.values() if attribute in span.attributes
+        ]
+
+    def count_spans(self) -> int:
+        """Count the number of spans in the tree"""
+        return len(self._all_spans)
+
+    def max_depth(self) -> int:
+        """Get the maximum depth of the tree"""
+
+        def _get_depth(span: SpanNode, current_depth: int = 0) -> int:
+            if not span.children:
+                return current_depth
+            return max(_get_depth(child, current_depth + 1) for child in span.children)
+
+        return _get_depth(self.root)
+
     def _extract_prompt(self, llm_span: SpanNode) -> str:
         """Extract prompt text from LLM span."""
         # Look for prompt in various attribute locations
