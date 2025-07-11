@@ -12,8 +12,11 @@ from rich.table import Table
 from rich.progress import Progress
 
 from .core import TestResult, _setup_functions, _teardown_functions
+from .session import TestSession
 from .datasets import Dataset
 from .reports import EvaluationReport
+
+from mcp_eval.config import get_current_config
 
 app = typer.Typer()
 console = Console()
@@ -117,7 +120,29 @@ async def run_decorator_tests(test_cases: List[Dict[str, Any]]) -> List[TestResu
                 test_name += f"[{param_str}]"
 
             try:
-                result = await func(**kwargs)
+                # Check if function requires mcp_agent and mcp_session
+                sig = inspect.signature(func)
+                needs_session = "mcp_session" in sig.parameters
+                needs_agent = "mcp_agent" in sig.parameters
+
+                if needs_session or needs_agent:
+                    config = get_current_config()
+                    server_name = config.get("default_server", "default")
+                    agent_config = config.get("agent_config", {})
+
+                    session = TestSession(server_name, test_name, agent_config)
+                    async with session as test_agent:
+                        call_kwargs = kwargs.copy()
+                        if needs_agent:
+                            call_kwargs["mcp_agent"] = test_agent
+                        if needs_session:
+                            call_kwargs["mcp_session"] = session
+
+                        result = await func(**call_kwargs)
+                else:
+                    # Function doesn't need session dependencies
+                    result = await func(**kwargs)
+
                 results.append(result)
 
                 status = "[green]PASS[/]" if result.passed else "[red]FAIL[/]"
