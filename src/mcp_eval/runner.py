@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress
 
-from .core import TestResult
+from .core import TestResult, _setup_functions, _teardown_functions
 from .datasets import Dataset
 from .reports import EvaluationReport
 
@@ -19,12 +19,33 @@ app = typer.Typer()
 console = Console()
 
 
-def discover_tests_and_datasets(path: Path) -> Dict[str, List]:
-    """Discover both decorator-style tests and dataset-style evaluations."""
+def discover_tests_and_datasets(test_spec: str) -> Dict[str, List]:
+    """Discover both decorator-style tests and dataset-style evaluations.
+
+    Args:
+        test_spec: Can be a directory, file, or file::function_name
+    """
     tasks = []
     datasets = []
 
-    for py_file in path.rglob("*.py"):
+    # Parse pytest-style test specifier
+    if "::" in test_spec:
+        file_path, function_name = test_spec.split("::", 1)
+        path = Path(file_path)
+        target_function = function_name
+    else:
+        path = Path(test_spec)
+        target_function = None
+
+    # Handle both files and directories
+    if path.is_file():
+        # Single file case
+        py_files = [path] if path.suffix == ".py" else []
+    else:
+        # Directory case
+        py_files = path.rglob("*.py")
+
+    for py_file in py_files:
         if py_file.name.startswith("__"):
             continue
 
@@ -41,12 +62,15 @@ def discover_tests_and_datasets(path: Path) -> Dict[str, List]:
                         and hasattr(obj, "_is_mcpeval_task")
                         and obj._is_mcpeval_task
                     ):
-                        tasks.append(obj)
+                        # If target_function is specified, only include matching function
+                        if target_function is None or name == target_function:
+                            tasks.append(obj)
 
-                # Discover datasets
-                for name, obj in inspect.getmembers(module):
-                    if isinstance(obj, Dataset):
-                        datasets.append(obj)
+                # Discover datasets (only if no specific function is targeted)
+                if target_function is None:
+                    for name, obj in inspect.getmembers(module):
+                        if isinstance(obj, Dataset):
+                            datasets.append(obj)
 
         except Exception as e:
             console.print(f"[yellow]Warning:[/] Could not load {py_file}: {e}")
@@ -159,8 +183,9 @@ async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationRep
     return reports
 
 
-@app.command()
-async def run(
+@app.callback(invoke_without_command=True)
+def run_tests(
+    ctx: typer.Context,
     test_dir: str = typer.Argument(
         "tests", help="Directory to scan for tests and datasets"
     ),
@@ -175,14 +200,36 @@ async def run(
     ),
 ):
     """Run MCP-Eval tests and datasets."""
-    test_path = Path(test_dir)
+    if ctx.invoked_subcommand is None:
+        asyncio.run(
+            _run_async(
+                test_dir, json_report, markdown_report, format, verbose, max_concurrency
+            )
+        )
+
+
+async def _run_async(
+    test_dir: str,
+    json_report: str,
+    markdown_report: str,
+    format: str,
+    verbose: bool,
+    max_concurrency: int,
+):
+    """Async implementation of the run command."""
+    # Parse pytest-style test specifier for path validation
+    if "::" in test_dir:
+        file_path, _ = test_dir.split("::", 1)
+        test_path = Path(file_path)
+    else:
+        test_path = Path(test_dir)
 
     if not test_path.exists():
-        console.print(f"[red]Error:[/] Test directory '{test_dir}' not found")
+        console.print(f"[red]Error:[/] Test path '{test_path}' not found")
         raise typer.Exit(1)
 
     console.print(f"[blue]Discovering tests and datasets in {test_dir}...[/blue]")
-    discovered = discover_tests_and_datasets(test_path)
+    discovered = discover_tests_and_datasets(test_dir)
 
     tasks = discovered["tasks"]
     datasets = discovered["datasets"]
@@ -199,8 +246,27 @@ async def run(
 
     if tasks and format in ["auto", "decorator"]:
         console.print(f"\n[blue]Running {len(tasks)} decorator-style tests...[/blue]")
+
+        # Execute setup functions before running tests
+        for setup_func in _setup_functions:
+            try:
+                setup_func()
+            except Exception as e:
+                console.print(
+                    f"[yellow]Warning: Setup function {setup_func.__name__} failed: {e}[/]"
+                )
+
         test_cases = expand_parametrized_tests(tasks)
         test_results = await run_decorator_tests(test_cases)
+
+        # Execute teardown functions after running tests
+        for teardown_func in _teardown_functions:
+            try:
+                teardown_func()
+            except Exception as e:
+                console.print(
+                    f"[yellow]Warning: Teardown function {teardown_func.__name__} failed: {e}[/]"
+                )
 
     if datasets and format in ["auto", "dataset"]:
         console.print(f"\n[blue]Running {len(datasets)} dataset evaluations...[/blue]")
