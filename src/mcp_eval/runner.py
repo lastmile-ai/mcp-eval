@@ -102,7 +102,9 @@ def expand_parametrized_tests(tasks: List[callable]) -> List[Dict[str, Any]]:
     return expanded
 
 
-async def run_decorator_tests(test_cases: List[Dict[str, Any]]) -> List[TestResult]:
+async def run_decorator_tests(
+    test_cases: List[Dict[str, Any]], verbose: bool
+) -> List[TestResult]:
     """Run decorator-style tests."""
     results = []
 
@@ -130,7 +132,7 @@ async def run_decorator_tests(test_cases: List[Dict[str, Any]]) -> List[TestResu
                     server_name = config.get("default_server", "default")
                     agent_config = config.get("agent_config", {})
 
-                    session = TestSession(server_name, test_name, agent_config)
+                    session = TestSession(server_name, test_name, agent_config, verbose)
                     async with session as test_agent:
                         call_kwargs = kwargs.copy()
                         if needs_agent:
@@ -282,7 +284,7 @@ async def _run_async(
                 )
 
         test_cases = expand_parametrized_tests(tasks)
-        test_results = await run_decorator_tests(test_cases)
+        test_results = await run_decorator_tests(test_cases, verbose)
 
         # Execute teardown functions after running tests
         for teardown_func in _teardown_functions:
