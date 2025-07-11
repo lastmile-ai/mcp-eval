@@ -42,13 +42,35 @@ def teardown(func: Callable):
     return func
 
 
-def parametrize(param_name: str, values: List[Any]):
-    """Parametrize a test function."""
+def parametrize(param_names: str, values: List[Any]):
+    """Parametrize a test function.
+
+    Args:
+        param_names: Comma-separated parameter names
+        values: List of tuples/values for each parameter combination
+    """
 
     def decorator(func):
-        if not hasattr(func, "_mcpeval_parameters"):
-            func._mcpeval_parameters = {}
-        func._mcpeval_parameters[param_name] = values
+        # Store parameter combinations for pytest-style parametrization
+        func._mcpeval_param_combinations = []
+
+        # Parse parameter names
+        names = [name.strip() for name in param_names.split(",")]
+
+        # Create parameter combinations
+        for value in values:
+            if len(names) == 1:
+                # Single parameter case
+                func._mcpeval_param_combinations.append({names[0]: value})
+            else:
+                # Multiple parameters case - unpack tuple
+                if isinstance(value, (tuple, list)) and len(value) == len(names):
+                    func._mcpeval_param_combinations.append(dict(zip(names, value)))
+                else:
+                    raise ValueError(
+                        f"Parameter count mismatch: expected {len(names)} values, got {len(value) if isinstance(value, (tuple, list)) else 1}"
+                    )
+
         return func
 
     return decorator

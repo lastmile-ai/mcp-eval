@@ -86,18 +86,11 @@ def expand_parametrized_tests(tasks: List[callable]) -> List[Dict[str, Any]]:
     expanded = []
 
     for task_func in tasks:
-        params = getattr(task_func, "_mcpeval_parameters", {})
-        if not params:
-            expanded.append({"func": task_func, "kwargs": {}})
-            continue
-
-        # Create cartesian product of all parameters
-        param_names = list(params.keys())
-        param_values = list(params.values())
-
-        for combination in itertools.product(*param_values):
-            kwargs = dict(zip(param_names, combination))
-            expanded.append({"func": task_func, "kwargs": kwargs})
+        # Check for new pytest-style parametrization first
+        param_combinations = getattr(task_func, "_mcpeval_param_combinations", None)
+        if param_combinations:
+            for kwargs in param_combinations:
+                expanded.append({"func": task_func, "kwargs": kwargs})
 
     return expanded
 
