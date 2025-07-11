@@ -91,6 +91,10 @@ def expand_parametrized_tests(tasks: List[callable]) -> List[Dict[str, Any]]:
         if param_combinations:
             for kwargs in param_combinations:
                 expanded.append({"func": task_func, "kwargs": kwargs})
+            continue
+        else:
+            expanded.append({"func": task_func, "kwargs": {}})
+            continue
 
     return expanded
 
