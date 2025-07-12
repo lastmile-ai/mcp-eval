@@ -32,7 +32,17 @@ class MCPEvalPytestSession:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self._session.__aexit__(exc_type, exc_val, exc_tb)
-        # Note: cleanup is already handled by the test_session context manager
+
+        # Check if all evaluations passed - if not, fail the test
+        if not self._session.all_passed():
+            failed_names = [
+                r.get("name", "unknown")
+                for r in self._session.get_results()
+                if not r.get("passed", True)
+            ]
+            pytest.fail(
+                f"Test evaluations failed. Failed: {failed_names}.", pytrace=False
+            )
 
     @property
     def agent(self) -> TestAgent | None:
@@ -152,5 +162,3 @@ def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
-
-
