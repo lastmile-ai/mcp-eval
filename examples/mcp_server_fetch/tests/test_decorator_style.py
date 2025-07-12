@@ -25,36 +25,32 @@ def cleanup_decorator_tests():
 
 
 @task("Test basic URL fetching functionality")
-async def test_basic_fetch_decorator(mcp_agent: TestAgent, mcp_session: TestSession):
+async def test_basic_fetch_decorator(agent: TestAgent, session: TestSession):
     """Test basic fetch functionality with modern evaluators."""
-    response = await mcp_agent.generate_str(
-        "Fetch the content from https://example.com"
-    )
+    response = await agent.generate_str("Fetch the content from https://example.com")
 
     # Modern evaluator approach - immediate evaluation
-    mcp_session.evaluate_now(ToolWasCalled("fetch"), response, "fetch_tool_called")
+    session.evaluate_now(ToolWasCalled("fetch"), response, "fetch_tool_called")
 
-    mcp_session.evaluate_now(
+    session.evaluate_now(
         ResponseContains("Example Domain"), response, "contains_domain_text"
     )
 
     # Deferred evaluation for tool success
-    mcp_session.add_deferred_evaluator(
+    session.add_deferred_evaluator(
         ToolSuccessRate(min_rate=1.0, tool_name="fetch"), "fetch_success_rate"
     )
 
 
 @task("Test content extraction quality")
-async def test_content_extraction_decorator(
-    mcp_agent: TestAgent, mcp_session: TestSession
-):
+async def test_content_extraction_decorator(agent: TestAgent, session: TestSession):
     """Test quality of content extraction."""
-    response = await mcp_agent.generate_str(
+    response = await agent.generate_str(
         "Fetch https://httpbin.org/html and summarize the main content"
     )
 
     # Tool usage check
-    mcp_session.add_deferred_evaluator(
+    session.add_deferred_evaluator(
         ToolWasCalled("fetch"), "fetch_called_for_extraction"
     )
 
@@ -66,24 +62,22 @@ async def test_content_extraction_decorator(
         require_reasoning=True,
     )
 
-    await mcp_session.evaluate_now_async(
+    await session.evaluate_now_async(
         extraction_judge, response, "extraction_quality_assessment"
     )
 
 
 @task("Test efficiency and iteration limits")
-async def test_efficiency_decorator(mcp_agent: TestAgent, mcp_session: TestSession):
+async def test_efficiency_decorator(agent: TestAgent, session: TestSession):
     """Test that fetch operations are efficient."""
-    await mcp_agent.generate_str(
+    await agent.generate_str(
         "Fetch https://httpbin.org/json and extract the main information"
     )
 
     # Should complete efficiently
-    mcp_session.add_deferred_evaluator(
-        MaxIterations(max_iterations=3), "efficiency_check"
-    )
+    session.add_deferred_evaluator(MaxIterations(max_iterations=3), "efficiency_check")
 
-    mcp_session.add_deferred_evaluator(ToolWasCalled("fetch"), "fetch_completed")
+    session.add_deferred_evaluator(ToolWasCalled("fetch"), "fetch_completed")
 
 
 @task("Test handling different content types")
@@ -96,22 +90,22 @@ async def test_efficiency_decorator(mcp_agent: TestAgent, mcp_session: TestSessi
     ],
 )
 async def test_content_types_decorator(
-    mcp_agent: TestAgent,
-    mcp_session: TestSession,
+    agent: TestAgent,
+    session: TestSession,
     url: str,
     content_type: str,
     expected_indicator: str,
 ):
     """Test handling of different content types."""
-    response = await mcp_agent.generate_str(
-        f"Fetch {url} and identify what type of content it contains"
+    response = await agent.generate_str(
+        f"Fetch {url} and identify what type of content it contains",
     )
 
-    mcp_session.add_deferred_evaluator(
+    session.add_deferred_evaluator(
         ToolWasCalled("fetch"), f"fetch_called_for_{content_type.lower()}"
     )
 
-    mcp_session.evaluate_now(
+    session.evaluate_now(
         ResponseContains(expected_indicator, case_sensitive=False),
         response,
         f"identifies_{content_type.lower()}_content",
@@ -119,15 +113,15 @@ async def test_content_types_decorator(
 
 
 @task("Test error recovery mechanisms")
-async def test_error_recovery_decorator(mcp_agent: TestAgent, mcp_session: TestSession):
+async def test_error_recovery_decorator(agent: TestAgent, session: TestSession):
     """Test agent's ability to recover from fetch errors."""
-    response = await mcp_agent.generate_str(
+    response = await agent.generate_str(
         "Try to fetch https://nonexistent-domain-12345.invalid and "
         "if that fails, fetch https://example.com instead"
     )
 
     # Should attempt multiple fetches
-    mcp_session.add_deferred_evaluator(
+    session.add_deferred_evaluator(
         ToolWasCalled("fetch", min_times=1),  # At least one fetch attempt
         "fetch_attempts_made",
     )
@@ -138,6 +132,6 @@ async def test_error_recovery_decorator(mcp_agent: TestAgent, mcp_session: TestS
         min_score=0.8,
     )
 
-    await mcp_session.evaluate_now_async(
+    await session.evaluate_now_async(
         recovery_judge, response, "error_recovery_demonstration"
     )
