@@ -27,6 +27,7 @@ from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
 from .metrics import TestMetrics, process_spans, TraceSpan
 from .otel.span_tree import SpanTree, SpanNode
 from .evaluators.base import Evaluator, EvaluatorContext
+from .evaluators.builtin import EvaluatorResult, EvaluationRecord
 
 import logging
 
@@ -150,7 +151,7 @@ class TestSession:
         # Cached data (computed from OTEL traces)
         self._metrics: Optional[TestMetrics] = None
         self._span_tree: Optional[SpanTree] = None
-        self._results: List[Dict[str, Any]] = []
+        self._results: List[EvaluationRecord] = []
 
     async def __aenter__(self) -> TestAgent:
         """Initialize the test session with OTEL tracing as source of truth."""
@@ -282,7 +283,14 @@ class TestSession:
             self._record_evaluation_result(name, result, None)
 
         except Exception as e:
-            self._record_evaluation_result(name, False, str(e))
+            error_result = EvaluatorResult(
+                passed=False,
+                expected="evaluation to complete",
+                actual="error occurred",
+                score=0.0,
+                error=str(e),
+            )
+            self._record_evaluation_result(name, error_result, str(e))
             raise
 
     async def evaluate_now_async(self, evaluator: Evaluator, response: str, name: str):
@@ -301,7 +309,14 @@ class TestSession:
             self._record_evaluation_result(name, result, None)
 
         except Exception as e:
-            self._record_evaluation_result(name, False, str(e))
+            error_result = EvaluatorResult(
+                passed=False,
+                expected="evaluation to complete",
+                actual="error occurred",
+                score=0.0,
+                error=str(e),
+            )
+            self._record_evaluation_result(name, error_result, str(e))
             raise
 
     async def _process_deferred_evaluators(self):
@@ -343,24 +358,26 @@ class TestSession:
                 self._record_evaluation_result(name, result, None)
 
             except Exception as e:
-                self._record_evaluation_result(name, False, str(e))
+                error_result = EvaluatorResult(
+                    passed=False,
+                    expected="evaluation to complete",
+                    actual="error occurred",
+                    score=0.0,
+                    error=str(e),
+                )
+                self._record_evaluation_result(name, error_result, str(e))
 
     def _record_evaluation_result(
-        self, name: str, result: Union[bool, float, Dict], error: Optional[str]
+        self, name: str, result: "EvaluatorResult", error: Optional[str]
     ):
         """Record an evaluation result."""
-        # Determine if passed
-        if isinstance(result, bool):
-            passed = result
-        elif isinstance(result, (int, float)):
-            passed = result > 0.5
-        elif isinstance(result, dict):
-            passed = result.get("passed", result.get("score", 0) > 0.5)
-        else:
-            passed = True
-
         self._results.append(
-            {"name": name, "result": result, "passed": passed, "error": error}
+            EvaluationRecord(
+                name=name,
+                result=result,
+                passed=result.passed,
+                error=error,
+            )
         )
 
     def get_metrics(self) -> TestMetrics:
@@ -385,7 +402,7 @@ class TestSession:
 
     def all_passed(self) -> bool:
         """Check if all evaluations passed."""
-        return all(r["passed"] for r in self._results)
+        return all(r.passed for r in self._results)
 
     def _process_otel_traces(self) -> TestMetrics:
         """Process OTEL traces into metrics and span tree (single source of truth)."""

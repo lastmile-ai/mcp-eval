@@ -2,11 +2,45 @@
 
 import re
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass
 from pydantic import BaseModel, Field
 
 from mcp_eval.evaluators.base import Evaluator, SyncEvaluator, EvaluatorContext
+
+
+class EvaluatorResult(BaseModel):
+    """Standardized result format for all evaluators."""
+
+    passed: bool = Field(description="Whether the evaluation passed")
+    expected: Union[str, int, float, List, Dict] = Field(
+        description="What was expected"
+    )
+    actual: Union[str, int, float, List, Dict, None] = Field(
+        description="What was actually received"
+    )
+    score: float = Field(ge=0.0, le=1.0, description="Score between 0.0 and 1.0")
+    details: Optional[Dict[str, Any]] = Field(
+        default=None, description="Additional context-specific information"
+    )
+    error: Optional[str] = Field(
+        default=None, description="Error message if applicable"
+    )
+
+    class Config:
+        extra = "forbid"
+
+
+class EvaluationRecord(BaseModel):
+    """Record of an evaluation result."""
+    
+    name: str = Field(description="Name of the evaluator")
+    result: EvaluatorResult = Field(description="The evaluation result")
+    passed: bool = Field(description="Whether the evaluation passed")
+    error: Optional[str] = Field(default=None, description="Error message if applicable")
+
+    class Config:
+        extra = "forbid"
 
 
 class JudgeResult(BaseModel):
@@ -27,9 +61,21 @@ class ToolWasCalled(SyncEvaluator):
     tool_name: str
     min_times: int = 1
 
-    def evaluate_sync(self, ctx: EvaluatorContext) -> bool:
+    def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         tool_calls = [call for call in ctx.tool_calls if call.name == self.tool_name]
-        return len(tool_calls) >= self.min_times
+        actual_calls = len(tool_calls)
+        passed = actual_calls >= self.min_times
+
+        return EvaluatorResult(
+            passed=passed,
+            expected=f">= {self.min_times}",
+            actual=actual_calls,
+            score=1.0 if passed else 0.0,
+            details={
+                "tool_name": self.tool_name,
+                "min_times": self.min_times,
+            },
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {"tool_name": self.tool_name, "min_times": self.min_times}
@@ -42,7 +88,7 @@ class ToolSequence(SyncEvaluator):
     expected_sequence: List[str]
     allow_other_calls: bool = True
 
-    def evaluate_sync(self, ctx: EvaluatorContext) -> Dict[str, Any]:
+    def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         actual_sequence = [call.name for call in ctx.tool_calls]
 
         if not self.allow_other_calls:
@@ -51,12 +97,12 @@ class ToolSequence(SyncEvaluator):
             # Check if expected sequence appears as subsequence
             matches = self._is_subsequence(self.expected_sequence, actual_sequence)
 
-        return {
-            "matches": matches,
-            "expected": self.expected_sequence,
-            "actual": actual_sequence,
-            "score": 1.0 if matches else 0.0,
-        }
+        return EvaluatorResult(
+            passed=matches,
+            expected=self.expected_sequence,
+            actual=actual_sequence,
+            score=1.0 if matches else 0.0,
+        )
 
     def _is_subsequence(self, subseq: List[str], seq: List[str]) -> bool:
         """Check if subseq is a subsequence of seq."""
@@ -78,9 +124,15 @@ class ResponseContains(SyncEvaluator):
     case_sensitive: bool = False
     regex: bool = False
 
-    def evaluate_sync(self, ctx: EvaluatorContext) -> bool:
+    def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         if not isinstance(ctx.output, str):
-            return False
+            return EvaluatorResult(
+                passed=False,
+                expected=f"string containing '{self.text}'",
+                actual=f"{type(ctx.output).__name__}: {ctx.output}",
+                score=0.0,
+                error="Output is not a string",
+            )
 
         response = ctx.output
         if not self.case_sensitive:
@@ -90,9 +142,27 @@ class ResponseContains(SyncEvaluator):
             text = self.text
 
         if self.regex:
-            return bool(re.search(text, response))
+            matches = bool(re.search(text, response))
         else:
-            return text in response
+            matches = text in response
+
+        match_type = "regex match" if self.regex else "substring"
+        case_note = (
+            " (case-sensitive)" if self.case_sensitive else " (case-insensitive)"
+        )
+
+        return EvaluatorResult(
+            passed=matches,
+            expected=f"{match_type} '{self.text}'{case_note}",
+            actual=ctx.output,
+            score=1.0 if matches else 0.0,
+            details={
+                "text": self.text,
+                "regex": self.regex,
+                "case_sensitive": self.case_sensitive,
+                "match_type": match_type,
+            },
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -108,18 +178,22 @@ class MaxIterations(SyncEvaluator):
 
     max_iterations: int
 
-    def evaluate_sync(self, ctx: EvaluatorContext) -> Dict[str, Any]:
+    def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         actual = ctx.metrics.iteration_count
         passed = actual <= self.max_iterations
 
-        return {
-            "passed": passed,
-            "max_allowed": self.max_iterations,
-            "actual": actual,
-            "score": 1.0
+        return EvaluatorResult(
+            passed=passed,
+            expected=f"<= {self.max_iterations}",
+            actual=actual,
+            score=1.0
             if passed
             else max(0.0, 1.0 - (actual - self.max_iterations) / self.max_iterations),
-        }
+            details={
+                "max_allowed": self.max_iterations,
+                "over_by": actual - self.max_iterations if not passed else 0,
+            },
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {"max_iterations": self.max_iterations}
@@ -132,7 +206,7 @@ class ToolSuccessRate(SyncEvaluator):
     min_rate: float = 0.9
     tool_name: Optional[str] = None  # If None, checks all tools
 
-    def evaluate_sync(self, ctx: EvaluatorContext) -> Dict[str, Any]:
+    def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         if self.tool_name:
             tool_calls = [
                 call for call in ctx.tool_calls if call.name == self.tool_name
@@ -141,24 +215,35 @@ class ToolSuccessRate(SyncEvaluator):
             tool_calls = ctx.tool_calls
 
         if not tool_calls:
-            return {
-                "passed": True,
-                "rate": 1.0,
-                "score": 1.0,
-            }  # No calls = perfect success
+            return EvaluatorResult(
+                passed=True,
+                expected=f">= {self.min_rate:.1%}",
+                actual="100% (no calls)",
+                score=1.0,
+                details={
+                    "rate": 1.0,
+                    "total_calls": 0,
+                    "successful_calls": 0,
+                },
+            )  # No calls = perfect success
 
         successful_calls = [call for call in tool_calls if not call.is_error]
         success_rate = len(successful_calls) / len(tool_calls)
         passed = success_rate >= self.min_rate
 
-        return {
-            "passed": passed,
-            "rate": success_rate,
-            "min_required": self.min_rate,
-            "total_calls": len(tool_calls),
-            "successful_calls": len(successful_calls),
-            "score": success_rate,
-        }
+        return EvaluatorResult(
+            passed=passed,
+            expected=f">= {self.min_rate:.1%}",
+            actual=f"{success_rate:.1%}",
+            score=success_rate,
+            details={
+                "rate": success_rate,
+                "min_required": self.min_rate,
+                "total_calls": len(tool_calls),
+                "successful_calls": len(successful_calls),
+                "tool_name": self.tool_name,
+            },
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {"min_rate": self.min_rate, "tool_name": self.tool_name}
@@ -175,7 +260,7 @@ class LLMJudge(Evaluator):
     include_expected: bool = True
     require_reasoning: bool = True
 
-    async def evaluate(self, ctx: EvaluatorContext) -> Dict[str, Any]:
+    async def evaluate(self, ctx: EvaluatorContext) -> EvaluatorResult:
         # Build prompt for LLM judge with structured output request
         prompt_parts = [
             f"Evaluate the following response based on this rubric: {self.rubric}",
@@ -237,15 +322,19 @@ class LLMJudge(Evaluator):
             # Use the structured result
             passed = judge_result.passed and judge_result.score >= self.min_score
 
-            return {
-                "passed": passed,
-                "score": judge_result.score,
-                "reasoning": judge_result.reasoning,
-                "confidence": judge_result.confidence,
-                "min_score": self.min_score,
-                "rubric": self.rubric,
-                "judge_response": response,
-            }
+            return EvaluatorResult(
+                passed=passed,
+                expected=f"score >= {self.min_score}",
+                actual=f"score = {judge_result.score}",
+                score=judge_result.score,
+                details={
+                    "reasoning": judge_result.reasoning,
+                    "confidence": judge_result.confidence,
+                    "min_score": self.min_score,
+                    "rubric": self.rubric,
+                    "judge_response": response,
+                },
+            )
 
         except Exception as e:
             # Fallback to simple parsing if structured output fails
@@ -253,26 +342,34 @@ class LLMJudge(Evaluator):
                 score = self._extract_numeric_score(response)
                 passed = score >= self.min_score
 
-                return {
-                    "passed": passed,
-                    "score": score,
-                    "reasoning": "Fallback parsing used",
-                    "confidence": 0.5,
-                    "min_score": self.min_score,
-                    "rubric": self.rubric,
-                    "judge_response": response,
-                    "parsing_error": str(e),
-                }
+                return EvaluatorResult(
+                    passed=passed,
+                    expected=f"score >= {self.min_score}",
+                    actual=f"score = {score}",
+                    score=score,
+                    details={
+                        "reasoning": "Fallback parsing used",
+                        "confidence": 0.5,
+                        "min_score": self.min_score,
+                        "rubric": self.rubric,
+                        "judge_response": response,
+                        "parsing_error": str(e),
+                    },
+                )
             except Exception as fallback_error:
-                return {
-                    "passed": False,
-                    "score": 0.0,
-                    "reasoning": "Failed to parse judge response",
-                    "confidence": 0.0,
-                    "error": str(fallback_error),
-                    "rubric": self.rubric,
-                    "judge_response": response,
-                }
+                return EvaluatorResult(
+                    passed=False,
+                    expected=f"score >= {self.min_score}",
+                    actual="failed to parse",
+                    score=0.0,
+                    error=str(fallback_error),
+                    details={
+                        "reasoning": "Failed to parse judge response",
+                        "confidence": 0.0,
+                        "rubric": self.rubric,
+                        "judge_response": response,
+                    },
+                )
 
     def _extract_json(self, response: str) -> str:
         """Extract JSON from response, handling various formats."""
@@ -329,7 +426,7 @@ class IsInstance(SyncEvaluator):
 
     type_name: str
 
-    def evaluate_sync(self, ctx: EvaluatorContext) -> bool:
+    def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         # Simplified type checking - would use proper type registry in production
         type_map = {
             "str": str,
@@ -340,7 +437,14 @@ class IsInstance(SyncEvaluator):
             "dict": dict,
         }
         expected_type = type_map.get(self.type_name, str)
-        return isinstance(ctx.output, expected_type)
+        passed = isinstance(ctx.output, expected_type)
+
+        return EvaluatorResult(
+            passed=passed,
+            expected=self.type_name,
+            actual=type(ctx.output).__name__,
+            score=1.0 if passed else 0.0,
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {"type_name": self.type_name}
@@ -353,9 +457,15 @@ class EqualsExpected(SyncEvaluator):
     exact_match: bool = True
     case_sensitive: bool = True
 
-    def evaluate_sync(self, ctx: EvaluatorContext) -> Dict[str, Any]:
+    def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         if ctx.expected_output is None:
-            return {"passed": True, "score": 1.0, "reason": "no_expected_output"}
+            return EvaluatorResult(
+                passed=True,
+                expected="no expected output",
+                actual=ctx.output,
+                score=1.0,
+                details={"reason": "no_expected_output"},
+            )
 
         if self.exact_match:
             if isinstance(ctx.output, str) and isinstance(ctx.expected_output, str):
@@ -378,14 +488,16 @@ class EqualsExpected(SyncEvaluator):
             else:
                 matches = ctx.output == ctx.expected_output
 
-        return {
-            "passed": matches,
-            "score": 1.0 if matches else 0.0,
-            "exact_match": self.exact_match,
-            "case_sensitive": self.case_sensitive,
-            "output": ctx.output,
-            "expected": ctx.expected_output,
-        }
+        return EvaluatorResult(
+            passed=matches,
+            expected=ctx.expected_output,
+            actual=ctx.output,
+            score=1.0 if matches else 0.0,
+            details={
+                "exact_match": self.exact_match,
+                "case_sensitive": self.case_sensitive,
+            },
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {"exact_match": self.exact_match, "case_sensitive": self.case_sensitive}

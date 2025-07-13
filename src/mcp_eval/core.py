@@ -2,12 +2,15 @@
 
 import asyncio
 import inspect
-from typing import Any, Dict, List, Optional, Callable
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Callable
 from functools import wraps
 from dataclasses import dataclass
 
 from mcp_eval.session import TestSession
 from mcp_eval.config import get_current_config
+
+if TYPE_CHECKING:
+    from mcp_eval.evaluators.builtin import EvaluationRecord
 
 
 @dataclass
@@ -19,7 +22,7 @@ class TestResult:
     server_name: str
     parameters: Dict[str, Any]
     passed: bool
-    evaluation_results: List[Dict[str, Any]]
+    evaluation_results: List["EvaluationRecord"]
     metrics: Optional[Dict[str, Any]]
     duration_ms: float
     error: Optional[str] = None

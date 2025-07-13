@@ -5,6 +5,8 @@ from rich.table import Table
 from mcp_eval.core import TestResult
 import dataclasses
 
+from mcp_eval.evaluators.builtin import EvaluationRecord
+
 
 class EnhancedJSONEncoder(json.JSONEncoder):
     def default(self, o):
@@ -86,3 +88,36 @@ def generate_json_report(results: List[TestResult], output_path: str):
     report_data = [result for result in results]
     with open(output_path, "w") as f:
         json.dump(report_data, f, cls=EnhancedJSONEncoder, indent=2)
+
+
+def generate_failure_message(results: list[EvaluationRecord]) -> str:
+    """Generate failure messages for mcp-eval pytest evaluations"""
+    failed_results = [r for r in results if not r.passed]
+
+    failure_details = []
+    for result in failed_results:
+        name = result.name
+        error = result.error
+        evaluation_result = result.result
+
+        if error:
+            failure_details.append(f"  ✗ {name}: {error}")
+        else:
+            # Extract expected vs actual information from detailed results
+            expected = evaluation_result.expected
+            actual = evaluation_result.actual
+            score = evaluation_result.score
+
+            detail_parts = []
+            if expected is not None and actual is not None:
+                detail_parts.append(f"expected {expected}, got {actual!r}")
+            elif score is not None:
+                detail_parts.append(f"score {score}")
+
+            if detail_parts:
+                failure_details.append(f"  ✗ {name}: {', '.join(detail_parts)}")
+            else:
+                failure_details.append(f"  ✗ {name}: {evaluation_result.model_dump()}")
+
+    failure_message = "Evaluation failures:\n" + "\n".join(failure_details)
+    return failure_message
