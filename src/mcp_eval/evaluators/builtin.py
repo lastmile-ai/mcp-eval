@@ -33,11 +33,13 @@ class EvaluatorResult(BaseModel):
 
 class EvaluationRecord(BaseModel):
     """Record of an evaluation result."""
-    
+
     name: str = Field(description="Name of the evaluator")
     result: EvaluatorResult = Field(description="The evaluation result")
     passed: bool = Field(description="Whether the evaluation passed")
-    error: Optional[str] = Field(default=None, description="Error message if applicable")
+    error: Optional[str] = Field(
+        default=None, description="Error message if applicable"
+    )
 
     class Config:
         extra = "forbid"
@@ -216,16 +218,18 @@ class ToolSuccessRate(SyncEvaluator):
 
         if not tool_calls:
             return EvaluatorResult(
-                passed=True,
+                passed=False,
                 expected=f">= {self.min_rate:.1%}",
-                actual="100% (no calls)",
-                score=1.0,
+                actual="N/A (no tool calls)",
+                score=0.0,
                 details={
-                    "rate": 1.0,
+                    "rate": 0,
+                    "min_required": self.min_rate,
                     "total_calls": 0,
                     "successful_calls": 0,
+                    "tool_name": self.tool_name,
                 },
-            )  # No calls = perfect success
+            )
 
         successful_calls = [call for call in tool_calls if not call.is_error]
         success_rate = len(successful_calls) / len(tool_calls)
@@ -503,6 +507,100 @@ class EqualsExpected(SyncEvaluator):
         return {"exact_match": self.exact_match, "case_sensitive": self.case_sensitive}
 
 
+class ResponseTimeCheck(MaxIterations):
+    """Evaluator that checks if the response time is under the threshold"""
+
+    def __init__(self, max_ms: float):
+        self.max_ms = max_ms
+
+    def evaluate_sync(self, ctx):
+        passed = ctx.metrics.latency_ms <= self.max_ms
+
+        return EvaluatorResult(
+            passed=passed,
+            expected=f"latency <= {self.max_ms}",
+            actual=ctx.metrics.latency_ms,
+            score=1.0 if passed else 0.0,
+            details={"max_ms": self.max_ms},
+        )
+
+
+class ExactToolCount(ToolWasCalled):
+    def __init__(self, tool_name: str, expected_count: int):
+        super().__init__(tool_name)
+        self.expected_count = expected_count
+
+    def evaluate_sync(self, ctx):
+        tool_calls = [call for call in ctx.tool_calls if call.name == self.tool_name]
+        passed = len(tool_calls) == self.expected_count
+
+        return EvaluatorResult(
+            passed=passed,
+            expected=len(tool_calls),
+            actual=self.expected_count,
+            score=1.0 if passed else 0.0,
+            details={"expected_count": self.expected_count},
+        )
+
+
+@dataclass
+class ToolFailed(ToolSuccessRate):
+    def evaluate_sync(self, ctx):
+        result = super().evaluate_sync(ctx)
+        failed = result.details["rate"] == 0.0  # Invert success rate
+
+        return EvaluatorResult(
+            passed=failed,
+            expected="0% success rate",
+            actual=f"{result.details['rate']:.1%}",
+            score=1.0 if failed else 0.0,
+            details=result.details,
+        )
+
+
+@dataclass
+class ToolCalledWith(ToolWasCalled):
+    def __init__(self, tool_name: str, expected_args: dict):
+        super().__init__(tool_name)
+        self.expected_args = expected_args
+
+    def evaluate_sync(self, ctx):
+        tool_calls = [call for call in ctx.tool_calls if call.name == self.tool_name]
+        matching_calls = [
+            call
+            for call in tool_calls
+            if all(call.arguments.get(k) == v for k, v in self.expected_args.items())
+        ]
+        matches = bool(matching_calls)
+
+        return EvaluatorResult(
+            passed=matches,
+            expected=f"tool '{self.tool_name}' called with {self.expected_args}",
+            actual=f"{len(tool_calls)} calls found",
+            score=1.0 if matches else 0.0,
+            details={
+                "tool_name": self.tool_name,
+                "expected_args": self.expected_args,
+                "matching_calls": len(matching_calls),
+            },
+        )
+
+
+@dataclass
+class NotContains(ResponseContains):
+    def evaluate_sync(self, ctx):
+        result = super().evaluate_sync(ctx)
+        inverted_passed = not result.passed
+
+        return EvaluatorResult(
+            passed=inverted_passed,
+            expected=f"text NOT containing '{self.text}'",
+            actual=result.actual,
+            score=1.0 if inverted_passed else 0.0,
+            details=result.details,
+        )
+
+
 # Registry for dynamic loading
 _EVALUATOR_REGISTRY = {
     "ToolWasCalled": ToolWasCalled,
@@ -513,6 +611,11 @@ _EVALUATOR_REGISTRY = {
     "LLMJudge": LLMJudge,
     "IsInstance": IsInstance,
     "EqualsExpected": EqualsExpected,
+    "ResponseTimeCheck": ResponseTimeCheck,
+    "ExactToolCount": ExactToolCount,
+    "ToolFailed": ToolFailed,
+    "ToolCalledWith": ToolCalledWith,
+    "NotContains": NotContains,
 }
 
 
