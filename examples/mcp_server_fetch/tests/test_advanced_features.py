@@ -3,6 +3,8 @@
 import mcp_eval
 from mcp_eval import task, setup
 from mcp_eval import ToolWasCalled, LLMJudge, ToolSequence
+from mcp_eval.evaluators.builtin import EvaluatorResult
+from mcp_eval.session import TestAgent, TestSession
 
 
 @setup
@@ -21,7 +23,7 @@ def configure_advanced_tests():
 
 
 @task("Test span tree analysis for fetch operations")
-async def test_span_tree_analysis(agent, session):
+async def test_span_tree_analysis(agent: TestAgent, session: TestSession):
     """Test advanced span tree analysis capabilities."""
     await agent.generate_str(
         "Fetch content from https://example.com, then fetch https://httpbin.org/json, "
@@ -42,11 +44,13 @@ async def test_span_tree_analysis(agent, session):
         if rephrasing_loops:
             session._record_evaluation_result(
                 "no_rephrasing_loops",
-                False,
+                EvaluatorResult(passed=False, expected=0, actual=len(rephrasing_loops)),
                 f"Found {len(rephrasing_loops)} LLM rephrasing loops",
             )
         else:
-            session._record_evaluation_result("no_rephrasing_loops", True, None)
+            session._record_evaluation_result(
+                "no_rephrasing_loops", EvaluatorResult(passed=True), None
+            )
 
         # Analyze tool path efficiency
         golden_paths = {"multi_fetch": ["fetch", "fetch"]}
@@ -55,7 +59,11 @@ async def test_span_tree_analysis(agent, session):
             efficiency_passed = analysis.efficiency_score >= 0.8
             session._record_evaluation_result(
                 "path_efficiency",
-                efficiency_passed,
+                EvaluatorResult(
+                    passed=efficiency_passed,
+                    expected=">= 0.8",
+                    actual=analysis.efficiency_score,
+                ),
                 f"Tool path efficiency: {analysis.efficiency_score:.2f}",
             )
 
@@ -66,15 +74,20 @@ async def test_span_tree_analysis(agent, session):
                 1 for seq in recovery_sequences if seq.recovery_successful
             )
             total_recoveries = len(recovery_sequences)
+            passed = successful_recoveries == total_recoveries
             session._record_evaluation_result(
                 "error_recovery",
-                successful_recoveries == total_recoveries,
+                EvaluatorResult(
+                    passed=passed,
+                    expected=total_recoveries,
+                    actual=successful_recoveries,
+                ),
                 f"Error recovery: {successful_recoveries}/{total_recoveries} successful",
             )
 
 
 @task("Test enhanced LLM judge with structured output")
-async def test_enhanced_llm_judge(agent, session):
+async def test_enhanced_llm_judge(agent: TestAgent, session: TestSession):
     """Test the enhanced LLM judge with structured JSON output."""
     response = await agent.generate_str(
         "Fetch https://httpbin.org/html and provide a detailed analysis of the content structure"
@@ -103,7 +116,7 @@ async def test_enhanced_llm_judge(agent, session):
 
 
 @task("Test fetch server capabilities under load")
-async def test_fetch_performance_analysis(agent, session):
+async def test_fetch_performance_analysis(agent: TestAgent, session: TestSession):
     """Test fetch server performance characteristics."""
     response = await agent.generate_str(
         "Fetch content from these URLs in sequence: "
@@ -132,7 +145,9 @@ async def test_fetch_performance_analysis(agent, session):
     # Custom performance checks
     total_duration = metrics.total_duration_ms
     if total_duration < 30000:  # Less than 30 seconds
-        session._record_evaluation_result("reasonable_duration", True, None)
+        session._record_evaluation_result(
+            "reasonable_duration", EvaluatorResult(passed=True), None
+        )
     else:
         session._record_evaluation_result(
             "reasonable_duration", False, f"Duration too long: {total_duration:.0f}ms"
@@ -141,15 +156,19 @@ async def test_fetch_performance_analysis(agent, session):
     # Check tool call efficiency
     tool_calls = len(metrics.tool_calls)
     if tool_calls >= 3:  # Expected number of fetch calls
-        session._record_evaluation_result("sufficient_tool_calls", True, None)
+        session._record_evaluation_result(
+            "sufficient_tool_calls", EvaluatorResult(passed=True), None
+        )
     else:
         session._record_evaluation_result(
-            "sufficient_tool_calls", False, f"Only {tool_calls} tool calls made"
+            "sufficient_tool_calls",
+            EvaluatorResult(passed=False, expected=">= 3", actual=tool_calls),
+            f"Only {tool_calls} tool calls made",
         )
 
 
 @task("Test fetch server error recovery patterns")
-async def test_comprehensive_error_recovery(agent, session):
+async def test_comprehensive_error_recovery(agent: TestAgent, session: TestSession):
     """Test comprehensive error recovery patterns."""
     response = await agent.generate_str(
         "Try to fetch these URLs in order, and for any that fail, "
