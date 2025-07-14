@@ -13,13 +13,15 @@ class EvaluatorResult(BaseModel):
     """Standardized result format for all evaluators."""
 
     passed: bool = Field(description="Whether the evaluation passed")
-    expected: Union[str, int, float, List, Dict] = Field(
-        description="What was expected"
+    expected: Union[str, int, float, List, Dict, None] = Field(
+        default=None, description="What was expected"
     )
     actual: Union[str, int, float, List, Dict, None] = Field(
-        description="What was actually received"
+        default=None, description="What was actually received"
     )
-    score: float = Field(ge=0.0, le=1.0, description="Score between 0.0 and 1.0")
+    score: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Score between 0.0 and 1.0"
+    )
     details: Optional[Dict[str, Any]] = Field(
         default=None, description="Additional context-specific information"
     )
@@ -72,7 +74,6 @@ class ToolWasCalled(SyncEvaluator):
             passed=passed,
             expected=f">= {self.min_times}",
             actual=actual_calls,
-            score=1.0 if passed else 0.0,
             details={
                 "tool_name": self.tool_name,
                 "min_times": self.min_times,
@@ -100,10 +101,7 @@ class ToolSequence(SyncEvaluator):
             matches = self._is_subsequence(self.expected_sequence, actual_sequence)
 
         return EvaluatorResult(
-            passed=matches,
-            expected=self.expected_sequence,
-            actual=actual_sequence,
-            score=1.0 if matches else 0.0,
+            passed=matches, expected=self.expected_sequence, actual=actual_sequence
         )
 
     def _is_subsequence(self, subseq: List[str], seq: List[str]) -> bool:
@@ -132,7 +130,6 @@ class ResponseContains(SyncEvaluator):
                 passed=False,
                 expected=f"string containing '{self.text}'",
                 actual=f"{type(ctx.output).__name__}: {ctx.output}",
-                score=0.0,
                 error="Output is not a string",
             )
 
@@ -157,7 +154,6 @@ class ResponseContains(SyncEvaluator):
             passed=matches,
             expected=f"{match_type} '{self.text}'{case_note}",
             actual=ctx.output,
-            score=1.0 if matches else 0.0,
             details={
                 "text": self.text,
                 "regex": self.regex,
@@ -188,13 +184,7 @@ class MaxIterations(SyncEvaluator):
             passed=passed,
             expected=f"<= {self.max_iterations}",
             actual=actual,
-            score=1.0
-            if passed
-            else max(0.0, 1.0 - (actual - self.max_iterations) / self.max_iterations),
-            details={
-                "max_allowed": self.max_iterations,
-                "over_by": actual - self.max_iterations if not passed else 0,
-            },
+            details={"max_iterations": self.max_iterations},
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -444,10 +434,7 @@ class IsInstance(SyncEvaluator):
         passed = isinstance(ctx.output, expected_type)
 
         return EvaluatorResult(
-            passed=passed,
-            expected=self.type_name,
-            actual=type(ctx.output).__name__,
-            score=1.0 if passed else 0.0,
+            passed=passed, expected=self.type_name, actual=type(ctx.output).__name__
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -467,7 +454,6 @@ class EqualsExpected(SyncEvaluator):
                 passed=True,
                 expected="no expected output",
                 actual=ctx.output,
-                score=1.0,
                 details={"reason": "no_expected_output"},
             )
 
@@ -496,7 +482,6 @@ class EqualsExpected(SyncEvaluator):
             passed=matches,
             expected=ctx.expected_output,
             actual=ctx.output,
-            score=1.0 if matches else 0.0,
             details={
                 "exact_match": self.exact_match,
                 "case_sensitive": self.case_sensitive,
@@ -520,7 +505,6 @@ class ResponseTimeCheck(MaxIterations):
             passed=passed,
             expected=f"latency <= {self.max_ms}",
             actual=ctx.metrics.latency_ms,
-            score=1.0 if passed else 0.0,
             details={"max_ms": self.max_ms},
         )
 
@@ -538,7 +522,6 @@ class ExactToolCount(ToolWasCalled):
             passed=passed,
             expected=len(tool_calls),
             actual=self.expected_count,
-            score=1.0 if passed else 0.0,
             details={"expected_count": self.expected_count},
         )
 
@@ -553,7 +536,6 @@ class ToolFailed(ToolSuccessRate):
             passed=failed,
             expected="0% success rate",
             actual=f"{result.details['rate']:.1%}",
-            score=1.0 if failed else 0.0,
             details=result.details,
         )
 
@@ -577,7 +559,6 @@ class ToolCalledWith(ToolWasCalled):
             passed=matches,
             expected=f"tool '{self.tool_name}' called with {self.expected_args}",
             actual=f"{len(tool_calls)} calls found",
-            score=1.0 if matches else 0.0,
             details={
                 "tool_name": self.tool_name,
                 "expected_args": self.expected_args,
@@ -596,7 +577,6 @@ class NotContains(ResponseContains):
             passed=inverted_passed,
             expected=f"text NOT containing '{self.text}'",
             actual=result.actual,
-            score=1.0 if inverted_passed else 0.0,
             details=result.details,
         )
 
