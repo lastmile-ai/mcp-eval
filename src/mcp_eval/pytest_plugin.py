@@ -11,6 +11,7 @@ import pytest
 
 from mcp_eval import TestSession, TestAgent
 from mcp_eval.config import get_current_config
+from mcp_eval.reporting import generate_failure_message
 
 
 class MCPEvalPytestSession:
@@ -35,14 +36,8 @@ class MCPEvalPytestSession:
 
         # Check if all evaluations passed - if not, fail the test
         if not self._session.all_passed():
-            failed_names = [
-                r.get("name", "unknown")
-                for r in self._session.get_results()
-                if not r.get("passed", True)
-            ]
-            pytest.fail(
-                f"Test evaluations failed. Failed: {failed_names}.", pytrace=False
-            )
+            failure_message = generate_failure_message(self._session.get_results())
+            pytest.fail(failure_message, pytrace=False)
 
     @property
     def agent(self) -> TestAgent | None:

@@ -10,6 +10,8 @@ from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress
 
+from mcp_eval.reporting import generate_failure_message
+
 from .core import TestResult, _setup_functions, _teardown_functions
 from .datasets import Dataset
 from .reports import EvaluationReport
@@ -99,7 +101,7 @@ async def run_decorator_tests(
     test_cases: List[Dict[str, Any]], verbose: bool
 ) -> List[TestResult]:
     """Run decorator-style tests."""
-    results = []
+    results: list[TestResult] = []
 
     with Progress() as progress:
         task_id = progress.add_task("[cyan]Running tests...", total=len(test_cases))
@@ -116,7 +118,7 @@ async def run_decorator_tests(
 
             try:
                 # Call task decorated function
-                result = await func(**kwargs)
+                result: TestResult = await func(**kwargs)
 
                 results.append(result)
 
@@ -124,13 +126,10 @@ async def run_decorator_tests(
                 console.print(f"  {status} {test_name}")
 
                 if not result.passed:
-                    if result.error:
-                        console.print(f"    Error: {result.error}")
-                    for eval_result in result.evaluation_results:
-                        if not eval_result.get("passed", True):
-                            console.print(f"    Failed: {eval_result['name']}")
-                            if eval_result.get("error"):
-                                console.print(f"      {eval_result['error']}")
+                    failure_message = generate_failure_message(
+                        result.evaluation_results
+                    )
+                    console.print(f"[red]ERROR[/] {failure_message}")
 
             except Exception as e:
                 console.print(f"  [red]ERROR[/] {test_name}: {e}")

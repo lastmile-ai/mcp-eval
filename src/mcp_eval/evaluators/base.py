@@ -1,11 +1,14 @@
 """Base evaluator classes and context."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Generic, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, Optional, TypeVar, TYPE_CHECKING
 from dataclasses import dataclass
 
 from mcp_eval.metrics import TestMetrics
 from mcp_eval.otel.span_tree import SpanTree
+
+if TYPE_CHECKING:
+    from .builtin import EvaluatorResult
 
 
 InputType = TypeVar("InputType")
@@ -40,14 +43,12 @@ class Evaluator(ABC, Generic[InputType, OutputType]):
     @abstractmethod
     async def evaluate(
         self, ctx: EvaluatorContext[InputType, OutputType]
-    ) -> Union[float, bool, Dict[str, Any]]:
+    ) -> "EvaluatorResult":
         """
         Evaluate the test case.
 
         Returns:
-            - float: Score between 0.0 and 1.0
-            - bool: Pass/fail result
-            - dict: Detailed evaluation results
+            EvaluatorResult: Detailed evaluation results
         """
         pass
 
@@ -66,13 +67,13 @@ class SyncEvaluator(Evaluator[InputType, OutputType]):
 
     async def evaluate(
         self, ctx: EvaluatorContext[InputType, OutputType]
-    ) -> Union[float, bool, Dict[str, Any]]:
+    ) -> "EvaluatorResult":
         """Async wrapper for sync evaluation."""
         return self.evaluate_sync(ctx)
 
     @abstractmethod
     def evaluate_sync(
         self, ctx: EvaluatorContext[InputType, OutputType]
-    ) -> Union[float, bool, Dict[str, Any]]:
+    ) -> "EvaluatorResult":
         """Synchronous evaluation method."""
         pass
