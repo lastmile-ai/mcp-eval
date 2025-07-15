@@ -16,14 +16,19 @@ def optimize_with_dspy(predictor: ToolPredictor, list_of_available_tools: list, 
 
     # Optimize docstrings using available tools and examples
     print("\n=== Optimizing Docstrings ===")
-    predictor.optimize_docstrings(
+    optimization_report = predictor.optimize_docstrings(
         examples=train_examples,
         tools_list=list_of_available_tools
     )
     
     # Final evaluation
     print("\n=== Final Evaluation ===")
-    return {"optimizer": optimizer_type, "train_count": len(train_examples), "val_count": len(test_examples)}
+    return {
+        "optimizer": optimizer_type, 
+        "train_count": len(train_examples), 
+        "val_count": len(test_examples),
+        "optimization_report": optimization_report
+    }
 
 
 def save_results(results: dict, output_path: str) -> None:
@@ -101,6 +106,12 @@ def main(args) -> None:
     # Save results if output path provided
     if args.output:
         save_results(results, args.output)
+    
+    # Save optimization report as separate JSON file
+    if 'optimization_report' in results and results['optimization_report']:
+        report_path = args.output.replace('.json', '_report.json') if args.output else 'optimization_report.json'
+        save_results(results['optimization_report'], report_path)
+        print(f"Optimization report saved to {report_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tool Selection Optimizer with DSPy")

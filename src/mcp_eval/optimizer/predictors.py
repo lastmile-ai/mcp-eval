@@ -203,11 +203,15 @@ class ToolPredictor(dspy.Module):
         print("=== Starting Docstring Optimization ===")
         print(f"Processing {len(tools_list)} tools with {len(examples)} examples")
         
+        # Store optimization report data
+        self.optimization_report = {}
+        
         # Optimize docstrings for tools that have both failed and successful examples
         for tool in tools_list:
             try:
                 tool_name = tool.get('name', '')
                 tool_docstring = tool.get('description', '')
+                tool_schema = tool.get('input_schema', {})
                 failed_queries = []
                 successful_queries = []
                 
@@ -223,9 +227,24 @@ class ToolPredictor(dspy.Module):
                         else:
                             failed_queries.append(example.user_query)
                 
+                # Initialize report entry for this tool
+                self.optimization_report[tool_name] = {
+                    'original_docstring': tool_docstring,
+                    'input_schema': tool_schema,
+                    'successful_examples': successful_queries,
+                    'failed_examples': failed_queries,
+                    'optimized_docstring': None,
+                    'optimization_attempted': False
+                }
+                
                 # Only optimize if we have both successful and failed examples
                 if len(successful_queries) > 0 or len(failed_queries) > 0:
                     print(f"Optimizing {tool_name}: {len(successful_queries)} successful, {len(failed_queries)} failed")
+                    
+                    # Show original docstring
+                    print(f"\n--- ORIGINAL DOCSTRING for {tool_name} ---")
+                    print(f"{tool_docstring}")
+                    print("--- END ORIGINAL DOCSTRING ---")
                     
                     # Use docstring improver to generate better docstring
                     improved_docstring = self.docstring_improver(
@@ -236,7 +255,15 @@ class ToolPredictor(dspy.Module):
                     )
                     
                     # Store the optimized docstring
-                    self.optimized_docstrings[tool_name] = improved_docstring.improved_docstring
+                    optimized_text = improved_docstring.improved_docstring
+                    self.optimized_docstrings[tool_name] = optimized_text
+                    self.optimization_report[tool_name]['optimized_docstring'] = optimized_text
+                    self.optimization_report[tool_name]['optimization_attempted'] = True
+                    
+                    # Show optimized docstring
+                    print(f"\n--- OPTIMIZED DOCSTRING for {tool_name} ---")
+                    print(f"{optimized_text}")
+                    print("--- END OPTIMIZED DOCSTRING ---\n")
                     
                     print(f"✓ Optimized docstring for tool: {tool_name}")
                 else:
@@ -244,9 +271,15 @@ class ToolPredictor(dspy.Module):
                 
             except Exception as e:
                 print(f"✗ Error optimizing docstring for {tool_name}: {e}")
-    
+                if tool_name in self.optimization_report:
+                    self.optimization_report[tool_name]['optimization_attempted'] = True
+                    self.optimization_report[tool_name]['error'] = str(e)
+        
         print("=== Optimization Complete ===")
         print(f"Optimized docstrings for {len(self.optimized_docstrings)} tools")
+        
+        # Return the optimization report
+        return self.optimization_report
         
         
     
