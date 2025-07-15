@@ -109,8 +109,13 @@ def generate_failure_message(results: list[EvaluationRecord]) -> str:
             score = evaluation_result.score
 
             detail_parts = []
-            if expected is not None and actual is not None:
-                detail_parts.append(f"expected {expected}, got {actual!r}")
+            if expected is not None:
+                if actual is not None:
+                    detail_parts.append(f"expected {expected}, got {actual!r}")
+                else:
+                    detail_parts.append(f"expected {expected}")
+            elif actual is not None:
+                detail_parts.append(f"got {expected!r}")
             elif score is not None:
                 detail_parts.append(f"score {score}")
 
