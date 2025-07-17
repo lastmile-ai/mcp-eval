@@ -34,6 +34,73 @@ def read_trace_file(trace_file_path: str) -> List[Dict[str, Any]]:
     return spans
 
 
+def extract_server_name_from_trace(trace_file_path: str) -> str:
+    """
+    Extract server name from trace file by analyzing span attributes.
+    
+    Args:
+        trace_file_path: Path to the trace file
+        
+    Returns:
+        Server name if found, otherwise "unknown"
+    """
+    traces = read_trace_file(trace_file_path)
+    
+    # Look for server name in various span attributes
+    for span in traces:
+        attributes = span.get('attributes', {})
+        
+        # Check for server name in MCP-related attributes
+        for key, value in attributes.items():
+            if 'server' in key.lower() and isinstance(value, str):
+                # Extract server name from various formats
+                if 'server_name' in key.lower():
+                    return value
+                elif 'server.name' in key.lower():
+                    return value
+                elif key.endswith('.server'):
+                    return value
+        
+        # Check span name for server information
+        span_name = span.get('name', '')
+        if span_name and 'server' in span_name.lower():
+            # Try to extract server name from span name like "ServerName.method"
+            parts = span_name.split('.')
+            if len(parts) > 1:
+                return parts[0]
+    
+    # Try to extract from filename if no server name found in traces
+    filename = os.path.basename(trace_file_path)
+    if '_trace.jsonl' in filename:
+        base_name = filename.replace('_trace.jsonl', '')
+        # If base name contains server info, use it
+        if 'server' in base_name.lower():
+            return base_name
+    
+    return "unknown"
+
+
+def separate_traces_by_server(trace_files: List[str]) -> Dict[str, List[str]]:
+    """
+    Separate trace files by server name.
+    
+    Args:
+        trace_files: List of trace file paths
+        
+    Returns:
+        Dictionary mapping server names to lists of trace files
+    """
+    server_traces = {}
+    
+    for trace_file in trace_files:
+        server_name = extract_server_name_from_trace(trace_file)
+        if server_name not in server_traces:
+            server_traces[server_name] = []
+        server_traces[server_name].append(trace_file)
+    
+    return server_traces
+
+
 
 def get_tools_info(trace_file_path: str) -> List[Dict[str, Any]]:
     """
