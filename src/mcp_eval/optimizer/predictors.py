@@ -25,7 +25,7 @@ class ToolPredictor(dspy.Module):
         super().__init__()
         
         # Configure LLM
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("OPENAI_API_KEY", "")
         if not api_key:
             raise ValueError("OpenAI API key not found. Please set OPENAI_API_KEY in the .env file.")
         

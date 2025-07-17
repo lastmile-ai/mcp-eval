@@ -3,10 +3,11 @@ Core utilities for trace evaluation.
 
 This module provides foundational functions for loading and working with trace files.
 """
-
+import os
 import json
 from typing import Dict, List, Any
 from dataloader import DataExample
+from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan
 
 
 def read_trace_file(trace_file_path: str) -> List[Dict[str, Any]]:
@@ -182,28 +183,39 @@ def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str) ->
         if 'gen_ai.prompt.1.content' in attributes:
             user_query = attributes['gen_ai.prompt.1.content']
             break
+    # Convert raw trace dictionaries to TraceSpan objects
+    trace_spans = []
+    for span_dict in traces:
+        try:
+            # Convert dict to JSON string and then to TraceSpan
+            span_json = json.dumps(span_dict)
+            trace_spans.append(TraceSpan.from_json(span_json))
+        except (json.JSONDecodeError, KeyError) as e:
+            print(f"Error converting span to TraceSpan: {e}")
+            continue
     
+    # Process spans to get metrics
+    metrics = process_spans(trace_spans)
     # Extract metrics from processed data
-    metrics = processed_data.get('metrics', {})
     
     # Get available tools from trace file
     available_tools = get_tools_info(trace_raw_file_path)
     
     # Extract tool calls and unique tools
-    tool_calls = metrics.get('tool_calls', [])
-    unique_tools = metrics.get('unique_tools_used', [])
+    tool_calls = metrics.tool_calls
+    unique_tools = metrics.unique_tools_used
     
     # Create updated metrics dictionary with available tools
     updated_metrics = {
         'tool_calls': tool_calls,
         'unique_tools_used': unique_tools,
         'list_of_available_tools': available_tools,
-        'iteration_count': metrics.get('iteration_count', 0),
-        'total_duration_ms': metrics.get('total_duration_ms', 0.0),
-        'latency_ms': metrics.get('latency_ms', 0.0),
-        'error_count': metrics.get('error_count', 0),
-        'success_rate': metrics.get('success_rate', 0.0),
-        'cost_estimate': metrics.get('cost_estimate', 0.0)
+        'iteration_count': metrics.iteration_count,
+        'total_duration_ms': metrics.total_duration_ms,
+        'latency_ms': metrics.latency_ms,
+        'error_count': metrics.error_count,
+        'success_rate': metrics.success_rate,
+        'cost_estimate': metrics.cost_estimate
     }
     
     # Create and return DataExample instance

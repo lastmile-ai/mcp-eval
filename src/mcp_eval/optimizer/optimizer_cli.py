@@ -4,7 +4,7 @@ import json
 
 from core_trace_process import create_trace_dataset, get_tools_info
 from predictors import ToolPredictor
-
+from mcp_eval.metrics import process_spans
 
 def optimize_with_dspy(predictor: ToolPredictor, list_of_available_tools: list, train_examples: list, test_examples: list, optimizer_type: str, optimizer_kwargs: dict) -> dict:
     """Use DSPy optimizers to improve tool selection"""
