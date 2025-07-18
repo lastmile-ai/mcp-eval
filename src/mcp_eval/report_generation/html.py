@@ -337,15 +337,15 @@ def generate_combined_html_report(
                 </tr>
 """
 
-        # Add failure message row if test failed
-        if not test_data["passed"]:
-            failure_msg = test_data.get("error", "")
-            if failure_msg:
-                # Escape HTML in failure message for proper display in code block
-                import html as html_module
+            # Add failure message row if test failed
+            if not test_data["passed"]:
+                failure_msg = test_data.get("error", "")
+                if failure_msg:
+                    # Escape HTML in failure message for proper display in code block
+                    import html as html_module
 
-                escaped_failure_msg = html_module.escape(failure_msg)
-                html += f"""            <tr class="test-row {status_class} failure-row">
+                    escaped_failure_msg = html_module.escape(failure_msg)
+                    html += f"""            <tr class="test-row {status_class} failure-row">
                 <td colspan="4">
                     <div class="failure-message"><code>{escaped_failure_msg}</code></div>
                 </td>
