@@ -111,26 +111,26 @@ def generate_combined_html_report(
             color: #27ae60;
         }}
         .filter-controls {{
-            margin-bottom: 20px;
-            padding: 15px;
-            background-color: #e8f4f8;
+            padding: 15px 0;
             border-radius: 4px;
         }}
-        .filter-btn {{
-            padding: 8px 16px;
-            margin-right: 10px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
+        .filter-checkbox {{
+            margin-right: 20px;
+            display: inline-flex;
+            align-items: center;
+        }}
+        .filter-checkbox input[type="checkbox"] {{
+            margin-right: 8px;
+        }}
+        .filter-checkbox label {{
             font-weight: bold;
+            cursor: pointer;
         }}
-        .filter-btn.active {{
-            background-color: #3498db;
-            color: white;
+        .filter-checkbox.pass label {{
+            color: #27ae60;
         }}
-        .filter-btn:not(.active) {{
-            background-color: #bdc3c7;
-            color: #2c3e50;
+        .filter-checkbox.fail label {{
+            color: #e74c3c;
         }}
         table {{
             width: 100%;
@@ -175,7 +175,7 @@ def generate_combined_html_report(
             border-top: none !important;
         }}
         .failure-row td {{
-            padding-top: 0 !important;
+            padding-top: 15px !important;
             padding-bottom: 15px !important;
         }}
         .dataset-section {{
@@ -216,16 +216,13 @@ def generate_combined_html_report(
             }}
         }}
         
-        function filterTests(filter) {{
+        function filterTests() {{
             const table = document.getElementById('test-table');
             const rows = table.getElementsByTagName('tr');
-            const buttons = document.querySelectorAll('.filter-btn');
+            const passCheckbox = document.getElementById('filter-pass');
+            const failCheckbox = document.getElementById('filter-fail');
             
-            // Update button states
-            buttons.forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            // Filter rows
+            // Filter rows based on pass/fail checkboxes
             for (let i = 1; i < rows.length; i++) {{ // Skip header row
                 const row = rows[i];
                 
@@ -236,11 +233,7 @@ def generate_combined_html_report(
                     const statusCell = prevRow.cells[1];
                     const isPass = statusCell.textContent.includes('PASS');
                     
-                    if (filter === 'all') {{
-                        row.style.display = '';
-                    }} else if (filter === 'pass' && isPass) {{
-                        row.style.display = '';
-                    }} else if (filter === 'fail' && !isPass) {{
+                    if ((isPass && passCheckbox.checked) || (!isPass && failCheckbox.checked)) {{
                         row.style.display = '';
                     }} else {{
                         row.style.display = 'none';
@@ -250,11 +243,7 @@ def generate_combined_html_report(
                     const statusCell = row.cells[1];
                     const isPass = statusCell.textContent.includes('PASS');
                     
-                    if (filter === 'all') {{
-                        row.style.display = '';
-                    }} else if (filter === 'pass' && isPass) {{
-                        row.style.display = '';
-                    }} else if (filter === 'fail' && !isPass) {{
+                    if ((isPass && passCheckbox.checked) || (!isPass && failCheckbox.checked)) {{
                         row.style.display = '';
                     }} else {{
                         row.style.display = 'none';
@@ -298,6 +287,7 @@ def generate_combined_html_report(
             </div>
         </div>
         
+        <h2>Summary</h2>
         <div class="summary">
             <div class="summary-item">
                 <strong>Decorator Tests:</strong> {summary["passed_decorator_tests"]}/{summary["total_decorator_tests"]} passed
@@ -312,9 +302,14 @@ def generate_combined_html_report(
         
         <h2>Decorator Test Results</h2>
         <div class="filter-controls">
-            <button class="filter-btn active" onclick="filterTests('all')">All Tests</button>
-            <button class="filter-btn" onclick="filterTests('pass')">Passed Only</button>
-            <button class="filter-btn" onclick="filterTests('fail')">Failed Only</button>
+            <div class="filter-checkbox pass">
+                <input type="checkbox" id="filter-pass" checked onchange="filterTests()">
+                <label for="filter-pass">Passed ({summary["passed_decorator_tests"]})</label>
+            </div>
+            <div class="filter-checkbox fail">
+                <input type="checkbox" id="filter-fail" checked onchange="filterTests()">
+                <label for="filter-fail">Failed ({summary["total_decorator_tests"] - summary["passed_decorator_tests"]})</label>
+            </div>
         </div>
         <table id="test-table">
             <tr>
@@ -324,20 +319,22 @@ def generate_combined_html_report(
                 <th>Server</th>
             </tr>
 """
+    if not report_data["decorator_tests"]:
+        html += """<tr class="test-row empty-row"><td colspan="4"></td></tr>"""
+    else:
+        for test_data in report_data["decorator_tests"]:
+            status_class = "pass" if test_data["passed"] else "fail"
+            status_text = "✅ PASS" if test_data["passed"] else "❌ FAIL"
+            duration = f"{test_data.get('duration_ms', 0):.1f}ms"
+            server = test_data.get("server_name", "unknown")
 
-    for test_data in report_data["decorator_tests"]:
-        status_class = "pass" if test_data["passed"] else "fail"
-        status_text = "✅ PASS" if test_data["passed"] else "❌ FAIL"
-        duration = f"{test_data.get('duration_ms', 0):.1f}ms"
-        server = test_data.get("server_name", "unknown")
-
-        # Add main test row
-        html += f"""            <tr class="test-row {status_class}">
-                <td>{test_data["test_name"]}</td>
-                <td class="{status_class}">{status_text}</td>
-                <td>{duration}</td>
-                <td>{server}</td>
-            </tr>
+            # Add main test row
+            html += f"""            <tr class="test-row {status_class}">
+                    <td>{test_data["test_name"]}</td>
+                    <td class="{status_class}">{status_text}</td>
+                    <td>{duration}</td>
+                    <td>{server}</td>
+                </tr>
 """
 
         # Add failure message row if test failed
