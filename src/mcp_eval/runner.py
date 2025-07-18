@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import List, Dict, Any
 import typer
 from rich.console import Console
-from rich.table import Table
 from rich.progress import Progress
 
 from mcp_eval.reporting import generate_failure_message
@@ -15,6 +14,11 @@ from mcp_eval.reporting import generate_failure_message
 from .core import TestResult, _setup_functions, _teardown_functions
 from .datasets import Dataset
 from .reports import EvaluationReport
+from .report_generation import (
+    generate_combined_summary,
+    generate_combined_markdown_report,
+    generate_combined_html_report,
+)
 
 app = typer.Typer()
 console = Console()
@@ -188,13 +192,14 @@ def run_tests(
     test_dir: str = typer.Argument(
         "tests", help="Directory to scan for tests and datasets"
     ),
-    json_report: str = typer.Option(None, "--json", help="Save JSON report"),
-    markdown_report: str = typer.Option(
-        None, "--markdown", help="Save Markdown report"
-    ),
     format: str = typer.Option("auto", help="Output format (auto, decorator, dataset)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
-    max_concurrency: int = typer.Option(
+    json_report: str | None = typer.Option(None, "--json", help="Save JSON report"),
+    markdown_report: str | None = typer.Option(
+        None, "--markdown", help="Save Markdown report"
+    ),
+    html_report: str | None = typer.Option(None, "--html", help="Save HTML report"),
+    max_concurrency: int | None = typer.Option(
         None, "--max-concurrency", help="Maximum concurrent evaluations"
     ),
 ):
@@ -202,18 +207,25 @@ def run_tests(
     if ctx.invoked_subcommand is None:
         asyncio.run(
             _run_async(
-                test_dir, json_report, markdown_report, format, verbose, max_concurrency
+                test_dir,
+                format,
+                verbose,
+                json_report,
+                markdown_report,
+                html_report,
+                max_concurrency,
             )
         )
 
 
 async def _run_async(
     test_dir: str,
-    json_report: str,
-    markdown_report: str,
     format: str,
     verbose: bool,
-    max_concurrency: int,
+    json_report: str | None,
+    markdown_report: str | None,
+    html_report: str | None,
+    max_concurrency: int | None,
 ):
     """Async implementation of the run command."""
     # Parse pytest-style test specifier for path validation
@@ -274,10 +286,10 @@ async def _run_async(
     # Generate combined summary
     if test_results or dataset_reports:
         console.print(f"\n{'=' * 60}")
-        _generate_combined_summary(test_results, dataset_reports)
+        generate_combined_summary(test_results, dataset_reports, console)
 
     # Generate reports
-    if json_report or markdown_report:
+    if json_report or markdown_report or html_report:
         combined_report = {
             "decorator_tests": [r.__dict__ for r in test_results],
             "dataset_reports": [r.to_dict() for r in dataset_reports],
@@ -297,8 +309,12 @@ async def _run_async(
             console.print(f"JSON report saved to {json_report}")
 
         if markdown_report:
-            _generate_combined_markdown_report(combined_report, markdown_report)
+            generate_combined_markdown_report(combined_report, markdown_report)
             console.print(f"Markdown report saved to {markdown_report}")
+
+        if html_report:
+            generate_combined_html_report(combined_report, html_report)
+            console.print(f"HTML report saved to {html_report}")
 
     # Exit with error if any tests failed
     total_failed = sum(1 for r in test_results if not r.passed) + sum(
@@ -307,95 +323,6 @@ async def _run_async(
 
     if total_failed > 0:
         raise typer.Exit(1)
-
-
-def _generate_combined_summary(
-    test_results: List[TestResult], dataset_reports: List[EvaluationReport]
-):
-    """Generate a combined summary of all results."""
-    table = Table(title="Combined Test Results Summary")
-    table.add_column("Type", style="cyan")
-    table.add_column("Name", style="magenta")
-    table.add_column("Status", justify="center")
-    table.add_column("Cases/Tests", justify="right")
-    table.add_column("Duration", justify="right")
-
-    # Add decorator test results
-    for result in test_results:
-        status = "[green]PASS[/]" if result.passed else "[red]FAIL[/]"
-        duration = f"{result.duration_ms:.1f}ms" if result.duration_ms else "N/A"
-
-        table.add_row("Test", result.test_name, status, "1", duration)
-
-    # Add dataset results
-    for report in dataset_reports:
-        status = f"[green]{report.passed_cases}/{report.total_cases}[/]"
-        duration = f"{report.average_duration_ms:.1f}ms"
-
-        table.add_row(
-            "Dataset", report.dataset_name, status, str(report.total_cases), duration
-        )
-
-    console.print(table)
-
-    # Overall summary
-    total_decorator_tests = len(test_results)
-    passed_decorator_tests = sum(1 for r in test_results if r.passed)
-
-    total_dataset_cases = sum(r.total_cases for r in dataset_reports)
-    passed_dataset_cases = sum(r.passed_cases for r in dataset_reports)
-
-    total_tests = total_decorator_tests + total_dataset_cases
-    total_passed = passed_decorator_tests + passed_dataset_cases
-
-    console.print("\n[bold]Overall Summary:[/]")
-    console.print(
-        f"  Decorator Tests: {passed_decorator_tests}/{total_decorator_tests} passed"
-    )
-    console.print(
-        f"  Dataset Cases: {passed_dataset_cases}/{total_dataset_cases} passed"
-    )
-    console.print(
-        f"  [bold]Total: {total_passed}/{total_tests} passed ({total_passed / total_tests * 100:.1f}%)[/]"
-    )
-
-
-def _generate_combined_markdown_report(report_data: Dict[str, Any], output_path: str):
-    """Generate a combined markdown report."""
-    summary = report_data["summary"]
-
-    report = f"""# MCP-Eval Combined Test Report
-
-## Summary
-
-- **Decorator Tests**: {summary["passed_decorator_tests"]}/{summary["total_decorator_tests"]} passed
-- **Dataset Cases**: {summary["passed_dataset_cases"]}/{summary["total_dataset_cases"]} passed
-- **Overall Success Rate**: {(summary["passed_decorator_tests"] + summary["passed_dataset_cases"]) / (summary["total_decorator_tests"] + summary["total_dataset_cases"]) * 100:.1f}%
-
-## Decorator Test Results
-
-| Test | Status | Duration | Server |
-|------|--------|----------|--------|
-"""
-
-    for test_data in report_data["decorator_tests"]:
-        status = "✅ PASS" if test_data["passed"] else "❌ FAIL"
-        duration = f"{test_data.get('duration_ms', 0):.1f}ms"
-        server = test_data.get("server_name", "unknown")
-
-        report += f"| {test_data['test_name']} | {status} | {duration} | {server} |\n"
-
-    report += "\n## Dataset Evaluation Results\n\n"
-
-    for dataset_data in report_data["dataset_reports"]:
-        dataset_summary = dataset_data["summary"]
-        report += f"### {dataset_data['dataset_name']}\n\n"
-        report += f"- **Cases**: {dataset_summary['passed_cases']}/{dataset_summary['total_cases']} passed\n"
-        report += f"- **Success Rate**: {dataset_summary['success_rate'] * 100:.1f}%\n"
-        report += f"- **Average Duration**: {dataset_summary['average_duration_ms']:.1f}ms\n\n"
-
-    with open(output_path, "w") as f:
-        f.write(report)
 
 
 @app.command()
