@@ -124,19 +124,18 @@ async def run_decorator_tests(
                 # Call task decorated function
                 result: TestResult = await func(**kwargs)
 
-                results.append(result)
-
                 status = "[green]PASS[/]" if result.passed else "[red]FAIL[/]"
-                console.print(f"  {status} {test_name}")
+                progress.console.print(f"  {status} {test_name}")
 
                 if not result.passed:
                     failure_message = generate_failure_message(
                         result.evaluation_results
                     )
-                    console.print(f"[red]ERROR[/] {failure_message}")
+                    result.error = failure_message
+                    progress.console.print(f"[red]ERROR[/] {failure_message}")
 
             except Exception as e:
-                console.print(f"  [red]ERROR[/] {test_name}: {e}")
+                progress.console.print(f"  [red]ERROR[/] {test_name}: {e}")
                 result = TestResult(
                     test_name=test_name,
                     description=getattr(func, "_description", ""),
@@ -148,6 +147,7 @@ async def run_decorator_tests(
                     duration_ms=0,
                     error=str(e),
                 )
+            finally:
                 results.append(result)
 
             progress.update(task_id, advance=1)
