@@ -1,22 +1,12 @@
 """HTML report generation for MCP-Eval."""
 
 from typing import Dict, Any
-import platform
-import sys
-import os
-from datetime import datetime
+from .utils import get_environment_info, load_config_info, format_config_for_display
 
 
 def format_config_for_html(config_info: Dict[str, Any]) -> str:
     """Format configuration for HTML display."""
-    if not config_info:
-        return "No configuration available"
-
-    import yaml
-
-    # Remove the _config_path key for display
-    display_config = {k: v for k, v in config_info.items() if k != "_config_path"}
-    return yaml.dump(display_config, default_flow_style=False, sort_keys=False)
+    return format_config_for_display(config_info)
 
 
 def generate_combined_html_report(
@@ -30,30 +20,10 @@ def generate_combined_html_report(
     overall_success_rate = (total_passed / total_tests * 100) if total_tests > 0 else 0
 
     # Collect environment information
-    env_info = {
-        "python_version": sys.version,
-        "platform": platform.platform(),
-        "system": platform.system(),
-        "machine": platform.machine(),
-        "processor": platform.processor(),
-        "timestamp": datetime.now().isoformat(),
-        "working_directory": os.getcwd(),
-    }
+    env_info = get_environment_info()
 
     # Try to load MCP-Eval configuration
-    config_info = None
-    config_paths = ["mcpeval.yaml", "mcpeval.yml"]
-    for config_path in config_paths:
-        if os.path.exists(config_path):
-            try:
-                import yaml
-
-                with open(config_path, "r") as f:
-                    config_info = yaml.safe_load(f)
-                    config_info["_config_path"] = config_path
-                break
-            except Exception:
-                continue
+    config_info = load_config_info()
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
