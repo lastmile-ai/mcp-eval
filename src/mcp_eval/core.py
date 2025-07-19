@@ -2,6 +2,7 @@
 
 import asyncio
 import inspect
+import traceback
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Callable
 from functools import wraps
 from dataclasses import dataclass
@@ -138,17 +139,17 @@ def task(description: str = "", server: str = None):
                     duration_ms=duration_ms,
                 )
 
-            except Exception as e:
+            except Exception:
                 return TestResult(
                     test_name=func.__name__,
                     description=description,
                     server_name=server_name,
                     parameters=kwargs,
                     passed=False,
-                    evaluation_results=[],
+                    evaluation_results=session.get_results() if session else [],
                     metrics=None,
                     duration_ms=0,
-                    error=str(e),
+                    error=traceback.format_exc(),
                 )
 
             finally:

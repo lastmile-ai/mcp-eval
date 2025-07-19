@@ -128,9 +128,7 @@ async def run_decorator_tests(
                 progress.console.print(f"  {status} {test_name}")
 
                 if not result.passed:
-                    failure_message = generate_failure_message(
-                        result.evaluation_results
-                    )
+                    failure_message = generate_failure_message(result)
                     result.error = failure_message
                     progress.console.print(f"[red]ERROR[/] {failure_message}")
 
