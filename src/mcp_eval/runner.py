@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 import typer
 from rich.console import Console
-from rich.progress import Progress
+from rich.live import Live
 
 from mcp_eval.reporting import generate_failure_message
 
@@ -18,6 +18,13 @@ from .report_generation import (
     generate_combined_summary,
     generate_combined_markdown_report,
     generate_combined_html_report,
+)
+from .report_generation.console import (
+    pad,
+    print_failure_details,
+    print_test_summary_info,
+    print_final_summary,
+    TestProgressDisplay,
 )
 
 app = typer.Typer()
@@ -69,6 +76,8 @@ def discover_tests_and_datasets(test_spec: str) -> Dict[str, List]:
                     ):
                         # If target_function is specified, only include matching function
                         if target_function is None or name == target_function:
+                            # Add file path info to the task function
+                            obj._source_file = py_file
                             tasks.append(obj)
 
                 # Discover datasets (only if no specific function is targeted)
@@ -92,63 +101,103 @@ def expand_parametrized_tests(tasks: List[callable]) -> List[Dict[str, Any]]:
         param_combinations = getattr(task_func, "_mcpeval_param_combinations", None)
         if param_combinations:
             for kwargs in param_combinations:
-                expanded.append({"func": task_func, "kwargs": kwargs})
+                expanded.append(
+                    {
+                        "func": task_func,
+                        "kwargs": kwargs,
+                        "source_file": getattr(task_func, "_source_file", None),
+                    }
+                )
             continue
         else:
-            expanded.append({"func": task_func, "kwargs": {}})
+            expanded.append(
+                {
+                    "func": task_func,
+                    "kwargs": {},
+                    "source_file": getattr(task_func, "_source_file", None),
+                }
+            )
             continue
 
     return expanded
 
 
+def group_tests_by_file(
+    test_cases: List[Dict[str, Any]],
+) -> Dict[Path, List[Dict[str, Any]]]:
+    """Group test cases by their source file."""
+    grouped = {}
+    for test_case in test_cases:
+        source_file = test_case.get("source_file")
+        if source_file not in grouped:
+            grouped[source_file] = []
+        grouped[source_file].append(test_case)
+    return grouped
+
+
 async def run_decorator_tests(
     test_cases: List[Dict[str, Any]], verbose: bool
 ) -> List[TestResult]:
-    """Run decorator-style tests."""
+    """Run decorator-style tests grouped by file."""
     results: list[TestResult] = []
+    failed_results = []
 
-    with Progress() as progress:
-        task_id = progress.add_task("[cyan]Running tests...", total=len(test_cases))
+    # Group tests by file
+    grouped_tests = group_tests_by_file(test_cases)
+    files_with_counts = {
+        file_path: len(tests) for file_path, tests in grouped_tests.items()
+    }
 
-        for test_case in test_cases:
-            func = test_case["func"]
-            kwargs = test_case["kwargs"]
+    display = TestProgressDisplay(files_with_counts)
 
-            # Create test name with parameters
-            test_name = func.__name__
-            if kwargs:
-                param_str = ",".join(f"{k}={v}" for k, v in kwargs.items())
-                test_name += f"[{param_str}]"
+    with Live(display.create_display(), refresh_per_second=10) as live:
+        # Process each file's tests
+        for source_file, file_test_cases in grouped_tests.items():
+            display.set_current_file(source_file)
 
-            try:
-                # Call task decorated function
-                result: TestResult = await func(**kwargs)
+            for test_case in file_test_cases:
+                func = test_case["func"]
+                kwargs = test_case["kwargs"]
 
-                status = "[green]PASS[/]" if result.passed else "[red]FAIL[/]"
-                progress.console.print(f"  {status} {test_name}")
+                # Create test name with parameters
+                test_name = func.__name__
+                if kwargs:
+                    param_str = ",".join(f"{k}={v}" for k, v in kwargs.items())
+                    test_name += f"[{param_str}]"
 
-                if not result.passed:
-                    failure_message = generate_failure_message(result)
-                    result.error = failure_message
-                    progress.console.print(f"[red]ERROR[/] {failure_message}")
+                try:
+                    # Call task decorated function
+                    result: TestResult = await func(**kwargs)
 
-            except Exception as e:
-                progress.console.print(f"  [red]ERROR[/] {test_name}: {e}")
-                result = TestResult(
-                    test_name=test_name,
-                    description=getattr(func, "_description", ""),
-                    server_name=getattr(func, "_server", "unknown"),
-                    parameters=kwargs,
-                    passed=False,
-                    evaluation_results=[],
-                    metrics=None,
-                    duration_ms=0,
-                    error=str(e),
-                )
-            finally:
+                    if result.passed:
+                        display.add_result(passed=True)
+                    else:
+                        display.add_result(passed=False)
+                        failure_message = generate_failure_message(result)
+                        result.error = failure_message
+                        failed_results.append(result)
+
+                except Exception as e:
+                    display.add_result(passed=False, error=True)
+                    console.print(f"  [red]ERROR[/] {test_name}: {e}")
+                    result = TestResult(
+                        test_name=test_name,
+                        description=getattr(func, "_description", ""),
+                        server_name=getattr(func, "_server", "unknown"),
+                        parameters=kwargs,
+                        passed=False,
+                        evaluation_results=[],
+                        metrics=None,
+                        duration_ms=0,
+                        error=str(e),
+                    )
+                    failed_results.append(result)
+
                 results.append(result)
+                live.update(display.create_display())
 
-            progress.update(task_id, advance=1)
+    # Print detailed failures section if there are any failures
+    print_failure_details(console, failed_results)
 
     return results
 
@@ -226,6 +275,7 @@ async def _run_async(
     max_concurrency: int | None,
 ):
     """Async implementation of the run command."""
+    console.print(pad("MCP-Eval", char="*"), style="magenta")
     # Parse pytest-style test specifier for path validation
     if "::" in test_dir:
         file_path, _ = test_dir.split("::", 1)
@@ -237,7 +287,7 @@ async def _run_async(
         console.print(f"[red]Error:[/] Test path '{test_path}' not found")
         raise typer.Exit(1)
 
-    console.print(f"[blue]Discovering tests and datasets in {test_dir}...[/blue]")
+    console.print("[blue]Discovering tests and datasets...[/blue]")
     discovered = discover_tests_and_datasets(test_dir)
 
     tasks = discovered["tasks"]
@@ -247,14 +297,19 @@ async def _run_async(
         console.print("[yellow]No tests or datasets found[/]")
         return
 
-    console.print(f"Found {len(tasks)} test function(s) and {len(datasets)} dataset(s)")
+    console.print(
+        f"[blue]Found {len(tasks)} test function(s) and {len(datasets)} dataset(s)[/blue]",
+    )
 
     # Run tests and evaluations
     test_results = []
     dataset_reports = []
 
     if tasks and format in ["auto", "decorator"]:
-        console.print(f"\n[blue]Running {len(tasks)} decorator-style tests...[/blue]")
+        test_cases = expand_parametrized_tests(tasks)
+        console.print(
+            f"\n[blue]Running {len(test_cases)} decorator-style test cases...[/blue]"
+        )
 
         # Execute setup functions before running tests
         for setup_func in _setup_functions:
@@ -265,7 +320,6 @@ async def _run_async(
                     f"[yellow]Warning: Setup function {setup_func.__name__} failed: {e}[/]"
                 )
 
-        test_cases = expand_parametrized_tests(tasks)
         test_results = await run_decorator_tests(test_cases, verbose)
 
         # Execute teardown functions after running tests
@@ -281,8 +335,14 @@ async def _run_async(
         console.print(f"\n[blue]Running {len(datasets)} dataset evaluations...[/blue]")
         dataset_reports = await run_dataset_evaluations(datasets)
 
-    # Generate combined summary
-    if test_results or dataset_reports:
+    # Print short test summary info (pytest-like)
+    if test_results:
+        failed_tests = [r for r in test_results if not r.passed]
+        print_test_summary_info(console, failed_tests)
+        print_final_summary(console, test_results)
+
+    # Generate combined summary for other reports
+    if dataset_reports:
         console.print(f"\n{'=' * 60}")
         generate_combined_summary(test_results, dataset_reports, console)
 
@@ -304,15 +364,15 @@ async def _run_async(
 
             with open(json_report, "w") as f:
                 json.dump(combined_report, f, indent=2, default=str)
-            console.print(f"JSON report saved to {json_report}")
+            console.print(f"JSON report saved to {json_report}", style="blue")
 
         if markdown_report:
             generate_combined_markdown_report(combined_report, markdown_report)
-            console.print(f"Markdown report saved to {markdown_report}")
+            console.print(f"Markdown report saved to {markdown_report}", style="blue")
 
         if html_report:
             generate_combined_html_report(combined_report, html_report)
-            console.print(f"HTML report saved to {html_report}")
+            console.print(f"HTML report saved to {html_report}", style="blue")
 
     # Exit with error if any tests failed
     total_failed = sum(1 for r in test_results if not r.passed) + sum(
