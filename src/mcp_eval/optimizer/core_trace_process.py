@@ -7,7 +7,9 @@ import os
 import json
 from typing import Dict, List, Any
 from dataloader import DataExample
-from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan
+from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan, extract_comprehensive_trace_information, TraceInformation
+from mcp_eval.evaluators.builtin import LLMJudgeSuccess, EvaluatorContext
+import asyncio
 
 
 def read_trace_file(trace_file_path: str) -> List[Dict[str, Any]]:
@@ -78,6 +80,54 @@ def extract_server_name_from_trace(trace_file_path: str) -> str:
             return base_name
     
     return "unknown"
+
+
+async def evaluate_task_success(trace_info_list: List[TraceInformation], metrics: TestMetrics) -> Dict[str, Any]:
+    """
+    Evaluate if the user's task was successfully addressed using LLMJudgeSuccess.
+    
+    Args:
+        trace_info_list: List of TraceInformation objects with message content
+        metrics: TestMetrics object containing tool calls and other metrics
+        
+    Returns:
+        Dictionary containing evaluation results
+    """
+    # Create a custom EvaluatorContext with trace information
+    class TraceEvaluatorContext(EvaluatorContext):
+        def __init__(self, trace_info, metrics):
+            self.trace_info = trace_info
+            self.inputs = {}
+            self.output = ""
+            self.expected_output = None
+            self.tool_calls = metrics.tool_calls
+            self.metrics = metrics
+    
+    # Create the evaluator context
+    ctx = TraceEvaluatorContext(trace_info_list, metrics)
+    
+    # Create and run the LLMJudgeSuccess evaluator
+    evaluator = LLMJudgeSuccess(min_score=0.7)  # Set minimum score threshold
+    
+    try:
+        result = await evaluator.evaluate(ctx)
+        
+        # Convert EvaluatorResult to dictionary
+        return {
+            'passed': result.passed,
+            'score': result.score,
+            'expected': result.expected,
+            'actual': result.actual,
+            'details': result.details,
+            'error': result.error
+        }
+    except Exception as e:
+        return {
+            'passed': False,
+            'score': 0.0,
+            'error': str(e),
+            'reasoning': 'Failed to evaluate task success with LLM judge'
+        }
 
 
 def separate_traces_by_server(trace_files: List[str]) -> Dict[str, List[str]]:
@@ -263,7 +313,22 @@ def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str) ->
     
     # Process spans to get metrics
     metrics = process_spans(trace_spans)
-    # Extract metrics from processed data
+    
+    # Extract comprehensive trace information 
+    comprehensive_info = extract_comprehensive_trace_information(trace_spans)
+    
+    # Evaluate task success using LLMJudgeSuccess
+    success_evaluation = None
+    try:
+        success_evaluation = asyncio.run(evaluate_task_success(comprehensive_info, metrics))
+    except Exception as e:
+        print(f"Error evaluating task success: {e}")
+        success_evaluation = {
+            'passed': False,
+            'score': 0.0,
+            'error': str(e),
+            'reasoning': 'Failed to evaluate task success'
+        }
     
     # Get available tools from trace file
     available_tools = get_tools_info(trace_raw_file_path)
@@ -272,7 +337,7 @@ def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str) ->
     tool_calls = metrics.tool_calls
     unique_tools = metrics.unique_tools_used
     
-    # Create updated metrics dictionary with available tools
+    # Create updated metrics dictionary with available tools and comprehensive trace info
     updated_metrics = {
         'tool_calls': tool_calls,
         'unique_tools_used': unique_tools,
@@ -282,7 +347,9 @@ def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str) ->
         'latency_ms': metrics.latency_ms,
         'error_count': metrics.error_count,
         'success_rate': metrics.success_rate,
-        'cost_estimate': metrics.cost_estimate
+        'cost_estimate': metrics.cost_estimate,
+        'comprehensive_trace_info': comprehensive_info,
+        'task_success_evaluation': success_evaluation
     }
     
     # Create and return DataExample instance

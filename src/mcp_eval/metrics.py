@@ -75,34 +75,6 @@ class MessageInfo:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class TraceInformation:
-    """Comprehensive information extracted from trace spans."""
-    
-    # Server and initialization information
-    server_initialization: List[MessageInfo] = field(default_factory=list)
-    
-    # User tasks and requests
-    user_tasks: List[MessageInfo] = field(default_factory=list)
-    
-    # Agent information and activities
-    agent_conversations: List[MessageInfo] = field(default_factory=list)
-    
-    # LLM interactions
-    llm_requests: List[MessageInfo] = field(default_factory=list)
-    llm_responses: List[MessageInfo] = field(default_factory=list)
-    
-    # Tool calls and results
-    tool_interactions: List[MessageInfo] = field(default_factory=list)
-    
-    # System events and logs
-    system_events: List[MessageInfo] = field(default_factory=list)
-    
-    # Error messages and warnings
-    errors_warnings: List[MessageInfo] = field(default_factory=list)
-    
-    # General span information
-    all_spans: List[TraceSpan] = field(default_factory=list)
 
 
 @dataclass
@@ -192,6 +164,20 @@ class TraceSpan:
                 attributes=data.get("tags", {}),
                 events=data.get("logs", []),
             )
+
+
+@dataclass
+class TraceInformation:
+    """Comprehensive information extracted from a single trace span."""
+    
+    # Associated message information
+    message_info: MessageInfo
+    
+    # Span attributes and metadata
+    span_attributes: Dict[str, Any] = field(default_factory=dict)
+    
+    # Original span for reference
+    original_span: Optional[TraceSpan] = None
 
 
 def process_spans(spans: List[TraceSpan]) -> TestMetrics:
@@ -366,19 +352,22 @@ def register_metric(name: str, processor: callable):
     _custom_metrics[name] = processor
 
 
-def extract_comprehensive_trace_information(spans: List[TraceSpan]) -> TraceInformation:
-    """Extract comprehensive information from trace spans including messages, conversations, and system events.
+def extract_comprehensive_trace_information(spans: List[TraceSpan]) -> List[TraceInformation]:
+    """Extract comprehensive information from trace spans that contain actual text/message content.
     
     Args:
         spans: List of TraceSpan objects extracted from trace jsonl file
         
     Returns:
-        TraceInformation object containing categorized information with timestamps
+        List of TraceInformation objects, one for each span that contains meaningful text/message content
     """
-    trace_info = TraceInformation()
-    trace_info.all_spans = spans
+    trace_info_list = []
     
     for span in spans:
+        # Check if this span contains any meaningful text/message content
+        if not _span_contains_text_message(span):
+            continue
+            
         timestamp = span.start_time / 1e9  # Convert nanoseconds to seconds
         end_timestamp = span.end_time / 1e9
         
@@ -386,114 +375,188 @@ def extract_comprehensive_trace_information(spans: List[TraceSpan]) -> TraceInfo
         sender = _extract_sender_info(span)
         recipient = _extract_recipient_info(span)
         
-        # Server initialization information
-        if _is_server_init_span(span):
-            content = _extract_server_init_content(span)
-            trace_info.server_initialization.append(MessageInfo(
+        # Determine message type and extract content
+        message_type = _determine_message_type(span)
+        content = _extract_text_content(span)
+        
+        # Only create TraceInformation if we found meaningful content
+        if content and content.strip():
+            # Create MessageInfo for this span
+            message_info = MessageInfo(
                 content=content,
                 sender=sender,
                 recipient=recipient,
                 timestamp=timestamp,
                 end_timestamp=end_timestamp,
-                message_type="server_init",
+                message_type=message_type,
                 metadata={"span_name": span.name, "attributes": span.attributes}
-            ))
-        
-        # User tasks and requests
-        elif _is_user_task_span(span):
-            content = _extract_user_task_content(span)
-            trace_info.user_tasks.append(MessageInfo(
-                content=content,
-                sender=sender,
-                recipient=recipient,
-                timestamp=timestamp,
-                end_timestamp=end_timestamp,
-                message_type="user_task",
-                metadata={"span_name": span.name, "attributes": span.attributes}
-            ))
-        
+            )
+            
+            # Create TraceInformation for this span
+            trace_info = TraceInformation(
+                message_info=message_info,
+                span_attributes=span.attributes.copy(),
+                original_span=span
+            )
+            
+            trace_info_list.append(trace_info)
+    
+    # Sort by timestamp for chronological order
+    trace_info_list.sort(key=lambda x: x.message_info.timestamp)
+    
+    return trace_info_list
+
+
+def _span_contains_text_message(span: TraceSpan) -> bool:
+    """Check if a span contains meaningful text/message content."""
+    # Check common attributes that might contain text content
+    text_attributes = [
+        # User messages and tasks
+        "message.content", "user.message", "task.description", "request.content",
+        # LLM prompts and responses
+        "gen_ai.prompt", "gen_ai.completion", "gen_ai.response.text", 
+        "gen_ai.prompt.1.content", "gen_ai.prompt.2.content", "gen_ai.prompt.3.content",
+        "gen_ai.response.1.content", "gen_ai.response.2.content",
         # Agent conversations
-        elif _is_agent_conversation_span(span):
-            content = _extract_agent_conversation_content(span)
-            trace_info.agent_conversations.append(MessageInfo(
-                content=content,
-                sender=sender,
-                recipient=recipient,
-                timestamp=timestamp,
-                end_timestamp=end_timestamp,
-                message_type="agent_conversation",
-                metadata={"span_name": span.name, "attributes": span.attributes}
-            ))
-        
-        # LLM requests
-        elif _is_llm_request_span(span):
-            content = _extract_llm_request_content(span)
-            trace_info.llm_requests.append(MessageInfo(
-                content=content,
-                sender=sender,
-                recipient=recipient,
-                timestamp=timestamp,
-                end_timestamp=end_timestamp,
-                message_type="llm_request",
-                metadata={"span_name": span.name, "attributes": span.attributes}
-            ))
-        
-        # LLM responses
-        elif _is_llm_response_span(span):
-            content = _extract_llm_response_content(span)
-            trace_info.llm_responses.append(MessageInfo(
-                content=content,
-                sender=sender,
-                recipient=recipient,
-                timestamp=timestamp,
-                end_timestamp=end_timestamp,
-                message_type="llm_response",
-                metadata={"span_name": span.name, "attributes": span.attributes}
-            ))
-        
-        # Tool interactions
-        elif _is_tool_call_span(span):
-            content = _extract_tool_interaction_content(span)
-            trace_info.tool_interactions.append(MessageInfo(
-                content=content,
-                sender=sender,
-                recipient=recipient,
-                timestamp=timestamp,
-                end_timestamp=end_timestamp,
-                message_type="tool_interaction",
-                metadata={"span_name": span.name, "attributes": span.attributes}
-            ))
-        
-        # System events
-        elif _is_system_event_span(span):
-            content = _extract_system_event_content(span)
-            trace_info.system_events.append(MessageInfo(
-                content=content,
-                sender=sender,
-                recipient=recipient,
-                timestamp=timestamp,
-                end_timestamp=end_timestamp,
-                message_type="system_event",
-                metadata={"span_name": span.name, "attributes": span.attributes}
-            ))
-        
-        # Errors and warnings
-        if _has_error_or_warning(span):
-            content = _extract_error_warning_content(span)
-            trace_info.errors_warnings.append(MessageInfo(
-                content=content,
-                sender=sender,
-                recipient=recipient,
-                timestamp=timestamp,
-                end_timestamp=end_timestamp,
-                message_type="error_warning",
-                metadata={"span_name": span.name, "attributes": span.attributes}
-            ))
+        "agent.message", "conversation.content", "agent.response",
+        # System messages and logs
+        "log.message", "system.message", "event.message", "event.description",
+        # Error messages
+        "error.message", "warning", "error.description",
+        # Server initialization messages
+        "server.message", "init.message", "startup.message",
+        # Tool interaction content that might have text
+        "tool.description", "tool.result.content"
+    ]
     
-    # Sort all lists by timestamp for chronological order
-    _sort_messages_by_timestamp(trace_info)
+    # Check span attributes for text content
+    for attr in text_attributes:
+        if attr in span.attributes and span.attributes[attr]:
+            value = str(span.attributes[attr]).strip()
+            if value and len(value) > 0:
+                return True
     
-    return trace_info
+    # Check events for text content
+    for event in span.events:
+        if event.get("name") in ["log", "message", "user_input", "agent_message"]:
+            event_attrs = event.get("attributes", {})
+            for key, value in event_attrs.items():
+                if "message" in key.lower() or "content" in key.lower():
+                    if value and str(value).strip():
+                        return True
+    
+    # Check for any attribute that might contain meaningful text (broader check)
+    for key, value in span.attributes.items():
+        if isinstance(value, str) and len(value.strip()) > 10:  # Reasonable text length
+            # Skip technical IDs and short codes
+            if not (key.endswith("_id") or key.endswith(".id") or key.endswith("_key") or 
+                   key.startswith("trace.") or key.startswith("span.") or
+                   value.replace("-", "").replace("_", "").isalnum()):
+                return True
+    
+    return False
+
+
+def _extract_text_content(span: TraceSpan) -> str:
+    """Extract all meaningful text content from a span."""
+    content_parts = []
+    
+    # Priority order for extracting content
+    priority_attributes = [
+        # User content first
+        "message.content", "user.message", "task.description", "request.content",
+        # LLM content
+        "gen_ai.prompt.1.content", "gen_ai.prompt.2.content", "gen_ai.prompt.3.content",
+        "gen_ai.response.1.content", "gen_ai.response.2.content",
+        "gen_ai.prompt", "gen_ai.completion", "gen_ai.response.text",
+        # Agent content
+        "agent.message", "conversation.content", "agent.response",
+        # System content
+        "log.message", "system.message", "event.message", "event.description",
+        # Error content
+        "error.message", "warning", "error.description",
+        # Server content
+        "server.message", "init.message", "startup.message"
+    ]
+    
+    # Extract content in priority order
+    for attr in priority_attributes:
+        if attr in span.attributes and span.attributes[attr]:
+            value = str(span.attributes[attr]).strip()
+            if value:
+                content_parts.append(value)
+    
+    # Check events for additional content
+    for event in span.events:
+        if event.get("name") in ["log", "message", "user_input", "agent_message"]:
+            event_attrs = event.get("attributes", {})
+            for key, value in event_attrs.items():
+                if ("message" in key.lower() or "content" in key.lower()) and value:
+                    content_parts.append(str(value).strip())
+    
+    # If no priority content found, look for any meaningful text
+    if not content_parts:
+        for key, value in span.attributes.items():
+            if isinstance(value, str) and len(value.strip()) > 10:
+                # Skip technical IDs and short codes
+                if not (key.endswith("_id") or key.endswith(".id") or key.endswith("_key") or 
+                       key.startswith("trace.") or key.startswith("span.") or
+                       value.replace("-", "").replace("_", "").isalnum()):
+                    content_parts.append(value.strip())
+    
+    # Return combined content, removing duplicates while preserving order
+    seen = set()
+    unique_parts = []
+    for part in content_parts:
+        if part not in seen:
+            seen.add(part)
+            unique_parts.append(part)
+    
+    return " | ".join(unique_parts) if unique_parts else ""
+
+
+def _determine_message_type(span: TraceSpan) -> str:
+    """Determine the message type for a span."""
+    if _is_server_init_span(span):
+        return "server_init"
+    elif _is_user_task_span(span):
+        return "user_task"
+    elif _is_agent_conversation_span(span):
+        return "agent_conversation"
+    elif _is_llm_request_span(span):
+        return "llm_request"
+    elif _is_llm_response_span(span):
+        return "llm_response"
+    elif _is_tool_call_span(span):
+        return "tool_interaction"
+    elif _is_system_event_span(span):
+        return "system_event"
+    elif _has_error_or_warning(span):
+        return "error_warning"
+    else:
+        return "general"
+
+
+def _extract_content_by_type(span: TraceSpan, message_type: str) -> str:
+    """Extract content based on message type."""
+    if message_type == "server_init":
+        return _extract_server_init_content(span)
+    elif message_type == "user_task":
+        return _extract_user_task_content(span)
+    elif message_type == "agent_conversation":
+        return _extract_agent_conversation_content(span)
+    elif message_type == "llm_request":
+        return _extract_llm_request_content(span)
+    elif message_type == "llm_response":
+        return _extract_llm_response_content(span)
+    elif message_type == "tool_interaction":
+        return _extract_tool_interaction_content(span)
+    elif message_type == "system_event":
+        return _extract_system_event_content(span)
+    elif message_type == "error_warning":
+        return _extract_error_warning_content(span)
+    else:
+        return span.name
 
 
 def _extract_sender_info(span: TraceSpan) -> str:
@@ -764,13 +827,3 @@ def _extract_error_warning_content(span: TraceSpan) -> str:
     return " | ".join(content_parts) if content_parts else span.name
 
 
-def _sort_messages_by_timestamp(trace_info: TraceInformation) -> None:
-    """Sort all message lists by timestamp for chronological order."""
-    trace_info.server_initialization.sort(key=lambda x: x.timestamp)
-    trace_info.user_tasks.sort(key=lambda x: x.timestamp)
-    trace_info.agent_conversations.sort(key=lambda x: x.timestamp)
-    trace_info.llm_requests.sort(key=lambda x: x.timestamp)
-    trace_info.llm_responses.sort(key=lambda x: x.timestamp)
-    trace_info.tool_interactions.sort(key=lambda x: x.timestamp)
-    trace_info.system_events.sort(key=lambda x: x.timestamp)
-    trace_info.errors_warnings.sort(key=lambda x: x.timestamp)
