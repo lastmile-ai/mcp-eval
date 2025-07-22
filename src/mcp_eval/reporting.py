@@ -90,15 +90,17 @@ def generate_json_report(results: List[TestResult], output_path: str):
         json.dump(report_data, f, cls=EnhancedJSONEncoder, indent=2)
 
 
-def generate_failure_message(results: list[EvaluationRecord]) -> str:
+def generate_failure_message(result: TestResult) -> str:
     """Generate failure messages for mcp-eval pytest evaluations"""
-    failed_results = [r for r in results if not r.passed]
-
     failure_details = []
-    for result in failed_results:
-        name = result.name
-        error = result.error
-        evaluation_result = result.result
+
+    eval_record = result.evaluation_results
+    failed_eval_records = [r for r in eval_record if not r.passed]
+
+    for eval_record in failed_eval_records:
+        name = eval_record.name
+        error = eval_record.error
+        evaluation_result = eval_record.result
 
         if error:
             failure_details.append(f"  ✗ {name}: {error}")
@@ -125,4 +127,8 @@ def generate_failure_message(results: list[EvaluationRecord]) -> str:
                 failure_details.append(f"  ✗ {name}: {evaluation_result.model_dump()}")
 
     failure_message = "Evaluation failures:\n" + "\n".join(failure_details)
+
+    if result.error:
+        failure_message += f"\n\n{result.error}"
+
     return failure_message

@@ -7,14 +7,25 @@ from pathlib import Path
 from typing import List, Dict, Any
 import typer
 from rich.console import Console
-from rich.table import Table
-from rich.progress import Progress
+from rich.live import Live
 
 from mcp_eval.reporting import generate_failure_message
 
 from .core import TestResult, _setup_functions, _teardown_functions
 from .datasets import Dataset
 from .reports import EvaluationReport
+from .report_generation import (
+    generate_combined_summary,
+    generate_combined_markdown_report,
+    generate_combined_html_report,
+)
+from .report_generation.console import (
+    pad,
+    print_failure_details,
+    print_test_summary_info,
+    print_final_summary,
+    TestProgressDisplay,
+)
 
 app = typer.Typer()
 console = Console()
@@ -65,6 +76,8 @@ def discover_tests_and_datasets(test_spec: str) -> Dict[str, List]:
                     ):
                         # If target_function is specified, only include matching function
                         if target_function is None or name == target_function:
+                            # Add file path info to the task function
+                            obj._source_file = py_file
                             tasks.append(obj)
 
                 # Discover datasets (only if no specific function is targeted)
@@ -88,65 +101,103 @@ def expand_parametrized_tests(tasks: List[callable]) -> List[Dict[str, Any]]:
         param_combinations = getattr(task_func, "_mcpeval_param_combinations", None)
         if param_combinations:
             for kwargs in param_combinations:
-                expanded.append({"func": task_func, "kwargs": kwargs})
+                expanded.append(
+                    {
+                        "func": task_func,
+                        "kwargs": kwargs,
+                        "source_file": getattr(task_func, "_source_file", None),
+                    }
+                )
             continue
         else:
-            expanded.append({"func": task_func, "kwargs": {}})
+            expanded.append(
+                {
+                    "func": task_func,
+                    "kwargs": {},
+                    "source_file": getattr(task_func, "_source_file", None),
+                }
+            )
             continue
 
     return expanded
 
 
+def group_tests_by_file(
+    test_cases: List[Dict[str, Any]],
+) -> Dict[Path, List[Dict[str, Any]]]:
+    """Group test cases by their source file."""
+    grouped = {}
+    for test_case in test_cases:
+        source_file = test_case.get("source_file")
+        if source_file not in grouped:
+            grouped[source_file] = []
+        grouped[source_file].append(test_case)
+    return grouped
+
+
 async def run_decorator_tests(
     test_cases: List[Dict[str, Any]], verbose: bool
 ) -> List[TestResult]:
-    """Run decorator-style tests."""
+    """Run decorator-style tests grouped by file."""
     results: list[TestResult] = []
+    failed_results = []
 
-    with Progress() as progress:
-        task_id = progress.add_task("[cyan]Running tests...", total=len(test_cases))
+    # Group tests by file
+    grouped_tests = group_tests_by_file(test_cases)
+    files_with_counts = {
+        file_path: len(tests) for file_path, tests in grouped_tests.items()
+    }
 
-        for test_case in test_cases:
-            func = test_case["func"]
-            kwargs = test_case["kwargs"]
+    display = TestProgressDisplay(files_with_counts)
 
-            # Create test name with parameters
-            test_name = func.__name__
-            if kwargs:
-                param_str = ",".join(f"{k}={v}" for k, v in kwargs.items())
-                test_name += f"[{param_str}]"
+    with Live(display.create_display(), refresh_per_second=10) as live:
+        # Process each file's tests
+        for source_file, file_test_cases in grouped_tests.items():
+            display.set_current_file(source_file)
 
-            try:
-                # Call task decorated function
-                result: TestResult = await func(**kwargs)
+            for test_case in file_test_cases:
+                func = test_case["func"]
+                kwargs = test_case["kwargs"]
 
-                results.append(result)
+                # Create test name with parameters
+                test_name = func.__name__
+                if kwargs:
+                    param_str = ",".join(f"{k}={v}" for k, v in kwargs.items())
+                    test_name += f"[{param_str}]"
 
-                status = "[green]PASS[/]" if result.passed else "[red]FAIL[/]"
-                console.print(f"  {status} {test_name}")
+                try:
+                    # Call task decorated function
+                    result: TestResult = await func(**kwargs)
 
-                if not result.passed:
-                    failure_message = generate_failure_message(
-                        result.evaluation_results
+                    if result.passed:
+                        display.add_result(passed=True)
+                    else:
+                        display.add_result(passed=False)
+                        failure_message = generate_failure_message(result)
+                        result.error = failure_message
+                        failed_results.append(result)
+
+                except Exception as e:
+                    display.add_result(passed=False, error=True)
+                    console.print(f"  [red]ERROR[/] {test_name}: {e}")
+                    result = TestResult(
+                        test_name=test_name,
+                        description=getattr(func, "_description", ""),
+                        server_name=getattr(func, "_server", "unknown"),
+                        parameters=kwargs,
+                        passed=False,
+                        evaluation_results=[],
+                        metrics=None,
+                        duration_ms=0,
+                        error=str(e),
                     )
-                    console.print(f"[red]ERROR[/] {failure_message}")
+                    failed_results.append(result)
 
-            except Exception as e:
-                console.print(f"  [red]ERROR[/] {test_name}: {e}")
-                result = TestResult(
-                    test_name=test_name,
-                    description=getattr(func, "_description", ""),
-                    server_name=getattr(func, "_server", "unknown"),
-                    parameters=kwargs,
-                    passed=False,
-                    evaluation_results=[],
-                    metrics=None,
-                    duration_ms=0,
-                    error=str(e),
-                )
                 results.append(result)
+                live.update(display.create_display())
 
-            progress.update(task_id, advance=1)
+    # Print detailed failures section if there are any failures
+    print_failure_details(console, failed_results)
 
     return results
 
@@ -188,13 +239,14 @@ def run_tests(
     test_dir: str = typer.Argument(
         "tests", help="Directory to scan for tests and datasets"
     ),
-    json_report: str = typer.Option(None, "--json", help="Save JSON report"),
-    markdown_report: str = typer.Option(
-        None, "--markdown", help="Save Markdown report"
-    ),
     format: str = typer.Option("auto", help="Output format (auto, decorator, dataset)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
-    max_concurrency: int = typer.Option(
+    json_report: str | None = typer.Option(None, "--json", help="Save JSON report"),
+    markdown_report: str | None = typer.Option(
+        None, "--markdown", help="Save Markdown report"
+    ),
+    html_report: str | None = typer.Option(None, "--html", help="Save HTML report"),
+    max_concurrency: int | None = typer.Option(
         None, "--max-concurrency", help="Maximum concurrent evaluations"
     ),
 ):
@@ -202,20 +254,28 @@ def run_tests(
     if ctx.invoked_subcommand is None:
         asyncio.run(
             _run_async(
-                test_dir, json_report, markdown_report, format, verbose, max_concurrency
+                test_dir,
+                format,
+                verbose,
+                json_report,
+                markdown_report,
+                html_report,
+                max_concurrency,
             )
         )
 
 
 async def _run_async(
     test_dir: str,
-    json_report: str,
-    markdown_report: str,
     format: str,
     verbose: bool,
-    max_concurrency: int,
+    json_report: str | None,
+    markdown_report: str | None,
+    html_report: str | None,
+    max_concurrency: int | None,
 ):
     """Async implementation of the run command."""
+    console.print(pad("MCP-Eval", char="*"), style="magenta")
     # Parse pytest-style test specifier for path validation
     if "::" in test_dir:
         file_path, _ = test_dir.split("::", 1)
@@ -227,7 +287,7 @@ async def _run_async(
         console.print(f"[red]Error:[/] Test path '{test_path}' not found")
         raise typer.Exit(1)
 
-    console.print(f"[blue]Discovering tests and datasets in {test_dir}...[/blue]")
+    console.print("[blue]Discovering tests and datasets...[/blue]")
     discovered = discover_tests_and_datasets(test_dir)
 
     tasks = discovered["tasks"]
@@ -237,14 +297,19 @@ async def _run_async(
         console.print("[yellow]No tests or datasets found[/]")
         return
 
-    console.print(f"Found {len(tasks)} test function(s) and {len(datasets)} dataset(s)")
+    console.print(
+        f"[blue]Found {len(tasks)} test function(s) and {len(datasets)} dataset(s)[/blue]",
+    )
 
     # Run tests and evaluations
     test_results = []
     dataset_reports = []
 
     if tasks and format in ["auto", "decorator"]:
-        console.print(f"\n[blue]Running {len(tasks)} decorator-style tests...[/blue]")
+        test_cases = expand_parametrized_tests(tasks)
+        console.print(
+            f"\n[blue]Running {len(test_cases)} decorator-style test cases...[/blue]"
+        )
 
         # Execute setup functions before running tests
         for setup_func in _setup_functions:
@@ -255,7 +320,6 @@ async def _run_async(
                     f"[yellow]Warning: Setup function {setup_func.__name__} failed: {e}[/]"
                 )
 
-        test_cases = expand_parametrized_tests(tasks)
         test_results = await run_decorator_tests(test_cases, verbose)
 
         # Execute teardown functions after running tests
@@ -271,13 +335,19 @@ async def _run_async(
         console.print(f"\n[blue]Running {len(datasets)} dataset evaluations...[/blue]")
         dataset_reports = await run_dataset_evaluations(datasets)
 
-    # Generate combined summary
-    if test_results or dataset_reports:
+    # Print short test summary info (pytest-like)
+    if test_results:
+        failed_tests = [r for r in test_results if not r.passed]
+        print_test_summary_info(console, failed_tests)
+        print_final_summary(console, test_results)
+
+    # Generate combined summary for other reports
+    if dataset_reports:
         console.print(f"\n{'=' * 60}")
-        _generate_combined_summary(test_results, dataset_reports)
+        generate_combined_summary(test_results, dataset_reports, console)
 
     # Generate reports
-    if json_report or markdown_report:
+    if json_report or markdown_report or html_report:
         combined_report = {
             "decorator_tests": [r.__dict__ for r in test_results],
             "dataset_reports": [r.to_dict() for r in dataset_reports],
@@ -294,11 +364,15 @@ async def _run_async(
 
             with open(json_report, "w") as f:
                 json.dump(combined_report, f, indent=2, default=str)
-            console.print(f"JSON report saved to {json_report}")
+            console.print(f"JSON report saved to {json_report}", style="blue")
 
         if markdown_report:
-            _generate_combined_markdown_report(combined_report, markdown_report)
-            console.print(f"Markdown report saved to {markdown_report}")
+            generate_combined_markdown_report(combined_report, markdown_report)
+            console.print(f"Markdown report saved to {markdown_report}", style="blue")
+
+        if html_report:
+            generate_combined_html_report(combined_report, html_report)
+            console.print(f"HTML report saved to {html_report}", style="blue")
 
     # Exit with error if any tests failed
     total_failed = sum(1 for r in test_results if not r.passed) + sum(
@@ -307,95 +381,6 @@ async def _run_async(
 
     if total_failed > 0:
         raise typer.Exit(1)
-
-
-def _generate_combined_summary(
-    test_results: List[TestResult], dataset_reports: List[EvaluationReport]
-):
-    """Generate a combined summary of all results."""
-    table = Table(title="Combined Test Results Summary")
-    table.add_column("Type", style="cyan")
-    table.add_column("Name", style="magenta")
-    table.add_column("Status", justify="center")
-    table.add_column("Cases/Tests", justify="right")
-    table.add_column("Duration", justify="right")
-
-    # Add decorator test results
-    for result in test_results:
-        status = "[green]PASS[/]" if result.passed else "[red]FAIL[/]"
-        duration = f"{result.duration_ms:.1f}ms" if result.duration_ms else "N/A"
-
-        table.add_row("Test", result.test_name, status, "1", duration)
-
-    # Add dataset results
-    for report in dataset_reports:
-        status = f"[green]{report.passed_cases}/{report.total_cases}[/]"
-        duration = f"{report.average_duration_ms:.1f}ms"
-
-        table.add_row(
-            "Dataset", report.dataset_name, status, str(report.total_cases), duration
-        )
-
-    console.print(table)
-
-    # Overall summary
-    total_decorator_tests = len(test_results)
-    passed_decorator_tests = sum(1 for r in test_results if r.passed)
-
-    total_dataset_cases = sum(r.total_cases for r in dataset_reports)
-    passed_dataset_cases = sum(r.passed_cases for r in dataset_reports)
-
-    total_tests = total_decorator_tests + total_dataset_cases
-    total_passed = passed_decorator_tests + passed_dataset_cases
-
-    console.print("\n[bold]Overall Summary:[/]")
-    console.print(
-        f"  Decorator Tests: {passed_decorator_tests}/{total_decorator_tests} passed"
-    )
-    console.print(
-        f"  Dataset Cases: {passed_dataset_cases}/{total_dataset_cases} passed"
-    )
-    console.print(
-        f"  [bold]Total: {total_passed}/{total_tests} passed ({total_passed / total_tests * 100:.1f}%)[/]"
-    )
-
-
-def _generate_combined_markdown_report(report_data: Dict[str, Any], output_path: str):
-    """Generate a combined markdown report."""
-    summary = report_data["summary"]
-
-    report = f"""# MCP-Eval Combined Test Report
-
-## Summary
-
-- **Decorator Tests**: {summary["passed_decorator_tests"]}/{summary["total_decorator_tests"]} passed
-- **Dataset Cases**: {summary["passed_dataset_cases"]}/{summary["total_dataset_cases"]} passed
-- **Overall Success Rate**: {(summary["passed_decorator_tests"] + summary["passed_dataset_cases"]) / (summary["total_decorator_tests"] + summary["total_dataset_cases"]) * 100:.1f}%
-
-## Decorator Test Results
-
-| Test | Status | Duration | Server |
-|------|--------|----------|--------|
-"""
-
-    for test_data in report_data["decorator_tests"]:
-        status = "✅ PASS" if test_data["passed"] else "❌ FAIL"
-        duration = f"{test_data.get('duration_ms', 0):.1f}ms"
-        server = test_data.get("server_name", "unknown")
-
-        report += f"| {test_data['test_name']} | {status} | {duration} | {server} |\n"
-
-    report += "\n## Dataset Evaluation Results\n\n"
-
-    for dataset_data in report_data["dataset_reports"]:
-        dataset_summary = dataset_data["summary"]
-        report += f"### {dataset_data['dataset_name']}\n\n"
-        report += f"- **Cases**: {dataset_summary['passed_cases']}/{dataset_summary['total_cases']} passed\n"
-        report += f"- **Success Rate**: {dataset_summary['success_rate'] * 100:.1f}%\n"
-        report += f"- **Average Duration**: {dataset_summary['average_duration_ms']:.1f}ms\n\n"
-
-    with open(output_path, "w") as f:
-        f.write(report)
 
 
 @app.command()

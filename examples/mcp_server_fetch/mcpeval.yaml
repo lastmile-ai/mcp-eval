@@ -6,7 +6,9 @@ servers:
   fetch:
     command: "uvx"
     args: ["mcp-server-fetch"]
-    env: {}
+    env: {
+      "UV_NO_PROGRESS": "1"
+    }
 
 # Agent Configurations
 agents:
