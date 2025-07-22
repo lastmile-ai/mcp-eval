@@ -6,9 +6,11 @@ This module provides foundational functions for loading and working with trace f
 import os
 import json
 from typing import Dict, List, Any
-from dataloader import DataExample
+from mcp_eval.optimizer.dataloader import DataExample
 from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan, extract_comprehensive_trace_information, TraceInformation
 from mcp_eval.evaluators.builtin import LLMJudgeSuccess, EvaluatorContext
+from mcp_eval.optimizer.trace_grouping import group_trace_information_by_span_name
+from mcp_eval.optimizer.trace_prompt_generator import TracePromptGenerator
 import asyncio
 
 
@@ -82,35 +84,32 @@ def extract_server_name_from_trace(trace_file_path: str) -> str:
     return "unknown"
 
 
-async def evaluate_task_success(trace_info_list: List[TraceInformation], metrics: TestMetrics) -> Dict[str, Any]:
+async def evaluate_task_success(trace_info_list: List[TraceInformation], evaluation_prompts: Dict[str, str] = None) -> Dict[str, Any]:
     """
     Evaluate if the user's task was successfully addressed using LLMJudgeSuccess.
     
     Args:
         trace_info_list: List of TraceInformation objects with message content
-        metrics: TestMetrics object containing tool calls and other metrics
+        evaluation_prompts: Dictionary containing structured prompts for evaluation
         
     Returns:
         Dictionary containing evaluation results
     """
     # Create a custom EvaluatorContext with trace information
     class TraceEvaluatorContext(EvaluatorContext):
-        def __init__(self, trace_info, metrics):
+        def __init__(self, trace_info, prompts):
             self.trace_info = trace_info
-            self.inputs = {}
-            self.output = ""
-            self.expected_output = None
-            self.tool_calls = metrics.tool_calls
-            self.metrics = metrics
+            self.evaluation_prompts = prompts
     
     # Create the evaluator context
-    ctx = TraceEvaluatorContext(trace_info_list, metrics)
+    ctx = TraceEvaluatorContext(trace_info_list, evaluation_prompts)
     
     # Create and run the LLMJudgeSuccess evaluator
     evaluator = LLMJudgeSuccess(min_score=0.7)  # Set minimum score threshold
     
     try:
         result = await evaluator.evaluate(ctx)
+        print(f"Evaluator result: {result}")
         
         # Convert EvaluatorResult to dictionary
         return {
@@ -317,10 +316,18 @@ def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str) ->
     # Extract comprehensive trace information 
     comprehensive_info = extract_comprehensive_trace_information(trace_spans)
     
+    # Group trace information by span name
+    grouped_trace_info = group_trace_information_by_span_name(comprehensive_info)
+    
+    # Generate prompts from trace information
+    prompt_generator = TracePromptGenerator()
+    trace_events = prompt_generator.extract_trace_events(comprehensive_info)
+    evaluation_prompts = prompt_generator.generate_evaluation_prompt(trace_events)
+    
     # Evaluate task success using LLMJudgeSuccess
     success_evaluation = None
     try:
-        success_evaluation = asyncio.run(evaluate_task_success(comprehensive_info, metrics))
+        success_evaluation = asyncio.run(evaluate_task_success(comprehensive_info, evaluation_prompts))
     except Exception as e:
         print(f"Error evaluating task success: {e}")
         success_evaluation = {

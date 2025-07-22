@@ -707,6 +707,10 @@ class LLMJudgeSuccess(Evaluator):
         """Extract JSON from response, handling various formats."""
         import re
         
+        # Ensure response is a string to handle cases where LLM client returns numeric values
+        if not isinstance(response, str):
+            response = str(response)
+        
         # Look for JSON between ``` markers
         json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", response, re.DOTALL)
         if json_match:
