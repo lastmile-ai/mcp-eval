@@ -532,7 +532,7 @@ class TestSession:
 @asynccontextmanager
 async def test_session(
     server_name: str, test_name: str, agent_config: Optional[Dict[str, Any]] = None
-) -> TestAgent:
+):
     """Context manager for creating test sessions."""
     session = TestSession(server_name, test_name, agent_config)
     try:

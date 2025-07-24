@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.live import Live
 
 from mcp_eval.reporting import generate_failure_message
+from mcp_eval.session import TestAgent, TestSession
 
 from .core import TestResult, _setup_functions, _teardown_functions
 from .datasets import Dataset
@@ -209,15 +210,13 @@ async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationRep
     for dataset in datasets:
         console.print(f"\n[blue]Evaluating dataset: {dataset.name}[/blue]")
 
-        # Find the task function in the same module
-        # This is a simplified approach - in practice, would be more sophisticated
-        async def mock_task(inputs):
-            return f"Mock response for: {inputs}"
+        async def standard_task(inputs, agent: TestAgent, session: TestSession):
+            response = await agent.generate_str(inputs)
+            return response
 
         try:
-            report = await dataset.evaluate(mock_task)
+            report = await dataset.evaluate(standard_task)
             reports.append(report)
-
             console.print(
                 f"[green]Completed:[/] {report.passed_cases}/{report.total_cases} cases passed"
             )

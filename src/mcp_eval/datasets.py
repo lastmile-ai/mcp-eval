@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, TypeVar, Generic, Callable, Union
 from dataclasses import dataclass, field
 
 from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
-from mcp_eval.evaluators.builtin import EqualsExpected
+from mcp_eval.evaluators.builtin import EqualsExpected, EvaluatorResult
 from mcp_eval.metrics import TestMetrics
 from mcp_eval.reports import EvaluationReport, CaseResult
 from mcp_eval.session import TestSession
@@ -68,11 +68,14 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
 
     async def evaluate(
         self,
-        task_func: Callable[[InputType], OutputType],
+        task_func: Callable,
         max_concurrency: Optional[int] = None,
         agent_config: Optional[Dict[str, Any]] = None,
     ) -> EvaluationReport:
-        """Evaluate the task function against all cases using unified TestSession."""
+        """Evaluate the task function against all cases using unified TestSession.
+
+        Task function signature: async def task_func(inputs, agent, session) -> output
+        """
         import asyncio
 
         # Merge agent configurations
@@ -91,9 +94,9 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
                 )
 
                 try:
-                    async with session as _:
-                        # Execute the task
-                        output = await task_func(case.inputs)
+                    async with session as agent:
+                        # Execute the task with session access
+                        output = await task_func(case.inputs, agent, session)
 
                         # Run evaluators
                         ctx = EvaluatorContext(
@@ -107,7 +110,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
 
                         # Combine case-specific and global evaluators
                         all_evaluators = case.evaluators + self.evaluators
-                        evaluation_results = {}
+                        evaluation_results: dict[str, EvaluatorResult] = {}
 
                         for evaluator in all_evaluators:
                             try:
@@ -128,14 +131,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
                             metadata=case.metadata,
                             evaluation_results=evaluation_results,
                             metrics=session.get_metrics(),
-                            passed=all(
-                                isinstance(r, (int, float))
-                                and r > 0.5
-                                or isinstance(r, dict)
-                                and r.get("score", 0) > 0.5
-                                or r is True
-                                for r in evaluation_results.values()
-                            ),
+                            passed=all(r.passed for r in evaluation_results.values()),
                             duration_ms=session.get_duration_ms(),
                         )
 
