@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional, Union, Any, Dict, List, Pattern
 
 from mcp_eval.evaluators.builtin import (
     ExactToolCount,
@@ -11,6 +11,7 @@ from mcp_eval.evaluators.builtin import (
     ToolSuccessRate,
     LLMJudge,
     MaxIterations,
+    ToolOutputMatches,
 )
 
 from mcp_eval.session import TestSession
@@ -131,3 +132,53 @@ async def judge(
     session = _get_session() if session is None else session
     evaluator = LLMJudge(rubric=rubric, min_score=min_score)
     await session.evaluate_now_async(evaluator, response, f"judge_{rubric[:20]}")
+
+
+def tool_output_matches(
+    session: TestSession,
+    tool_name: str,
+    expected_output: Union[Dict[str, Any], str, Pattern, int, float, List[Any]],
+    field_path: Optional[str] = None,
+    match_type: Literal["exact", "contains", "regex", "partial"] = "exact",
+    case_sensitive: bool = True,
+    call_index: int = -1,
+):
+    """Assert that tool output matches expected pattern.
+
+    Args:
+        session: Test session to use for evaluation
+        tool_name: Name of the tool to check
+        expected_output: Expected output value or pattern
+        field_path: Optional path to extract nested field (e.g., "content.text", "[0].message")
+        match_type: Type of matching - "exact", "contains", "regex", or "partial"
+        case_sensitive: Whether string matching should be case sensitive
+        call_index: Which tool call to check (-1 for last, 0 for first)
+
+    Examples:
+        ```
+        # Exact match on full output
+        tool_output_matches(session, "read_file", "Hello world")
+
+        # Match substring in output
+        tool_output_matches(session, "search", "found", match_type="contains")
+
+        # Regex match
+        tool_output_matches(session, "validate", r"\\d+", match_type="regex")
+
+        # Extract nested field and match
+        tool_output_matches(session, "api_call", "success", field_path="result.status")
+
+        # Partial dict matching
+        tool_output_matches(session, "get_config", {"debug": True}, match_type="partial")
+        ```
+    """
+    session = _get_session() if session is None else session
+    evaluator = ToolOutputMatches(
+        tool_name=tool_name,
+        expected_output=expected_output,
+        field_path=field_path,
+        match_type=match_type,
+        case_sensitive=case_sensitive,
+        call_index=call_index,
+    )
+    session.add_deferred_evaluator(evaluator, f"tool_output_{tool_name}")
