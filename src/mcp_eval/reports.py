@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.table import Table
 
 from mcp_eval.metrics import TestMetrics
+from mcp_eval.evaluators.builtin import EvaluationRecord
 
 
 @dataclass
@@ -17,7 +18,7 @@ class CaseResult:
     output: Any
     expected_output: Optional[Any]
     metadata: Optional[Dict[str, Any]]
-    evaluation_results: Dict[str, Any]
+    evaluation_results: List[EvaluationRecord]
     metrics: TestMetrics
     passed: bool
     duration_ms: float
@@ -111,14 +112,13 @@ class EvaluationReport:
             # Scores
             if include_scores:
                 scores = []
-                for evaluator_name, eval_result in result.evaluation_results.items():
-                    if isinstance(eval_result, (int, float)):
-                        scores.append(f"{evaluator_name}: {eval_result:.2f}")
-                    elif isinstance(eval_result, dict) and "score" in eval_result:
-                        scores.append(f"{evaluator_name}: {eval_result['score']:.2f}")
-                    elif isinstance(eval_result, bool):
+                for eval_record in result.evaluation_results:
+                    eval_result = eval_record.result
+                    if hasattr(eval_result, 'score') and eval_result.score is not None:
+                        scores.append(f"{eval_record.name}: {eval_result.score:.2f}")
+                    else:
                         scores.append(
-                            f"{evaluator_name}: {'✓' if eval_result else '✗'}"
+                            f"{eval_record.name}: {'✓' if eval_record.passed else '✗'}"
                         )
                 row_data.append("\n".join(scores))
 
@@ -158,7 +158,15 @@ class EvaluationReport:
                     "output": r.output,
                     "expected_output": r.expected_output,
                     "metadata": r.metadata,
-                    "evaluation_results": r.evaluation_results,
+                    "evaluation_results": [
+                        {
+                            "name": eval_record.name,
+                            "passed": eval_record.passed,
+                            "error": eval_record.error,
+                            "result": eval_record.result
+                        }
+                        for eval_record in r.evaluation_results
+                    ],
                     "passed": r.passed,
                     "duration_ms": r.duration_ms,
                     "error": r.error,

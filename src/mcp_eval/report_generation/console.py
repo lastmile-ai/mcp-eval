@@ -1,12 +1,13 @@
 """Console output formatting for mcp-eval test results."""
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Literal
 from rich.console import Console
 from rich.text import Text
 from rich.live import Live
 from rich.panel import Panel
 
 from ..core import TestResult
+from ..reports import EvaluationReport, CaseResult
 
 
 def pad(text: str, char: str = "=", length=80) -> Text:
@@ -68,44 +69,93 @@ def print_final_summary(console: Console, test_results: List[TestResult]) -> Non
     console.print(summary_text)
 
 
+def print_dataset_summary_info(
+    console: Console, failed_cases: List[CaseResult], dataset_name: str
+) -> None:
+    """Print pytest-style dataset summary info for failed cases."""
+    if not failed_cases:
+        return
+
+    console.print(pad("short dataset summary info"), style="blue")
+    for case in failed_cases:
+        console.print(f"[red]FAILED[/red] {dataset_name}::{case.case_name}")
+
+
+def print_dataset_final_summary(
+    console: Console, dataset_reports: List[EvaluationReport]
+) -> None:
+    """Print final dataset summary with pass/fail counts and duration."""
+    if not dataset_reports:
+        return
+
+    total_cases = sum(report.total_cases for report in dataset_reports)
+    passed_cases = sum(report.passed_cases for report in dataset_reports)
+    failed_cases = total_cases - passed_cases
+
+    # Calculate total duration from all cases across all reports
+    total_time = 0.0
+    for report in dataset_reports:
+        total_time += sum(case.duration_ms for case in report.results)
+    total_time = total_time / 1000.0  # Convert to seconds
+
+    summary_text = Text()
+    if failed_cases > 0:
+        summary_text.append(f"{failed_cases} failed", style="red bold")
+        if passed_cases > 0:
+            summary_text.append(",")
+            summary_text.append(f" {passed_cases} passed", style="green bold")
+    else:
+        summary_text.append(f"{passed_cases} passed", style="green bold")
+
+    summary_text.append(f" in {total_time:.2f}s", style=None)
+    console.print(summary_text)
+
+
 class TestProgressDisplay:
-    """Live display for test progress with pytest-style dots per file."""
+    """Live display for test progress with pytest-style dots per group (file/dataset)."""
 
-    def __init__(self, files_with_counts: Dict[str, int]):
-        self.files_with_counts = files_with_counts
-        self.total_tests = sum(files_with_counts.values())
+    def __init__(self, groups_with_counts: Dict[str, int]):
+        self.groups_with_counts = groups_with_counts
+        self.total_tests = sum(groups_with_counts.values())
         self.completed = 0
-        self.file_results = {
-            file_path: Text() for file_path in files_with_counts.keys()
+        self.group_results = {
+            group_key: Text() for group_key in groups_with_counts.keys()
         }
-        self.current_file = None
+        self.current_group = None
 
-    def create_display(self):
-        progress_text = f"Running tests... {self.completed}/{self.total_tests}"
+    def create_display(self, type: Literal["case", "test"] = "test"):
+        progress_text = f"Running {type}s... {self.completed}/{self.total_tests}"
 
-        # Build display with file results
+        # Build display with group results
         display_parts = [(progress_text, "blue"), "\n\n"]
 
-        for file_path, dots in self.file_results.items():
-            file_name = file_path.name if hasattr(file_path, "name") else str(file_path)
-            display_parts.extend([(file_name, "cyan"), " ", dots, "\n"])
+        for group_key, dots in self.group_results.items():
+            group_name = (
+                group_key.name if hasattr(group_key, "name") else str(group_key)
+            )
+            display_parts.extend([(group_name, "cyan"), " ", dots, "\n"])
 
         return Panel(
             Text.assemble(*display_parts),
             width=80,
-            title="Test Progress",
+            title="Progress",
             border_style="blue",
         )
 
-    def set_current_file(self, file_path):
-        """Set the current file being processed."""
-        self.current_file = file_path
+    def set_current_group(self, group_key):
+        """Set the current group being processed."""
+        self.current_group = group_key
 
-    def add_result(self, passed: bool, error: bool = False):
-        """Add a test result to the current file and update display."""
+    def set_current_file(self, file_path):
+        """Set the current file being processed (backward compatibility)."""
+        self.set_current_group(file_path)
+
+    def add_result(self, passed: bool, error: bool = False, group_key=None):
+        """Add a test result to the current or specified group and update display."""
         self.completed += 1
-        if self.current_file and self.current_file in self.file_results:
-            dots = self.file_results[self.current_file]
+        target_group = group_key or self.current_group
+        if target_group and target_group in self.group_results:
+            dots = self.group_results[target_group]
             if error:
                 dots.append("E", style="yellow")
             elif passed:

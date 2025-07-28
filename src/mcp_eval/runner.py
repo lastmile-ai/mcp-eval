@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.live import Live
 
 from mcp_eval.reporting import generate_failure_message
+from mcp_eval.session import TestAgent, TestSession
 
 from .core import TestResult, _setup_functions, _teardown_functions
 from .datasets import Dataset
@@ -24,6 +25,8 @@ from .report_generation.console import (
     print_failure_details,
     print_test_summary_info,
     print_final_summary,
+    print_dataset_summary_info,
+    print_dataset_final_summary,
     TestProgressDisplay,
 )
 
@@ -150,7 +153,7 @@ async def run_decorator_tests(
 
     display = TestProgressDisplay(files_with_counts)
 
-    with Live(display.create_display(), refresh_per_second=10) as live:
+    with Live(display.create_display(type="tests"), refresh_per_second=10) as live:
         # Process each file's tests
         for source_file, file_test_cases in grouped_tests.items():
             display.set_current_file(source_file)
@@ -194,7 +197,7 @@ async def run_decorator_tests(
                     failed_results.append(result)
 
                 results.append(result)
-                live.update(display.create_display())
+                live.update(display.create_display(type="test"))
 
     # Print detailed failures section if there are any failures
     print_failure_details(console, failed_results)
@@ -203,32 +206,63 @@ async def run_decorator_tests(
 
 
 async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationReport]:
-    """Run dataset-style evaluations."""
-    reports = []
+    """Run dataset-style evaluations with live progress display."""
+    reports: list[EvaluationReport] = []
+    failed_results: list[TestResult] = []
 
-    for dataset in datasets:
-        console.print(f"\n[blue]Evaluating dataset: {dataset.name}[/blue]")
+    # Create progress display for all datasets
+    dataset_counts = {dataset.name: len(dataset.cases) for dataset in datasets}
+    display = TestProgressDisplay(dataset_counts)
 
-        # Find the task function in the same module
-        # This is a simplified approach - in practice, would be more sophisticated
-        async def mock_task(inputs):
-            return f"Mock response for: {inputs}"
+    with Live(display.create_display(type="case"), refresh_per_second=10) as live:
+        for dataset in datasets:
 
-        try:
-            report = await dataset.evaluate(mock_task)
+            async def standard_task(inputs, agent: TestAgent, session: TestSession):
+                response = await agent.generate_str(inputs)
+                return response
+
+            display.set_current_group(dataset.name)
+
+            def progress_callback(
+                passed: bool,
+                error: bool,
+            ):
+                """Progress callback for dataset evaluation."""
+
+                display.add_result(passed=passed, error=error, group_key=dataset.name)
+
+                # Update the live display immediately
+                live.update(display.create_display(type="case"))
+
+            report = await dataset.evaluate(
+                standard_task, progress_callback=progress_callback
+            )
+
             reports.append(report)
 
-            console.print(
-                f"[green]Completed:[/] {report.passed_cases}/{report.total_cases} cases passed"
-            )
+            # Collect failed cases for detailed reporting with proper failure messages
+            for result in report.results:
+                if not result.passed:
+                    # Convert CaseResult to TestResult format for consistency
+                    test_result = TestResult(
+                        test_name=result.case_name,
+                        description=f"Dataset case from {dataset.name}",
+                        server_name=dataset.server_name or "unknown",
+                        parameters={},
+                        passed=result.passed,
+                        evaluation_results=result.evaluation_results,
+                        metrics=result.metrics,
+                        duration_ms=result.duration_ms,
+                        error=result.error,
+                    )
 
-            # Print brief summary
-            report.print(
-                include_input=False, include_output=False, include_durations=True
-            )
+                    # Generate detailed failure message
+                    failure_message = generate_failure_message(test_result)
+                    test_result.error = failure_message
+                    failed_results.append(test_result)
 
-        except Exception as e:
-            console.print(f"[red]Error evaluating dataset {dataset.name}: {e}[/red]")
+    # Print detailed failures section if there are any failures
+    print_failure_details(console, failed_results)
 
     return reports
 
@@ -341,9 +375,18 @@ async def _run_async(
         print_test_summary_info(console, failed_tests)
         print_final_summary(console, test_results)
 
+    # Print dataset summary info (pytest-like)
+    if dataset_reports:
+        for report in dataset_reports:
+            failed_cases = [case for case in report.results if not case.passed]
+            if failed_cases:
+                print_dataset_summary_info(console, failed_cases, report.dataset_name)
+
+        print_dataset_final_summary(console, dataset_reports)
+
     # Generate combined summary for other reports
     if dataset_reports:
-        console.print(f"\n{'=' * 60}")
+        console.print(f"\n{'=' * 80}")
         generate_combined_summary(test_results, dataset_reports, console)
 
     # Generate reports

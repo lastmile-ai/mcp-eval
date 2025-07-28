@@ -5,8 +5,6 @@ from rich.table import Table
 from mcp_eval.core import TestResult
 import dataclasses
 
-from mcp_eval.evaluators.builtin import EvaluationRecord
-
 
 class EnhancedJSONEncoder(json.JSONEncoder):
     def default(self, o):

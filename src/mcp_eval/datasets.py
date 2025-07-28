@@ -7,7 +7,11 @@ from typing import Any, Dict, List, Optional, TypeVar, Generic, Callable, Union
 from dataclasses import dataclass, field
 
 from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
-from mcp_eval.evaluators.builtin import EqualsExpected
+from mcp_eval.evaluators.builtin import (
+    EqualsExpected,
+    EvaluatorResult,
+    EvaluationRecord,
+)
 from mcp_eval.metrics import TestMetrics
 from mcp_eval.reports import EvaluationReport, CaseResult
 from mcp_eval.session import TestSession
@@ -68,11 +72,15 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
 
     async def evaluate(
         self,
-        task_func: Callable[[InputType], OutputType],
+        task_func: Callable,
         max_concurrency: Optional[int] = None,
         agent_config: Optional[Dict[str, Any]] = None,
+        progress_callback: Optional[Callable[[bool, bool], None]] = None,
     ) -> EvaluationReport:
-        """Evaluate the task function against all cases using unified TestSession."""
+        """Evaluate the task function against all cases using unified TestSession.
+
+        Task function signature: async def task_func(inputs, agent, session) -> output
+        """
         import asyncio
 
         # Merge agent configurations
@@ -91,9 +99,9 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
                 )
 
                 try:
-                    async with session as _:
-                        # Execute the task
-                        output = await task_func(case.inputs)
+                    async with session as agent:
+                        # Execute the task with session access
+                        output = await task_func(case.inputs, agent, session)
 
                         # Run evaluators
                         ctx = EvaluatorContext(
@@ -107,20 +115,34 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
 
                         # Combine case-specific and global evaluators
                         all_evaluators = case.evaluators + self.evaluators
-                        evaluation_results = {}
+                        evaluation_results = []
 
                         for evaluator in all_evaluators:
                             try:
                                 result = await evaluator.evaluate(ctx)
                                 evaluator_name = evaluator.__class__.__name__
-                                evaluation_results[evaluator_name] = result
-                            except Exception as e:
-                                evaluation_results[evaluator.__class__.__name__] = {
-                                    "error": str(e),
-                                    "score": 0.0,
-                                }
 
-                        return CaseResult(
+                                evaluation_results.append(
+                                    EvaluationRecord(
+                                        name=evaluator_name,
+                                        result=result,
+                                        passed=result.passed,
+                                        error=result.error,
+                                    )
+                                )
+                            except Exception as e:
+                                evaluation_results.append(
+                                    EvaluationRecord(
+                                        name=evaluator.__class__.__name__,
+                                        result=EvaluatorResult(
+                                            passed=False, error=str(e)
+                                        ),
+                                        passed=False,
+                                        error=str(e),
+                                    )
+                                )
+
+                        case_result = CaseResult(
                             case_name=case.name,
                             inputs=case.inputs,
                             output=output,
@@ -128,30 +150,35 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
                             metadata=case.metadata,
                             evaluation_results=evaluation_results,
                             metrics=session.get_metrics(),
-                            passed=all(
-                                isinstance(r, (int, float))
-                                and r > 0.5
-                                or isinstance(r, dict)
-                                and r.get("score", 0) > 0.5
-                                or r is True
-                                for r in evaluation_results.values()
-                            ),
+                            passed=all(r.passed for r in evaluation_results),
                             duration_ms=session.get_duration_ms(),
                         )
 
+                        # Call progress callback if provided
+                        if progress_callback:
+                            progress_callback(case_result.passed, False)
+
+                        return case_result
+
                 except Exception as e:
-                    return CaseResult(
+                    case_result = CaseResult(
                         case_name=case.name,
                         inputs=case.inputs,
                         output=None,
                         expected_output=case.expected_output,
                         metadata=case.metadata,
-                        evaluation_results={},
+                        evaluation_results=[],
                         metrics=TestMetrics(),
                         passed=False,
                         error=str(e),
                         duration_ms=0.0,
                     )
+
+                    # Call progress callback if provided
+                    if progress_callback:
+                        progress_callback(False, True)
+
+                    return case_result
                 finally:
                     session.cleanup()
 
