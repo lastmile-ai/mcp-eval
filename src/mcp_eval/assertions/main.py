@@ -3,6 +3,7 @@ from typing import Literal, Optional, Union, Any, Dict, List, Pattern
 from mcp_eval.evaluators.builtin import (
     ExactToolCount,
     NotContains,
+    PathEfficiency,
     ResponseTimeCheck,
     ToolCalledWith,
     ToolFailed,
@@ -182,3 +183,56 @@ def tool_output_matches(
         call_index=call_index,
     )
     session.add_deferred_evaluator(evaluator, f"tool_output_{tool_name}")
+
+
+def path_efficiency(
+    session: TestSession,
+    optimal_steps: Optional[int] = None,
+    expected_tool_sequence: Optional[List[str]] = None,
+    allow_extra_steps: int = 0,
+    penalize_backtracking: bool = True,
+    penalize_repeated_tools: bool = True,
+    tool_usage_limits: Optional[Dict[str, int]] = None,
+    default_tool_limit: int = 1,
+):
+    """Assert that agent took an efficient path to complete the task.
+    
+    Args:
+        session: Test session to use for evaluation
+        optimal_steps: Expected optimal number of steps (auto-calculated if None)
+        expected_tool_sequence: Expected sequence of tool calls
+        allow_extra_steps: Tolerance for additional steps beyond optimal
+        penalize_backtracking: Whether to penalize returning to previous tools
+        penalize_repeated_tools: Whether to penalize excessive tool repetition
+        tool_usage_limits: Custom limits per tool (e.g., {"read": 2, "write": 1})
+        default_tool_limit: Default limit for tools not in tool_usage_limits
+    
+    Examples:
+        ```
+        # Basic efficiency check with auto-calculated optimal steps
+        path_efficiency(session)
+        
+        # Check with specific expected sequence
+        path_efficiency(session, expected_tool_sequence=["read", "analyze", "write"])
+        
+        # Allow some tolerance
+        path_efficiency(session, optimal_steps=5, allow_extra_steps=2)
+        
+        # Disable backtracking penalty for exploratory tasks
+        path_efficiency(session, penalize_backtracking=False)
+        
+        # Custom tool usage limits
+        path_efficiency(session, tool_usage_limits={"read": 3, "write": 1}, default_tool_limit=2)
+        ```
+    """
+    session = _get_session() if session is None else session
+    evaluator = PathEfficiency(
+        optimal_steps=optimal_steps,
+        expected_tool_sequence=expected_tool_sequence,
+        allow_extra_steps=allow_extra_steps,
+        penalize_backtracking=penalize_backtracking,
+        penalize_repeated_tools=penalize_repeated_tools,
+        tool_usage_limits=tool_usage_limits,
+        default_tool_limit=default_tool_limit,
+    )
+    session.add_deferred_evaluator(evaluator, "path_efficiency")

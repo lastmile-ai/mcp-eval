@@ -14,6 +14,7 @@ from mcp_eval.assertions.main import (
     completed_within,
     response_time_under,
     judge,
+    path_efficiency,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "completed_within",
     "response_time_under",
     "judge",
+    "path_efficiency",
 ]

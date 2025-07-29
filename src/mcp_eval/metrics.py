@@ -188,6 +188,7 @@ def process_spans(spans: List[TraceSpan]) -> TestMetrics:
         metrics.llm_metrics = _extract_llm_metrics(llm_spans)
 
     # Calculate iteration count (number of agent turns)
+    # TODO: jerron - Investigate a better way to count
     agent_spans = [span for span in spans if "agent" in span.name.lower()]
     metrics.iteration_count = len(agent_spans)
 

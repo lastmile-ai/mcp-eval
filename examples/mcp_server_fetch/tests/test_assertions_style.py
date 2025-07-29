@@ -3,6 +3,7 @@
 import mcp_eval
 from mcp_eval import task, setup
 from mcp_eval import assertions
+from mcp_eval.session import TestAgent, TestSession
 
 
 @setup
@@ -83,4 +84,19 @@ async def test_tool_output_assetion(agent, session):
         tool_name="fetch",
         expected_output={"content": {"0": {"type": "text"}}},
         match_type="partial",
+    )
+
+
+@task("Test path efficiency with assertions")
+async def test_path_efficiency_assertions(agent: TestAgent, session: TestSession):
+    """Test efficient path using legacy assertions."""
+    await agent.generate_str("Fetch https://httpbin.org/json and extract the data")
+
+    # Test path efficiency using assertions
+    assertions.path_efficiency(
+        session,
+        expected_tool_sequence=["fetch"],
+        allow_extra_steps=1,
+        tool_usage_limits={"fetch": 1},
+        penalize_backtracking=True,
     )

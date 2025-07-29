@@ -9,7 +9,7 @@ from mcp_eval import (
     ToolSuccessRate,
     MaxIterations,
 )
-from mcp_eval.evaluators.builtin import ToolOutputMatches
+from mcp_eval.evaluators.builtin import ToolOutputMatches, PathEfficiency
 from mcp_eval.session import TestAgent, TestSession
 
 
@@ -154,4 +154,20 @@ async def test_error_recovery_decorator(agent: TestAgent, session: TestSession):
 
     await session.evaluate_now_async(
         recovery_judge, response, "error_recovery_demonstration"
+    )
+
+
+@task("Test path efficiency")
+async def test_path_efficiency_decorator(agent: TestAgent, session: TestSession):
+    """Test that agent takes an efficient path for simple fetch tasks."""
+    await agent.generate_str("Fetch https://example.com and summarize the content")
+
+    # Test basic efficiency - should complete in optimal steps
+    session.add_deferred_evaluator(
+        PathEfficiency(
+            expected_tool_sequence=["fetch"],
+            allow_extra_steps=1,  # TODO: jerron - fix iteration count logic
+            tool_usage_limits={"fetch": 1},
+        ),
+        "fetch_path_efficiency",
     )
