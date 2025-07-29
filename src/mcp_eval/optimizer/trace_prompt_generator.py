@@ -3,6 +3,7 @@
 from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass
 from ..metrics import TraceInformation
+from .llm_helpers import SummarizerLLM
 
 
 @dataclass
@@ -25,8 +26,7 @@ class TracePromptGenerator:
     """Processes TraceInformation objects and generates prompts for LLM evaluation."""
     
     def __init__(self):
-      
-        pass
+        self.summarizer = SummarizerLLM()
     
     def extract_trace_events(self, trace_info_list: List[TraceInformation]) -> List[TraceEvent]:
         """Extract and sort trace events from TraceInformation objects.
@@ -95,14 +95,10 @@ class TracePromptGenerator:
             
             # Add message content
             if event.message:
-                # Truncate very long messages
+                # Summarize very long messages using LLM
                 message = event.message
                 if len(message) > 500:
-                    # summarize the message using llm
-                    # create a class that includes an llm instance - open ai model - gpt-4o-mini 
-                    # if the legnth of the message is greater than 500 characters 
-                    # summarize the message using the llm and then append it to the conversation_parts
-                    message = message[:500] + "... [truncated]"
+                    message = self.summarizer.summarize_message(message)
                 
                 conversation_parts.append(f"{message}\n")
             
