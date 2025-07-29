@@ -5,6 +5,9 @@ from rich.console import Console
 from rich.text import Text
 from rich.live import Live
 from rich.panel import Panel
+from rich.spinner import Spinner
+from rich.columns import Columns
+from rich.console import Group
 
 from ..core import TestResult
 from ..reports import EvaluationReport, CaseResult
@@ -124,19 +127,32 @@ class TestProgressDisplay:
         self.current_group = None
 
     def create_display(self, type: Literal["case", "test"] = "test"):
-        progress_text = f"Running {type}s... {self.completed}/{self.total_tests}"
+        # Create spinner and progress text as columns
+        spinner_and_text = Columns(
+            [
+                Spinner("dots", style="blue"),
+                Text(
+                    f"Running {type}s... {self.completed}/{self.total_tests}",
+                    style="blue",
+                ),
+            ],
+            padding=(0, 1),
+        )
 
-        # Build display with group results
-        display_parts = [(progress_text, "blue"), "\n\n"]
-
+        # Add group results as separate text objects
+        group_displays = []
         for group_key, dots in self.group_results.items():
             group_name = (
                 group_key.name if hasattr(group_key, "name") else str(group_key)
             )
-            display_parts.extend([(group_name, "cyan"), " ", dots, "\n"])
+            group_displays.append(Text.assemble((group_name, "cyan"), " ", dots))
+
+        # Combine everything using Group
+        all_content = [spinner_and_text, Text("")]  # Empty text for spacing
+        all_content.extend(group_displays)
 
         return Panel(
-            Text.assemble(*display_parts),
+            Group(*all_content),
             width=80,
             title="Progress",
             border_style="blue",
