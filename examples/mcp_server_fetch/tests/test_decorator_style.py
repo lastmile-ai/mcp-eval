@@ -9,6 +9,7 @@ from mcp_eval import (
     ToolSuccessRate,
     MaxIterations,
 )
+from mcp_eval.evaluators.builtin import ToolOutputMatches
 from mcp_eval.session import TestAgent, TestSession
 
 
@@ -39,6 +40,25 @@ async def test_basic_fetch_decorator(agent: TestAgent, session: TestSession):
     # Deferred evaluation for tool success
     session.add_deferred_evaluator(
         ToolSuccessRate(min_rate=1.0, tool_name="fetch"), "fetch_success_rate"
+    )
+
+
+@task("Test tool output")
+async def test_fetch_tool_output(agent: TestAgent, session: TestSession):
+    """Test tool output"""
+    await agent.generate_str(
+        "Print the first line of the paragraph from https://example.com"
+    )
+
+    session.add_deferred_evaluator(
+        ToolOutputMatches(
+            tool_name="fetch",
+            expected_output=r"use.*examples",
+            match_type="regex",
+            case_sensitive=False,
+            field_path="content.0.text",
+        ),
+        "fetch_output_match",
     )
 
 

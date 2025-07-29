@@ -70,3 +70,17 @@ async def test_content_format_assertions(agent, session):
         "Response correctly identifies the content as JSON format",
         min_score=0.8,
     )
+
+
+@task("Test tool output return text content")
+async def test_tool_output_assetion(agent, session):
+    """Test tool output"""
+    await agent.generate_str(
+        "Print the first line of the paragraph in https://example.com"
+    )
+    assertions.tool_output_matches(
+        session,
+        tool_name="fetch",
+        expected_output={"content": {"0": {"type": "text"}}},
+        match_type="partial",
+    )
