@@ -5,12 +5,14 @@ This module provides foundational functions for loading and working with trace f
 """
 import os
 import json
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
+from datetime import datetime
 from mcp_eval.optimizer.dataloader import DataExample
-from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan, extract_comprehensive_trace_information, TraceInformation
+from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan, extract_comprehensive_trace_information, TraceInformation, extract_user_queries
 from mcp_eval.evaluators.builtin import LLMJudgeSuccess, EvaluatorContext
 from mcp_eval.optimizer.trace_grouping import group_trace_information_by_span_name
 from mcp_eval.optimizer.trace_prompt_generator import TracePromptGenerator
+from mcp_eval.otel.span_tree import SpanTree, SpanNode
 import asyncio
 
 
@@ -284,21 +286,10 @@ def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str) ->
     Returns:
         DataExample instance containing extracted dataset with user query and metrics
     """
-    # Read processed file for metrics
-    with open(processed_file_path, 'r') as f:
-        processed_data = json.load(f)
     
     # Read raw trace file to find user query
-    traces = read_trace_file(trace_raw_file_path)
-    
+    traces = read_trace_file(trace_raw_file_path)    
     # Extract user query from trace data
-    user_query = None
-    for span in traces:
-        attributes = span.get('attributes', {})
-        # Look for user prompt in chat completions
-        if 'gen_ai.prompt.1.content' in attributes:
-            user_query = attributes['gen_ai.prompt.1.content']
-            break
     # Convert raw trace dictionaries to TraceSpan objects
     trace_spans = []
     for span_dict in traces:
@@ -310,15 +301,16 @@ def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str) ->
             print(f"Error converting span to TraceSpan: {e}")
             continue
     
+    # Extract user queries using the new function
+    user_queries = extract_user_queries(traces)
+    user_query = user_queries[0] if user_queries else None
+    
     # Process spans to get metrics
     metrics = process_spans(trace_spans)
     
     # Extract comprehensive trace information 
     comprehensive_info = extract_comprehensive_trace_information(trace_spans)
-    
-    # Group trace information by span name
-    grouped_trace_info = group_trace_information_by_span_name(comprehensive_info)
-    
+        
     # Generate prompts from trace information
     prompt_generator = TracePromptGenerator()
     trace_events = prompt_generator.extract_trace_events(comprehensive_info)
@@ -356,7 +348,9 @@ def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str) ->
         'success_rate': metrics.success_rate,
         'cost_estimate': metrics.cost_estimate,
         'comprehensive_trace_info': comprehensive_info,
-        'task_success_evaluation': success_evaluation
+        'is_successful': success_evaluation.get('passed', False),
+        'score': success_evaluation.get('score', 0.0),
+        'task_success_evaluation': success_evaluation.get('reasoning', 'No evaluation performed'),
     }
     
     # Create and return DataExample instance

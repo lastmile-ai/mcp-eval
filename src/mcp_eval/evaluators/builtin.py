@@ -640,7 +640,7 @@ class LLMJudgeSuccess(Evaluator):
             "Provide your evaluation as a JSON object with the following structure:",
             "{",
             '  "score": <float between 0.0 and 1.0>,',
-            '  "reasoning": "<detailed explanation analyzing the task completion>",',
+            '  "reasoning": "<comprehensive and detailed explanation analyzing of the task completion>",',
             '  "passed": <boolean indicating if the user\'s task was successfully addressed>,',
             '  "confidence": <float between 0.0 and 1.0 indicating your confidence>',
             '  "user_task_identified": "<brief description of what the user wanted to accomplish>",',

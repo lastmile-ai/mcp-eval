@@ -16,19 +16,20 @@ class DataExample(dspy.Example):
             metrics: Dictionary containing performance metrics and tool usage data
         """
         unique_tools = metrics.get('unique_tools_used', [])
-        correct_tool: Optional[str] = unique_tools[0] if unique_tools else None
         
         super().__init__(
             user_query=user_query,
             query=user_query,
             tool_calls=metrics.get('tool_calls', []),
             unique_tools_used=unique_tools,
-            correct_tool=correct_tool,
             iteration_count=metrics.get('iteration_count', 0),
             total_duration_ms=metrics.get('total_duration_ms', 0.0),
             latency_ms=metrics.get('latency_ms', 0.0),
             error_count=metrics.get('error_count', 0),
             success_rate=metrics.get('success_rate', 0.0),
-            cost_estimate=metrics.get('cost_estimate', 0.0)
+            cost_estimate=metrics.get('cost_estimate', 0.0),
+            is_successful=metrics.get('is_successful', False),
+            score=metrics.get('score', 0.0),
+            task_success_evaluation=metrics.get('task_success_evaluation', 'No evaluation performed')
         )
 

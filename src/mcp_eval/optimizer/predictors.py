@@ -220,7 +220,7 @@ class ToolPredictor(dspy.Module):
                     # Check if this tool was used in the example
                     if tool_name in example.unique_tools_used:
                         # Determine if the example was successful
-                        is_successful = example.success_rate if hasattr(example, 'success_rate') else 1.0
+                        is_successful = example.is_successful if hasattr(example, 'is_successful') else False
                         
                         if is_successful:
                             successful_queries.append(example.user_query)
@@ -250,8 +250,8 @@ class ToolPredictor(dspy.Module):
                     improved_docstring = self.docstring_improver(
                         tool_name=tool_name,
                         original_docstring=tool_docstring,
-                        failed_examples=str(failed_queries[:3]),  # Limit to 3 examples
-                        correct_examples=str(successful_queries[:3])  # Limit to 3 examples
+                        failed_examples=str(failed_queries),  # Limit to 3 examples
+                        correct_examples=str(successful_queries)  # Limit to 3 examples
                     )
                     
                     # Store the optimized docstring

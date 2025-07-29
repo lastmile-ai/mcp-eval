@@ -98,6 +98,10 @@ class TracePromptGenerator:
                 # Truncate very long messages
                 message = event.message
                 if len(message) > 500:
+                    # summarize the message using llm
+                    # create a class that includes an llm instance - open ai model - gpt-4o-mini 
+                    # if the legnth of the message is greater than 500 characters 
+                    # summarize the message using the llm and then append it to the conversation_parts
                     message = message[:500] + "... [truncated]"
                 
                 conversation_parts.append(f"{message}\n")
@@ -115,24 +119,8 @@ class TracePromptGenerator:
     
     def generate_evaluation_prompt(self, events: List[TraceEvent]) -> Dict[str, str]:
         """Generate structured prompts for LLM evaluation.
-        
-        Args:
-            events: List of TraceEvent objects sorted by timestamp
-            
-        Returns:
-            Dictionary containing different prompt sections
         """
-        # Extract user query (usually first user message)
-        user_query = self._extract_user_query(events)
-        
-        # Generate conversation timeline
         conversation = self.generate_conversation_prompt(events)
-        
-        # Extract tool usage summary
-        tool_usage = self._extract_tool_usage_summary(events)
-        
-        # Extract final responses/outcomes
-        final_outcomes = self._extract_final_outcomes(events)
         
         return {
             "conversation": conversation,
