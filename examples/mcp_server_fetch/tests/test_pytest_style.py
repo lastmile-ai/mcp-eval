@@ -21,7 +21,9 @@ async def test_basic_fetch_with_pytest(mcp_agent: TestAgent):
     response = await mcp_agent.generate_str(
         "Fetch the content from https://example.com"
     )
-
+    response = await mcp_agent.generate_str(
+        "Fetch the content from https://bbc.com"
+    )
     # Modern evaluator approach
     mcp_agent.session.evaluate_now(
         ToolWasCalled("fetch"), response, "fetch_tool_called"

@@ -2,7 +2,7 @@
 
 import re
 import json
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Pattern, Literal
 from dataclasses import dataclass
 from pydantic import BaseModel, Field
 

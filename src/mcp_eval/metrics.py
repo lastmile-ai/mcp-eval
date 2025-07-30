@@ -827,3 +827,93 @@ def _extract_error_warning_content(span: TraceSpan) -> str:
     return " | ".join(content_parts) if content_parts else span.name
 
 
+def extract_user_queries(traces: List[Dict[str, Any]]) -> List[str]:
+    """
+    Extract user queries from raw trace file data.
+    
+    Based on the augmented LLM logging structure, user messages are recorded in span events
+    with specific patterns like "gen_ai.user.message" and message content in attributes
+    with keys like "messages.{i}.content" where role is "user".
+    
+    Args:
+        traces: List of raw trace dictionaries from JSONL file
+        
+    Returns:
+        List of user query strings extracted from the traces
+    """
+    user_queries = []
+    
+    for trace in traces:
+        # Check span events for user messages
+        events = trace.get('events', [])
+        for event in events:
+            event_name = event.get('name', '')
+            event_attrs = event.get('attributes', {})
+            
+            # Look for LLM generation events that contain user messages
+            if event_name == 'gen_ai.user.message':
+                # Extract user message content from event attributes
+                for key, value in event_attrs.items():
+                    if key.endswith('.content') and isinstance(value, str) and value.strip():
+                        user_queries.append(value.strip())
+            
+            # Also check for completion request events with user messages
+            elif 'completion.request' in event_name or 'gen_ai.user.message' in event_name:
+                # Look for message content in flattened attributes
+                message_indices = set()
+                
+                # Find all message indices in the event attributes
+                for key in event_attrs.keys():
+                    if key.startswith('messages.') and '.role' in key:
+                        role = event_attrs.get(key)
+                        if role == 'user':
+                            # Extract message index (e.g., "messages.1.role" -> "1")
+                            parts = key.split('.')
+                            if len(parts) >= 2:
+                                message_indices.add(parts[1])
+                
+                # Extract content for user messages
+                for msg_idx in message_indices:
+                    content_key = f'messages.{msg_idx}.content'
+                    if content_key in event_attrs:
+                        content = event_attrs[content_key]
+                        if isinstance(content, str) and content.strip():
+                            user_queries.append(content.strip())
+                    
+                    # Also check for multi-part content
+                    content_part_idx = 0
+                    while True:
+                        content_part_key = f'messages.{msg_idx}.content.{content_part_idx}.text'
+                        if content_part_key in event_attrs:
+                            content = event_attrs[content_part_key]
+                            if isinstance(content, str) and content.strip():
+                                user_queries.append(content.strip())
+                            content_part_idx += 1
+                        else:
+                            break
+        
+        # Also check span attributes directly for user messages
+        attributes = trace.get('attributes', {})
+        
+        # Look for user message in span attributes
+        for key, value in attributes.items():
+            if ('user' in key.lower() and 'message' in key.lower()) or key == 'message.content':
+                if isinstance(value, str) and value.strip():
+                    user_queries.append(value.strip())
+            
+            # Look for initial user query patterns
+            elif key in ['task.description', 'user.query', 'request.content', 'user.input']:
+                if isinstance(value, str) and value.strip():
+                    user_queries.append(value.strip())
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_queries = []
+    for query in user_queries:
+        if query not in seen:
+            seen.add(query)
+            unique_queries.append(query)
+    
+    return unique_queries
+
+

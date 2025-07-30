@@ -275,22 +275,179 @@ def get_tools_info(trace_file_path: str) -> List[Dict[str, Any]]:
     print(f"Tools found: {len(tools_info)}")
     return tools_info
 
-def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str) -> DataExample:
+
+def filter_traces_by_server(traces: List[Dict[str, Any]], server_name: str) -> List[Dict[str, Any]]:
+    """
+    Filter traces to return only those associated with the specified server.
+    
+    Args:
+        traces: List of raw trace dictionaries
+        server_name: Server name to filter for
+        
+    Returns:
+        List of traces associated with the specified server
+    """
+    if not server_name:
+        return traces
+    
+    filtered_traces = []
+    
+    for trace in traces:
+        # Check if this trace is related to the specified server
+        if _is_trace_for_server(trace, server_name):
+            filtered_traces.append(trace)
+    
+    return filtered_traces
+
+
+def _is_trace_for_server(trace: Dict[str, Any], server_name: str) -> bool:
+    """
+    Check if a trace is associated with the specified server.
+    
+    Args:
+        trace: Raw trace dictionary
+        server_name: Server name to check for
+        
+    Returns:
+        True if trace is associated with the server, False otherwise
+    """
+    attributes = trace.get('attributes', {})
+    span_name = trace.get('name', '')
+    
+    # Check for server name in various attribute patterns
+    for key, value in attributes.items():
+        if 'server' in key.lower() and isinstance(value, str):
+            if server_name.lower() in value.lower():
+                return True
+    
+    # Check span name for server information
+    if server_name.lower() in span_name.lower():
+        return True
+    
+    # Check for tool calls that might be from this server
+    tool_name = attributes.get('mcp.tool.name') or attributes.get('tool.name')
+    if tool_name and server_name.lower() in tool_name.lower():
+        return True
+    
+    # Check events for server-related information
+    events = trace.get('events', [])
+    for event in events:
+        event_attrs = event.get('attributes', {})
+        for key, value in event_attrs.items():
+            if isinstance(value, str) and server_name.lower() in value.lower():
+                return True
+    
+    return False
+
+
+def create_span_tree_from_raw_file(trace_raw_file_path: str) -> Optional[SpanTree]:
+    """
+    Create a SpanTree from raw trace file.
+    
+    Args:
+        trace_raw_file_path: Path to raw trace file (JSONL format)
+        
+    Returns:
+        SpanTree instance or None if no spans found
+    """
+    traces = read_trace_file(trace_raw_file_path)
+    if not traces:
+        return None
+    
+    # Convert raw trace dictionaries to SpanNode objects
+    span_nodes = {}
+    root_spans = []
+    
+    for span_dict in traces:
+        try:
+            # Extract span information
+            span_id = span_dict.get('span_id') or span_dict.get('spanId', '')
+            name = span_dict.get('name', '')
+            
+            # Parse timestamps
+            start_time_str = span_dict.get('start_time') or span_dict.get('startTime', '')
+            end_time_str = span_dict.get('end_time') or span_dict.get('endTime', '')
+            
+            if isinstance(start_time_str, (int, float)):
+                # Nanoseconds to seconds
+                start_time = datetime.fromtimestamp(start_time_str / 1_000_000_000)
+            else:
+                start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+            
+            if isinstance(end_time_str, (int, float)):
+                # Nanoseconds to seconds  
+                end_time = datetime.fromtimestamp(end_time_str / 1_000_000_000)
+            else:
+                end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
+            
+            # Extract attributes and events
+            attributes = span_dict.get('attributes', {})
+            events = span_dict.get('events', [])
+            parent_id = span_dict.get('parent_span_id') or span_dict.get('parentSpanId')
+            
+            # Create SpanNode
+            span_node = SpanNode(
+                span_id=span_id,
+                name=name,
+                start_time=start_time,
+                end_time=end_time,
+                attributes=attributes,
+                events=events,
+                parent_id=parent_id
+            )
+            
+            span_nodes[span_id] = span_node
+            
+            # Track root spans (no parent)
+            if not parent_id:
+                root_spans.append(span_node)
+                
+        except Exception as e:
+            print(f"Error converting span to SpanNode: {e}")
+            continue
+    
+    # Build parent-child relationships
+    for span_node in span_nodes.values():
+        if span_node.parent_id and span_node.parent_id in span_nodes:
+            parent = span_nodes[span_node.parent_id]
+            parent.children.append(span_node)
+    
+    # Create SpanTree with the first root span, or create artificial root if multiple roots
+    if not root_spans:
+        return None
+    elif len(root_spans) == 1:
+        return SpanTree(root_spans[0])
+    else:
+        # Create artificial root to hold multiple root spans
+        artificial_root = SpanNode(
+            span_id="artificial_root",
+            name="Root",
+            start_time=min(span.start_time for span in root_spans),
+            end_time=max(span.end_time for span in root_spans),
+            attributes={},
+            events=[],
+            children=root_spans
+        )
+        return SpanTree(artificial_root)
+
+
+def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str, server_name: str = None) -> DataExample:
     """
     Extract dataset from raw trace file and processed results file.
     
     Args:
         trace_raw_file_path: Path to raw trace file (JSONL format)
         processed_file_path: Path to processed results file (JSON format)
+        server_name: Optional server name to filter traces for server-specific processing
         
     Returns:
         DataExample instance containing extracted dataset with user query and metrics
     """
-    
     # Read raw trace file to find user query
-    traces = read_trace_file(trace_raw_file_path)    
-    # Extract user query from trace data
-    # Convert raw trace dictionaries to TraceSpan objects
+    # trace_raw_file_path = "/home/ubuntu/mahtab/projects/mcp-eval/examples/mcp_server_fetch/test-reports/test_basic_fetch_with_pytest_trace.jsonl"
+    traces = read_trace_file(trace_raw_file_path)
+    user_queries = extract_user_queries(traces)
+    
     trace_spans = []
     for span_dict in traces:
         try:
@@ -300,11 +457,6 @@ def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str) ->
         except (json.JSONDecodeError, KeyError) as e:
             print(f"Error converting span to TraceSpan: {e}")
             continue
-    
-    # Extract user queries using the new function
-    user_queries = extract_user_queries(traces)
-    user_query = user_queries[0] if user_queries else None
-    
     # Process spans to get metrics
     metrics = process_spans(trace_spans)
     
@@ -360,13 +512,14 @@ def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str) ->
     )
 
 
-def create_trace_dataset(trace_files: List[str], processed_files: List[str]) -> List[DataExample]:
+def create_trace_dataset(trace_files: List[str], processed_files: List[str], server_name: str = None) -> List[DataExample]:
     """
     Create a dataset from multiple trace and processed files.
     
     Args:
         trace_files: List of paths to raw trace files
         processed_files: List of paths to processed result files
+        server_name: Optional server name to filter traces for server-specific processing
         
     Returns:
         List of DataExample instances
@@ -377,7 +530,7 @@ def create_trace_dataset(trace_files: List[str], processed_files: List[str]) -> 
     dataset = []
     for trace_file, processed_file in zip(trace_files, processed_files):
         try:
-            entry = extract_trace_dataset(trace_file, processed_file)
+            entry = extract_trace_dataset(trace_file, processed_file, server_name)
             dataset.append(entry)
         except Exception as e:
             print(f"Error processing {trace_file} and {processed_file}: {e}")

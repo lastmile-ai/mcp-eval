@@ -43,7 +43,7 @@ def process_server_optimization(server_name: str, trace_files: List[str], proces
     """Process optimization for a specific server"""
     print(f"\n=== Processing server: {server_name} ===")
     
-    examples = create_trace_dataset(trace_files, processed_files)
+    examples = create_trace_dataset(trace_files, processed_files, server_name)
     
     if args.limit:
         examples = examples[:args.limit]
@@ -210,7 +210,7 @@ if __name__ == "__main__":
                       help="Ratio of data to use for training")
     parser.add_argument("--seed", type=int, default=42,
                       help="Random seed for reproducibility")
-    parser.add_argument("--server-name", type=str, default=None,
+    parser.add_argument("--server-name", type=str, default="fetch",
                       help="Specific server name to optimize docstrings for")
     
     # FewShot parameters
