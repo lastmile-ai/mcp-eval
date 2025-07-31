@@ -1,8 +1,11 @@
 """Simple LLM client for judge evaluations."""
 
-from typing import Optional
+from typing import Optional, TypeVar
+from pydantic import BaseModel
 from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
 from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class JudgeLLMClient:
@@ -24,7 +27,22 @@ class JudgeLLMClient:
 
         # For judge evaluations, we create a simple mock agent
         # In practice, this would use the proper LLM client
-        return await self._mock_llm_call(prompt)
+
+    async def generate_structured(self, prompt: str, response_model: type[T]) -> T:
+        """Generate a structured response using Pydantic model."""
+        if not self._client:
+            if "claude" in self.model:
+                self._client = AnthropicAugmentedLLM()
+            elif "gpt" in self.model:
+                self._client = OpenAIAugmentedLLM()
+            else:
+                self._client = AnthropicAugmentedLLM()  # Default
+
+        # Use the underlying LLM client's structured generation
+        response = await self._client.generate_structured(
+            prompt, response_model=response_model
+        )
+        return response
 
     async def _mock_llm_call(self, prompt: str) -> str:
         """Mock LLM call for demo purposes."""
