@@ -11,7 +11,7 @@ from mcp_eval.evaluators.builtin import ToolWasCalled, ResponseContains, LLMJudg
 class MCPCaseGenerator:
     """Generates test cases for MCP servers using LLM."""
 
-    def __init__(self, model: str = "claude-3-haiku-20240307"):
+    def __init__(self, model: str = "claude-3-5-haiku-20241022"):
         self.model = model
 
     async def generate_cases(

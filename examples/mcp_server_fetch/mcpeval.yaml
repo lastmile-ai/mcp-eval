@@ -18,7 +18,7 @@ agents:
       You are a web content fetching agent. You can fetch URLs and extract their content.
       Be thorough in your responses and handle errors gracefully.
     llm_factory: "AnthropicAugmentedLLM"
-    model: "claude-3-haiku-20240307"
+    model: "claude-3-5-haiku-20241022"
     max_iterations: 5
 
   advanced:
@@ -32,7 +32,7 @@ agents:
 
 # Enhanced Judge Configuration
 judge:
-  model: "claude-3-haiku-20240307"
+  model: "claude-3-5-haiku-20241022"
   min_score: 0.8
   max_tokens: 2000
   system_prompt: |

@@ -8,7 +8,7 @@ from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
 class JudgeLLMClient:
     """Simple LLM client for judge evaluations."""
 
-    def __init__(self, model: str = "claude-3-haiku-20240307"):
+    def __init__(self, model: str = "claude-3-5-haiku-20241022"):
         self.model = model
         self._client = None
 
@@ -37,4 +37,4 @@ class JudgeLLMClient:
 
 def get_judge_client(model: Optional[str] = None) -> JudgeLLMClient:
     """Get a judge LLM client."""
-    return JudgeLLMClient(model or "claude-3-haiku-20240307")
+    return JudgeLLMClient(model or "claude-3-5-haiku-20241022")
