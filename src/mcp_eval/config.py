@@ -49,7 +49,7 @@ class MetricsConfig(BaseSettings):
     token_prices: Dict[str, Dict[str, float]] = Field(
         default_factory=lambda: {
             "claude-3-5-haiku-20241022": {"input": 0.00000025, "output": 0.00000125},
-            "claude-3-sonnet-20240229": {"input": 0.000003, "output": 0.000015},
+            "claude-sonnet-4-20250514": {"input": 0.000003, "output": 0.000015},
             "gpt-4-turbo": {"input": 0.00001, "output": 0.00003},
         }
     )

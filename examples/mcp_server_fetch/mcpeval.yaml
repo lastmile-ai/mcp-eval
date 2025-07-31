@@ -27,7 +27,7 @@ agents:
       You are an expert web scraping agent. You can fetch content from multiple URLs,
       handle various content types, and process large documents efficiently using chunking.
     llm_factory: "AnthropicAugmentedLLM"
-    model: "claude-3-sonnet-20240229"
+    model: "claude-sonnet-4-20250514"
     max_iterations: 10
 
 # Enhanced Judge Configuration
