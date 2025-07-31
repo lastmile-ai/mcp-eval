@@ -25,8 +25,7 @@ class JudgeLLMClient:
             else:
                 self._client = AnthropicAugmentedLLM()  # Default
 
-        # For judge evaluations, we create a simple mock agent
-        # In practice, this would use the proper LLM client
+        return await self._client.generate_str(prompt)
 
     async def generate_structured(self, prompt: str, response_model: type[T]) -> T:
         """Generate a structured response using Pydantic model."""
