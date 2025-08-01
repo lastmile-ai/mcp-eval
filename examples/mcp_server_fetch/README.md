@@ -163,7 +163,7 @@ class CustomFetchEvaluator(SyncEvaluator):
         return True
 
 # Register the evaluator
-from mcp-eval.evaluators.builtin import register_evaluator
+from mcp-eval.evaluators import register_evaluator
 register_evaluator('CustomFetchEvaluator', CustomFetchEvaluator)
 ```
 
