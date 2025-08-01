@@ -5,7 +5,8 @@ description = "Pytest-style framework for evaluating Model Context Protocol (MCP
 license = { file = "LICENSE" }
 readme = "README.md"
 authors = [
-    { name = "Sarmad Qadri", email = "sarmad@lastmileai.dev" }
+    { name = "Sarmad Qadri", email = "sarmad@lastmileai.dev" },
+    { name = "Jerron Lim", email = "jerron@lastmileai.dev" }
 ]
 requires-python = ">=3.10"
 dependencies = [
