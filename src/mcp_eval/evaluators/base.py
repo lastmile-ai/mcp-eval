@@ -8,7 +8,7 @@ from mcp_eval.metrics import TestMetrics
 from mcp_eval.otel.span_tree import SpanTree
 
 if TYPE_CHECKING:
-    from .builtin import EvaluatorResult
+    from . import EvaluatorResult
 
 
 InputType = TypeVar("InputType")

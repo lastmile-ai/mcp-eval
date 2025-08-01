@@ -11,7 +11,7 @@ from mcp_eval.session import TestSession
 from mcp_eval.config import get_current_config
 
 if TYPE_CHECKING:
-    from mcp_eval.evaluators.builtin import EvaluationRecord
+    from mcp_eval.evaluators import EvaluationRecord
 
 
 @dataclass

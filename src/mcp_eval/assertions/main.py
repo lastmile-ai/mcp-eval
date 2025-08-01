@@ -1,6 +1,6 @@
 from typing import Literal, Optional, Union, Any, Dict, List, Pattern
 
-from mcp_eval.evaluators.builtin import (
+from mcp_eval.evaluators import (
     ExactToolCount,
     NotContains,
     PathEfficiency,
@@ -196,7 +196,7 @@ def path_efficiency(
     default_tool_limit: int = 1,
 ):
     """Assert that agent took an efficient path to complete the task.
-    
+
     Args:
         session: Test session to use for evaluation
         optimal_steps: Expected optimal number of steps (auto-calculated if None)
@@ -206,21 +206,21 @@ def path_efficiency(
         penalize_repeated_tools: Whether to penalize excessive tool repetition
         tool_usage_limits: Custom limits per tool (e.g., {"read": 2, "write": 1})
         default_tool_limit: Default limit for tools not in tool_usage_limits
-    
+
     Examples:
         ```
         # Basic efficiency check with auto-calculated optimal steps
         path_efficiency(session)
-        
+
         # Check with specific expected sequence
         path_efficiency(session, expected_tool_sequence=["read", "analyze", "write"])
-        
+
         # Allow some tolerance
         path_efficiency(session, optimal_steps=5, allow_extra_steps=2)
-        
+
         # Disable backtracking penalty for exploratory tasks
         path_efficiency(session, penalize_backtracking=False)
-        
+
         # Custom tool usage limits
         path_efficiency(session, tool_usage_limits={"read": 3, "write": 1}, default_tool_limit=2)
         ```

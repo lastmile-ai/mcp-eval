@@ -2,7 +2,7 @@
 
 import mcp_eval
 from mcp_eval import task, setup
-from mcp_eval.evaluators.builtin import (
+from mcp_eval.evaluators import (
     STANDARD_CRITERIA,
     MultiCriteriaJudge,
     EvaluationCriterion,

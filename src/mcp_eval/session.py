@@ -27,7 +27,7 @@ from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
 from .metrics import TestMetrics, process_spans, TraceSpan
 from .otel.span_tree import SpanTree, SpanNode
 from .evaluators.base import Evaluator, EvaluatorContext
-from .evaluators.builtin import EvaluatorResult, EvaluationRecord
+from .evaluators import EvaluatorResult, EvaluationRecord
 
 import logging
 

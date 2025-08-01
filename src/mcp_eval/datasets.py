@@ -7,10 +7,11 @@ from typing import Any, Dict, List, Optional, TypeVar, Generic, Callable, Union
 from dataclasses import dataclass, field
 
 from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
-from mcp_eval.evaluators.builtin import (
+from mcp_eval.evaluators import (
     EqualsExpected,
     EvaluatorResult,
     EvaluationRecord,
+    get_evaluator_by_name,
 )
 from mcp_eval.metrics import TestMetrics
 from mcp_eval.reports import EvaluationReport, CaseResult
@@ -264,9 +265,6 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         else:
             with open(path, "r") as f:
                 data = json.load(f)
-
-        # Reconstruct evaluators
-        from mcp_eval.evaluators.builtin import get_evaluator_by_name
 
         cases = []
         for case_data in data.get("cases", []):

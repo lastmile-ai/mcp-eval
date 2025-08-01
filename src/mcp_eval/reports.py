@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.table import Table
 
 from mcp_eval.metrics import TestMetrics
-from mcp_eval.evaluators.builtin import EvaluationRecord
+from mcp_eval.evaluators import EvaluationRecord
 
 
 @dataclass
@@ -114,7 +114,7 @@ class EvaluationReport:
                 scores = []
                 for eval_record in result.evaluation_results:
                     eval_result = eval_record.result
-                    if hasattr(eval_result, 'score') and eval_result.score is not None:
+                    if hasattr(eval_result, "score") and eval_result.score is not None:
                         scores.append(f"{eval_record.name}: {eval_result.score:.2f}")
                     else:
                         scores.append(
@@ -163,7 +163,7 @@ class EvaluationReport:
                             "name": eval_record.name,
                             "passed": eval_record.passed,
                             "error": eval_record.error,
-                            "result": eval_record.result
+                            "result": eval_record.result,
                         }
                         for eval_record in r.evaluation_results
                     ],
