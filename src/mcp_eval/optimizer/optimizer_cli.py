@@ -42,22 +42,16 @@ def save_results(results: dict, output_path: str) -> None:
 def process_server_optimization(server_name: str, trace_files: List[str], processed_files: List[str], args) -> dict:
     """Process optimization for a specific server"""
     print(f"\n=== Processing server: {server_name} ===")
-    
-    examples = create_trace_dataset(trace_files, processed_files, server_name)
+    examples, list_of_available_tools = create_trace_dataset(trace_files)
     
     if args.limit:
         examples = examples[:args.limit]
     
-    # Extract available tools from the first trace file
-    list_of_available_tools = []
-    if trace_files:
-        list_of_available_tools = get_tools_info(trace_files[0])
-        print(f"Loaded {len(list_of_available_tools)} available tools for {server_name}")
         
     # Simple train/test split
     train_size = int(len(examples) * args.train_ratio)
-    train_examples = examples[:train_size]
-    test_examples = examples[train_size:]
+    train_examples = examples
+    test_examples = []
     predictor = ToolPredictor(model_name=args.model)
 
     print(f"Loaded {len(examples)} examples for {server_name}")

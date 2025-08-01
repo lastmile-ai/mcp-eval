@@ -1,7 +1,7 @@
 """Metrics collection and processing from OTEL traces."""
 
 import json
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 
 
@@ -827,93 +827,342 @@ def _extract_error_warning_content(span: TraceSpan) -> str:
     return " | ".join(content_parts) if content_parts else span.name
 
 
-def extract_user_queries(traces: List[Dict[str, Any]]) -> List[str]:
-    """
-    Extract user queries from raw trace file data.
+def _is_trace_get_capabilities_span(span: TraceSpan) -> bool:
+    """Check if span represents getting server capabilities."""
+    span_name = span.name.lower()
+    attributes = span.attributes
     
-    Based on the augmented LLM logging structure, user messages are recorded in span events
-    with specific patterns like "gen_ai.user.message" and message content in attributes
-    with keys like "messages.{i}.content" where role is "user".
+    return (
+        'capabilities' in span_name or
+        'initialize' in span_name or
+        attributes.get('mcp.method.name') == 'initialize' or
+        attributes.get('mcp.method.name') == 'get_capabilities'
+    )
+
+
+def _is_trace_list_tools_span(span: TraceSpan) -> bool:
+    """Check if span represents listing available tools."""
+    span_name = span.name.lower()
+    attributes = span.attributes
+    
+    return (
+        'list_tools' in span_name or
+        'tools/list' in span_name or
+        attributes.get('mcp.method.name') == 'tools/list' or
+        'tools.list' in span_name
+    )
+
+
+def _is_trace_user_query_span(span: TraceSpan) -> bool:
+    """Check if span contains user query or task."""
+    span_name = span.name.lower()
+    attributes = span.attributes
+    events = span.events
+    
+    # Check for user-related span names
+    if any(keyword in span_name for keyword in ['chat']):
+        return True
+        
+    # Check attributes for user content
+    for key in attributes.keys():
+        if any(keyword in key.lower() for keyword in ['user', 'message.content', 'task']):
+            return True
+            
+    # Check events for user messages
+    for event in events:
+        if event.get('name') == 'gen_ai.user.message':
+            return True
+            
+    return False
+
+
+def _is_response_span(span: TraceSpan) -> bool:
+    """Check if span contains final response to user."""
+    span_name = span.name.lower()
+    attributes = span.attributes
+    
+    return (
+        'response' in span_name or
+        'call_tool' in span_name or
+        attributes.get('gen_ai.response.text') is not None or
+        attributes.get('gen_ai.completion') is not None or
+        attributes.get('agent.response') is not None
+    )
+
+
+def _is_the_shutdown_span(span: TraceSpan) -> bool:
+    """Check if span represents shutdown or end of session."""
+    span_name = span.name
+    attributes = span.attributes
+    events = span.events
+    
+    # Check for specific shutdown span patterns
+    if (
+        span_name == "MCPAggregator.close" or
+        span_name.endswith(".shutdown") or
+        "AgentTasks.shutdown_aggregator_task" in attributes.get('arg_1_callable_name', '')
+    ):
+        return True
+    
+    # Check for shutdown events
+    for event in events:
+        event_name = event.get('name', '')
+        if event_name in ['agent_shutdown_start', 'agent_shutdown_complete']:
+            return True
+    
+    return False
+
+
+def _extract_response_from_span(span: TraceSpan) -> str:
+    """Extract server response from span, matching with provided server name, tool, and user query.
     
     Args:
-        traces: List of raw trace dictionaries from JSONL file
+        span: The trace span to extract response from
+        server_name: Expected server name to match
+        tool_name: Expected tool name to match  
+        user_query: Expected user query to match
         
     Returns:
-        List of user query strings extracted from the traces
+        Server response text if found and matched, empty string otherwise
     """
-    user_queries = []
+    attributes = span.attributes
     
-    for trace in traces:
-        # Check span events for user messages
-        events = trace.get('events', [])
-        for event in events:
-            event_name = event.get('name', '')
+    # TODO: Ensure that the response is from the correct server and tool and it is generated in response to the user query
+    
+    # Extract the server response from result content
+    # Look for result.content.0.text pattern (as shown in the example)
+    response_text = attributes.get('result.content.0.text', '')
+    if response_text:
+        return str(response_text)
+    
+    # Fallback: look for other result content patterns
+    result_content_keys = [
+        'result.content.text', 'result.text', 'result.content',
+        'result.content.0.content', 'result.response'
+    ]
+    
+    for key in result_content_keys:
+        if key in attributes and attributes[key]:
+            return str(attributes[key])
+    
+    # Check if result indicates an error
+    if attributes.get('result.isError', False):
+        error_message = attributes.get('result.error', '') or attributes.get('error.message', '')
+        if error_message:
+            return f"Error: {error_message}"
+    
+    # Fallback to original response extraction logic
+    response_keys = [
+        'gen_ai.response.text', 'gen_ai.completion', 'agent.response', 
+        'response.content', 'completion.text', 'message.content'
+    ]
+    
+    for key in response_keys:
+        if key in attributes and attributes[key]:
+            return str(attributes[key])
+            
+    # Check events for response content
+    for event in span.events:
+        if 'response' in event.get('name', '').lower():
             event_attrs = event.get('attributes', {})
-            
-            # Look for LLM generation events that contain user messages
-            if event_name == 'gen_ai.user.message':
-                # Extract user message content from event attributes
-                for key, value in event_attrs.items():
-                    if key.endswith('.content') and isinstance(value, str) and value.strip():
-                        user_queries.append(value.strip())
-            
-            # Also check for completion request events with user messages
-            elif 'completion.request' in event_name or 'gen_ai.user.message' in event_name:
-                # Look for message content in flattened attributes
-                message_indices = set()
-                
-                # Find all message indices in the event attributes
-                for key in event_attrs.keys():
-                    if key.startswith('messages.') and '.role' in key:
-                        role = event_attrs.get(key)
-                        if role == 'user':
-                            # Extract message index (e.g., "messages.1.role" -> "1")
-                            parts = key.split('.')
-                            if len(parts) >= 2:
-                                message_indices.add(parts[1])
-                
-                # Extract content for user messages
-                for msg_idx in message_indices:
-                    content_key = f'messages.{msg_idx}.content'
-                    if content_key in event_attrs:
-                        content = event_attrs[content_key]
-                        if isinstance(content, str) and content.strip():
-                            user_queries.append(content.strip())
+            for key, value in event_attrs.items():
+                if 'content' in key.lower() and value:
+                    return str(value)
                     
-                    # Also check for multi-part content
-                    content_part_idx = 0
-                    while True:
-                        content_part_key = f'messages.{msg_idx}.content.{content_part_idx}.text'
-                        if content_part_key in event_attrs:
-                            content = event_attrs[content_part_key]
-                            if isinstance(content, str) and content.strip():
-                                user_queries.append(content.strip())
-                            content_part_idx += 1
-                        else:
-                            break
+    return ""
+
+
+def extract_user_query(trace: Dict[str, Any]) -> Optional[str]:
+    """
+    Extract the LAST user query from a single trace span.
+    
+    For anthropic.chat spans, extracts the most recent user message from the conversation
+    history stored in gen_ai.prompt.{i}.content attributes where role is 'user'.
+    
+    Args:
+        trace: Single trace dictionary from JSONL file
         
-        # Also check span attributes directly for user messages
-        attributes = trace.get('attributes', {})
+    Returns:
+        Last user query string if found, None otherwise
+    """
+    span_name = trace.get('name', '')
+    attributes = trace.get('attributes', {})
+    events = trace.get('events', [])
+    
+    # Check for LLM request spans like anthropic.chat
+    if span_name in ['anthropic.chat', 'openai.chat', 'claude.chat'] or 'chat' in span_name.lower():
+        # Find all user prompts and return the LAST one
+        user_queries = []
+        prompt_indices = []
         
-        # Look for user message in span attributes
-        for key, value in attributes.items():
-            if ('user' in key.lower() and 'message' in key.lower()) or key == 'message.content':
-                if isinstance(value, str) and value.strip():
-                    user_queries.append(value.strip())
+        # First, collect all prompt indices
+        for key in attributes.keys():
+            if key.startswith('gen_ai.prompt.') and key.endswith('.role'):
+                # Extract prompt index (e.g., "gen_ai.prompt.5.role" -> 5)
+                parts = key.split('.')
+                if len(parts) >= 3:
+                    try:
+                        prompt_idx = int(parts[2])
+                        prompt_indices.append(prompt_idx)
+                    except ValueError:
+                        continue
+        
+        # Sort indices to process in order
+        prompt_indices.sort()
+        
+        # Look for user prompts in order and keep the last one
+        for idx in prompt_indices:
+            role_key = f'gen_ai.prompt.{idx}.role'
+            content_key = f'gen_ai.prompt.{idx}.content'
             
-            # Look for initial user query patterns
-            elif key in ['task.description', 'user.query', 'request.content', 'user.input']:
-                if isinstance(value, str) and value.strip():
-                    user_queries.append(value.strip())
+            if attributes.get(role_key) == 'user' and content_key in attributes:
+                content = attributes[content_key]
+                if isinstance(content, str) and content.strip():
+                    user_queries.append(content.strip())
+        
+        # Return the LAST user query
+        if user_queries:
+            return user_queries[-1]
     
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_queries = []
-    for query in user_queries:
-        if query not in seen:
-            seen.add(query)
-            unique_queries.append(query)
+    # Check span events for user messages
+    for event in events:
+        event_name = event.get('name', '')
+        event_attrs = event.get('attributes', {})
+        
+        # Look for LLM generation events that contain user messages
+        if event_name == 'gen_ai.user.message':
+            # Extract user message content from event attributes
+            for key, value in event_attrs.items():
+                if key.endswith('.content') and isinstance(value, str) and value.strip():
+                    return value.strip()
+        
+        # Also check for completion request events with user messages
+        elif 'completion.request' in event_name or 'gen_ai.user.message' in event_name:
+            # Look for message content in flattened attributes
+            message_indices = set()
+            
+            # Find all message indices in the event attributes
+            for key in event_attrs.keys():
+                if key.startswith('messages.') and '.role' in key:
+                    role = event_attrs.get(key)
+                    if role == 'user':
+                        # Extract message index (e.g., "messages.1.role" -> "1")
+                        parts = key.split('.')
+                        if len(parts) >= 2:
+                            message_indices.add(parts[1])
+            
+            # Extract content for user messages
+            for msg_idx in message_indices:
+                content_key = f'messages.{msg_idx}.content'
+                if content_key in event_attrs:
+                    content = event_attrs[content_key]
+                    if isinstance(content, str) and content.strip():
+                        return content.strip()
+                
+                # Also check for multi-part content
+                content_part_idx = 0
+                while True:
+                    content_part_key = f'messages.{msg_idx}.content.{content_part_idx}.text'
+                    if content_part_key in event_attrs:
+                        content = event_attrs[content_part_key]
+                        if isinstance(content, str) and content.strip():
+                            return content.strip()
+                        content_part_idx += 1
+                    else:
+                        break
     
-    return unique_queries
+    # Check for user queries in MCP request attributes
+    if span_name == 'MCPAgentClientSession.send_request':
+        method_name = attributes.get('mcp.method.name', '')
+        
+        # Look for prompt requests that might contain user queries
+        if method_name == 'prompts/get':
+            # Check for prompt arguments that might contain user query
+            for key, value in attributes.items():
+                if key.startswith('request.argument.') and isinstance(value, str) and value.strip():
+                    return value.strip()
+    
+    # Also check span attributes directly for user messages
+    for key, value in attributes.items():
+        if ('user' in key.lower() and 'message' in key.lower()) or key == 'message.content':
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        
+        # Look for initial user query patterns
+        elif key in ['task.description', 'user.query', 'request.content', 'user.input']:
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    
+    return None
+
+
+def extract_tool_info_from_llm_span(trace: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Extract the LAST tool call information from LLM spans like anthropic.chat.
+    
+    For anthropic.chat spans, extracts the most recent tool call from the completion
+    response stored in gen_ai.completion.{i}.tool_calls.{j}.* attributes.
+    
+    Args:
+        trace: Single trace dictionary from JSONL file
+        
+    Returns:
+        Dictionary with tool name, description, and arguments if found, None otherwise
+    """
+    span_name = trace.get('name', '')
+    attributes = trace.get('attributes', {})
+    
+    # Check for LLM request spans that contain tool calls
+    if span_name in ['anthropic.chat', 'openai.chat', 'claude.chat'] or 'chat' in span_name.lower():
+        # Find all tool call indices
+        tool_calls_found = []
+        
+        # First, collect all completion indices that have tool calls
+        for key in attributes.keys():
+            if key.startswith('gen_ai.completion.') and '.tool_calls.' in key and key.endswith('.name'):
+                # Extract completion index and tool call index
+                # e.g., "gen_ai.completion.0.tool_calls.0.name" -> completion=0, tool_call=0
+                parts = key.split('.')
+                if len(parts) >= 5:
+                    try:
+                        completion_idx = int(parts[2])
+                        tool_call_idx = int(parts[4])
+                        tool_calls_found.append((completion_idx, tool_call_idx, key))
+                    except ValueError:
+                        continue
+        
+        # Sort by completion index and tool call index to get the LAST one
+        if tool_calls_found:
+            tool_calls_found.sort(key=lambda x: (x[0], x[1]))
+            last_completion_idx, last_tool_idx, name_key = tool_calls_found[-1]
+            
+            tool_name = attributes.get(name_key)
+            if tool_name:
+                # Extract tool call arguments using the same indices
+                args_key = f'gen_ai.completion.{last_completion_idx}.tool_calls.{last_tool_idx}.arguments'
+                arguments_str = attributes.get(args_key, '{}')
+                
+                # Parse arguments JSON
+                try:
+                    arguments = json.loads(arguments_str) if arguments_str else {}
+                except json.JSONDecodeError:
+                    arguments = {}
+                
+                # Extract tool description from function definition
+                description = ""
+                for desc_key, desc_value in attributes.items():
+                    if desc_key.startswith('llm.request.functions.') and desc_key.endswith('.description'):
+                        func_name_key = desc_key.replace('.description', '.name')
+                        if attributes.get(func_name_key) == tool_name:
+                            description = desc_value
+                            break
+                
+                return {
+                    'name': tool_name,
+                    'description': description,
+                    'arguments': arguments
+                }
+    
+    return None
 
 

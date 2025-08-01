@@ -218,11 +218,9 @@ class ToolPredictor(dspy.Module):
                 # Analyze examples to find successful and failed cases for this tool
                 for example in examples:
                     # Check if this tool was used in the example
-                    if tool_name in example.unique_tools_used:
-                        # Determine if the example was successful
-                        is_successful = example.is_successful if hasattr(example, 'is_successful') else False
-                        
-                        if is_successful:
+                    if any([True for tool in example.get('tool_calls') if tool_name in tool.name]):
+                        # Determine if the example was successful                        
+                        if example.is_successful:
                             successful_queries.append(example.user_query)
                         else:
                             failed_queries.append(example.user_query)

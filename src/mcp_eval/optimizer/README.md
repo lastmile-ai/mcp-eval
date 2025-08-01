@@ -158,3 +158,72 @@ Each trace evaluation returns:
   },
   "error": null
 }
+
+```
+
+## Prompt Optimization
+
+MCP-Eval now includes advanced prompt optimization capabilities that can analyze trace data and improve tool descriptions and interactions.
+
+### Trace-Based Analysis
+
+The optimizer can process OTEL trace files to extract:
+- User queries from conversation history
+- Tool calls and responses 
+- Server interactions and performance metrics
+
+### Example: Tool Description Optimization
+
+The optimizer can improve tool descriptions based on actual usage patterns. For example:
+
+**Original Description:**
+```
+Fetches a URL from the internet and optionally extracts its contents as markdown.
+
+Although originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that.
+```
+
+**Optimized Description:**
+```
+Fetches the content of a specified URL from the internet and can extract and format it as markdown. This tool allows users to access the most up-to-date information from web pages, making it useful for retrieving articles, news, or any other web content. Simply provide a valid URL, and the tool will return the content in a markdown format for easy readability.
+```
+
+### Usage
+
+```bash
+# Run optimization on a directory of trace files
+python -m mcp_eval.optimizer.optimizer_cli \
+  --trace-directory examples/mcp_server_fetch/test-reports \
+  --output optimization_results.json \
+  --server-name fetch \
+  --model openai/gpt-4o-mini
+
+# Process all servers in the directory
+python -m mcp_eval.optimizer.optimizer_cli \
+  --trace-directory path/to/trace/files \
+  --output results.json \
+  --optimizer bootstrap \
+  --limit 50
+
+# Use different optimization strategies
+python -m mcp_eval.optimizer.optimizer_cli \
+  --trace-directory path/to/traces \
+  --optimizer mipro \
+  --num-epochs 5 \
+  --batch-size 16
+```
+
+### Command Line Options
+
+- `--trace-directory`: Directory containing trace files (default: examples/mcp_server_fetch/test-reports)
+- `--output`: Path to save results JSON file
+- `--server-name`: Specific server name to optimize (default: fetch)
+- `--model`: Model to use for optimization (default: openai/gpt-4o-mini)
+- `--optimizer`: Optimizer type - fewshot, bootstrap, or mipro (default: bootstrap)
+- `--limit`: Maximum number of examples to process (default: 50)
+- `--train-ratio`: Ratio of data for training vs validation (default: 0.8)
+- `--k`: Number of examples for few-shot learning (default: 5)
+- `--num-bootstrapped`: Number of bootstrapped example sets (default: 5)
+- `--max-demos`: Maximum demonstrations per bootstrapped set (default: 3)
+- `--num-epochs`: Number of epochs for MIPRO optimizer (default: 3)
+- `--batch-size`: Batch size for MIPRO optimizer (default: 8)

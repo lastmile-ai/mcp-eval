@@ -8,7 +8,7 @@ import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from mcp_eval.optimizer.dataloader import DataExample
-from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan, extract_comprehensive_trace_information, TraceInformation, extract_user_queries
+from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan, extract_comprehensive_trace_information, TraceInformation, extract_user_query, extract_tool_info_from_llm_span, _is_tool_call_span, _extract_tool_call, _is_trace_get_capabilities_span, _is_trace_list_tools_span, _is_trace_user_query_span, _is_response_span, _is_the_shutdown_span, _extract_response_from_span
 from mcp_eval.evaluators.builtin import LLMJudgeSuccess, EvaluatorContext
 from mcp_eval.optimizer.trace_grouping import group_trace_information_by_span_name
 from mcp_eval.optimizer.trace_prompt_generator import TracePromptGenerator
@@ -431,112 +431,169 @@ def create_span_tree_from_raw_file(trace_raw_file_path: str) -> Optional[SpanTre
         return SpanTree(artificial_root)
 
 
-def extract_trace_dataset(trace_raw_file_path: str, processed_file_path: str, server_name: str = None) -> DataExample:
-    """
-    Extract dataset from raw trace file and processed results file.
+def extract_trace_dataset(trace_raw_file_path: str) -> List[DataExample]:
+    """Extract dataset from raw trace file.
     
     Args:
         trace_raw_file_path: Path to raw trace file (JSONL format)
-        processed_file_path: Path to processed results file (JSON format)
-        server_name: Optional server name to filter traces for server-specific processing
         
     Returns:
-        DataExample instance containing extracted dataset with user query and metrics
+        List of DataExample instances containing extracted dataset with user query and metrics
     """
-    # Read raw trace file to find user query
-    # trace_raw_file_path = "/home/ubuntu/mahtab/projects/mcp-eval/examples/mcp_server_fetch/test-reports/test_basic_fetch_with_pytest_trace.jsonl"
+    # Read raw trace file
+    trace_raw_file_path = "/home/ubuntu/mahtab/projects/mcp-eval/examples/mcp_server_fetch/test-reports/test_basic_fetch_with_pytest_trace.jsonl"
     traces = read_trace_file(trace_raw_file_path)
-    user_queries = extract_user_queries(traces)
-    
+    list_of_available_tools = []
     trace_spans = []
-    for span_dict in traces:
+    data_examples = []
+    current_server_name, current_user_query, current_tool_calls, current_available_tools = None, None, [], None
+    current_response = ""
+    current_tool_info = None
+    session_active = False
+    
+    print(f"Processing {len(traces)} spans from trace file")
+    
+    while len(traces) > 0:
+        if current_user_query and current_tool_info and session_active and current_response:
+            if current_user_query:  # Only process if we have a user query
+                print("Processing collected spans and creating data example")
+                
+                # Process spans to get metrics
+                metrics = process_spans(trace_spans)
+                comprehensive_info = extract_comprehensive_trace_information(trace_spans)
+                
+                # Generate prompts from trace information
+                prompt_generator = TracePromptGenerator()
+                trace_events = prompt_generator.extract_trace_events(comprehensive_info)
+                evaluation_prompts = prompt_generator.generate_evaluation_prompt(trace_events)
+                
+                # Evaluate task success using LLMJudgeSuccess
+                success_evaluation = None
+                try:
+                    success_evaluation = asyncio.run(evaluate_task_success(comprehensive_info, evaluation_prompts))
+                except Exception as e:
+                    print(f"Error evaluating task success: {e}")
+                    success_evaluation = {
+                        'passed': False,
+                        'score': 0.0,
+                        'error': str(e),
+                        'reasoning': 'Failed to evaluate task success'
+                    }
+                
+                # Create comprehensive metrics
+                updated_metrics = {
+                    'tool_calls': current_tool_calls,
+                    'unique_tools_used': current_tool_info,
+                    'response': current_response,
+                    'list_of_available_tools': current_available_tools or [],
+                    'iteration_count': metrics.iteration_count,
+                    'total_duration_ms': metrics.total_duration_ms,
+                    'latency_ms': metrics.latency_ms,
+                    'error_count': metrics.error_count,
+                    'success_rate': metrics.success_rate,
+                    'cost_estimate': metrics.cost_estimate,
+                    'comprehensive_trace_info': comprehensive_info,
+                    'is_successful': success_evaluation.get('passed', False),
+                    'score': success_evaluation.get('score', 0.0),
+                    'task_success_evaluation': success_evaluation['details'].get('reasoning', 'No evaluation performed'),
+                }
+                
+                # Create DataExample instance
+                data_example = DataExample(user_query=current_user_query, metrics=updated_metrics)
+                data_examples.append(data_example)
+                print(f"Created data example for query: {current_user_query[:50]}...")
+                list_of_available_tools.extend(current_available_tools)
+                # Reset for next iteration
+                trace_spans = []
+                current_user_query, current_tool_calls, current_response, current_tool_info = None, [], "", None
+                # TODO later the currect available tools should be reset        
+        span = traces.pop(0)
+        
         try:
             # Convert dict to JSON string and then to TraceSpan
-            span_json = json.dumps(span_dict)
-            trace_spans.append(TraceSpan.from_json(span_json))
+            span_json = json.dumps(span)
+            trace_span = TraceSpan.from_json(span_json)
+            trace_spans.append(trace_span)
         except (json.JSONDecodeError, KeyError) as e:
             print(f"Error converting span to TraceSpan: {e}")
             continue
-    # Process spans to get metrics
-    metrics = process_spans(trace_spans)
+            
+        # Check if this is server capabilities/initialization
+        if _is_trace_get_capabilities_span(trace_span) and not session_active:
+            current_server_name = extract_server_name_from_trace(trace_raw_file_path)
+            session_active = True
+            print(f"Found server initialization: {current_server_name}")
+            continue
+            
+        # Check if this is tools listing
+        if _is_trace_list_tools_span(trace_span):
+            current_available_tools = get_tools_info(trace_raw_file_path)
+            print(f"Found {len(current_available_tools) if current_available_tools else 0} available tools")
+            continue
+            
+        # Check if this contains user query
+        if _is_trace_user_query_span(trace_span):
+            user_query = extract_user_query(span)
+            tool_info = extract_tool_info_from_llm_span(span)
+            if user_query:
+                current_user_query = user_query
+                current_tool_info = tool_info
+                print(f"Found user query: {current_user_query[:100]}...")
+                if tool_info:
+                    print(f"Found tool info: {tool_info['name']} with args: {tool_info['arguments']}")
+            continue
+            
+        # Check if this is a tool call
+        if _is_tool_call_span(trace_span):
+            tool_call = _extract_tool_call(trace_span)
+            if tool_call:
+                current_tool_calls.append(tool_call)
+                print(f"Found tool call: {tool_call.name}")
+            continue
+            
+        # Check if this contains response
+        if _is_response_span(trace_span):
+            response = _extract_response_from_span(trace_span)
+            if response and current_user_query and current_tool_info:
+                current_response = response
+                print(f"Found response: {response[:100]}...")
+            continue
+            
+        # Check if this is shutdown - end of session
+        if _is_the_shutdown_span(trace_span):
+            session_active = False
+            print("Found session shutdown")
+            
+        # Process collected data when we have enough information or session ends
+
     
-    # Extract comprehensive trace information 
-    comprehensive_info = extract_comprehensive_trace_information(trace_spans)
-        
-    # Generate prompts from trace information
-    prompt_generator = TracePromptGenerator()
-    trace_events = prompt_generator.extract_trace_events(comprehensive_info)
-    evaluation_prompts = prompt_generator.generate_evaluation_prompt(trace_events)
-    
-    # Evaluate task success using LLMJudgeSuccess
-    success_evaluation = None
-    try:
-        success_evaluation = asyncio.run(evaluate_task_success(comprehensive_info, evaluation_prompts))
-    except Exception as e:
-        print(f"Error evaluating task success: {e}")
-        success_evaluation = {
-            'passed': False,
-            'score': 0.0,
-            'error': str(e),
-            'reasoning': 'Failed to evaluate task success'
-        }
-    
-    # Get available tools from trace file
-    available_tools = get_tools_info(trace_raw_file_path)
-    
-    # Extract tool calls and unique tools
-    tool_calls = metrics.tool_calls
-    unique_tools = metrics.unique_tools_used
-    
-    # Create updated metrics dictionary with available tools and comprehensive trace info
-    updated_metrics = {
-        'tool_calls': tool_calls,
-        'unique_tools_used': unique_tools,
-        'list_of_available_tools': available_tools,
-        'iteration_count': metrics.iteration_count,
-        'total_duration_ms': metrics.total_duration_ms,
-        'latency_ms': metrics.latency_ms,
-        'error_count': metrics.error_count,
-        'success_rate': metrics.success_rate,
-        'cost_estimate': metrics.cost_estimate,
-        'comprehensive_trace_info': comprehensive_info,
-        'is_successful': success_evaluation.get('passed', False),
-        'score': success_evaluation.get('score', 0.0),
-        'task_success_evaluation': success_evaluation.get('reasoning', 'No evaluation performed'),
-    }
-    
-    # Create and return DataExample instance
-    return DataExample(
-        user_query=user_query,
-        metrics=updated_metrics
-    )
+    print(f"Generated {len(data_examples)} data examples")
+    return data_examples, list_of_available_tools
 
 
-def create_trace_dataset(trace_files: List[str], processed_files: List[str], server_name: str = None) -> List[DataExample]:
+def create_trace_dataset(trace_files: List[str]) -> List[DataExample]:
     """
-    Create a dataset from multiple trace and processed files.
+    Create a dataset from multiple trace files.
     
     Args:
         trace_files: List of paths to raw trace files
-        processed_files: List of paths to processed result files
-        server_name: Optional server name to filter traces for server-specific processing
         
     Returns:
         List of DataExample instances
     """
-    if len(trace_files) != len(processed_files):
-        raise ValueError("Number of trace files must match number of processed files")
-    
     dataset = []
-    for trace_file, processed_file in zip(trace_files, processed_files):
+    list_of_available_tools = []
+    for trace_file in trace_files:
         try:
-            entry = extract_trace_dataset(trace_file, processed_file, server_name)
-            dataset.append(entry)
+            # extract_trace_dataset now returns a list of DataExample instances
+            examples, available_tools = extract_trace_dataset(trace_file)
+            dataset.extend(examples)
+            list_of_available_tools.extend(available_tools)
         except Exception as e:
-            print(f"Error processing {trace_file} and {processed_file}: {e}")
+            print(f"Error processing {trace_file}: {e}")
             continue
     
-    return dataset
+    return dataset, list_of_available_tools
 
 
 
