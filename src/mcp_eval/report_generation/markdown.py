@@ -10,6 +10,7 @@ def generate_combined_markdown_report(
     env_info: Optional[Dict[str, Any]] = None,
     config_data: Optional[Dict[str, Any]] = None,
     config_path: Optional[str] = None,
+    output_dir: str = "./test-reports",
 ) -> None:
     """Generate a combined markdown report."""
     summary = report_data["summary"]
@@ -66,21 +67,26 @@ def generate_combined_markdown_report(
 
 ## Decorator Test Results
 
-| Test | Status | Duration | Server | Error |
-|------|--------|----------|--------|-------|
+| Test | Status | Duration | Server | Test Report | Error |
+|------|--------|----------|--------|-------------|-------|
 """
 
     for test_data in report_data["decorator_tests"]:
         status = "✅ PASS" if test_data["passed"] else "❌ FAIL"
         duration = f"{test_data.get('duration_ms', 0):.1f}ms"
         server = test_data.get("server_name", "unknown")
+
+        # Create link to individual test report
+        test_name = test_data["test_name"]
+        test_report_link = f"[Link]({output_dir}/{test_name}.json)"
+
         error = (
             test_data.get("error", "").replace("\n", " ").replace("|", "\\|")
             if not test_data["passed"]
             else ""
         )
 
-        report += f"| {test_data['test_name']} | {status} | {duration} | {server} | {error} |\n"
+        report += f"| {test_name} | {status} | {duration} | {server} | {test_report_link} | {error} |\n"
 
     report += "\n## Dataset Evaluation Results\n\n"
 

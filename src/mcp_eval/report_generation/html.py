@@ -10,7 +10,7 @@ def format_config_for_html(config_info: Dict[str, Any]) -> str:
 
 
 def generate_combined_html_report(
-    report_data: Dict[str, Any], output_path: str
+    report_data: Dict[str, Any], output_path: str, output_dir: str = "./test-reports"
 ) -> None:
     """Generate a combined HTML report."""
     summary = report_data["summary"]
@@ -317,10 +317,11 @@ def generate_combined_html_report(
                 <th>Status</th>
                 <th>Duration</th>
                 <th>Server</th>
+                <th>Test Report</th>
             </tr>
 """
     if not report_data["decorator_tests"]:
-        html += """<tr class="test-row empty-row"><td colspan="4"></td></tr>"""
+        html += """<tr class="test-row empty-row"><td colspan="5"></td></tr>"""
     else:
         for test_data in report_data["decorator_tests"]:
             status_class = "pass" if test_data["passed"] else "fail"
@@ -329,11 +330,13 @@ def generate_combined_html_report(
             server = test_data.get("server_name", "unknown")
 
             # Add main test row
+            test_report_link = f"{output_dir}/{test_data['test_name']}.json"
             html += f"""            <tr class="test-row {status_class}">
                     <td>{test_data["test_name"]}</td>
                     <td class="{status_class}">{status_text}</td>
                     <td>{duration}</td>
                     <td>{server}</td>
+                    <td><a href="{test_report_link}" target="_blank">Link</a></td>
                 </tr>
 """
 
@@ -346,7 +349,7 @@ def generate_combined_html_report(
 
                     escaped_failure_msg = html_module.escape(failure_msg)
                     html += f"""            <tr class="test-row {status_class} failure-row">
-                <td colspan="4">
+                <td colspan="5">
                     <div class="failure-message"><code>{escaped_failure_msg}</code></div>
                 </td>
             </tr>
