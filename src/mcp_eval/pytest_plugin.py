@@ -12,6 +12,7 @@ import pytest
 from mcp_eval import TestSession, TestAgent
 from mcp_eval.config import get_current_config
 from mcp_eval.reporting import generate_failure_message
+from mcp_eval.core import TestResult
 
 
 class MCPEvalPytestSession:
@@ -36,7 +37,19 @@ class MCPEvalPytestSession:
 
         # Check if all evaluations passed - if not, fail the test
         if not self._session.all_passed():
-            failure_message = generate_failure_message(self._session.get_results())
+            # Create a TestResult object from session results for compatibility with generate_failure_message
+            evaluation_results = self._session.get_results()
+            test_result = TestResult(
+                test_name=self._session.test_name,
+                description=f"Pytest test: {self._session.test_name}",
+                server_name=self._session.server_name,
+                parameters={},
+                passed=False,
+                evaluation_results=evaluation_results,
+                metrics=None,
+                duration_ms=self._session.get_duration_ms(),
+            )
+            failure_message = generate_failure_message(test_result)
             pytest.fail(failure_message, pytrace=False)
 
     @property
