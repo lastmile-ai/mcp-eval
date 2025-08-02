@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
 from mcp_eval.evaluators.shared import EvaluatorResult
+from mcp_eval.llm_client import get_judge_client
 
 
 class JudgeResult(BaseModel):
@@ -78,8 +79,6 @@ class LLMJudge(Evaluator):
         prompt = "\n".join(prompt_parts)
 
         try:
-            from mcp_eval.llm_client import get_judge_client
-
             client = get_judge_client(self.model)
             response = await client.generate_str(prompt)
 
@@ -96,7 +95,7 @@ class LLMJudge(Evaluator):
             return EvaluatorResult(
                 passed=passed,
                 expected=f"score >= {self.min_score}",
-                actual=f"score = {judge_result.score}",
+                actual=f"score = {judge_result.score}. {judge_result.reasoning}",
                 score=judge_result.score,
                 details={
                     "reasoning": judge_result.reasoning,
@@ -116,7 +115,7 @@ class LLMJudge(Evaluator):
                 return EvaluatorResult(
                     passed=passed,
                     expected=f"score >= {self.min_score}",
-                    actual=f"score = {score}",
+                    actual=f"score = {score}. {response}",
                     score=score,
                     details={
                         "reasoning": "Fallback parsing used",
