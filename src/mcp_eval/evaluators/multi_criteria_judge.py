@@ -86,21 +86,31 @@ class MultiCriteriaJudge(Evaluator):
         # Generate summary explanation
         summary = self._generate_summary(scores, explanations)
 
+        # Build actual field with explanations for failed criteria
+        actual_parts = [f"Overall score: {overall_score:.2f}"]
+        failed_criteria_names = [
+            c.name for c in self.criteria if scores[c.name] < c.min_score
+        ]
+        if failed_criteria_names:
+            actual_parts.append("Failed criteria:")
+            for criteria_name in failed_criteria_names:
+                score = scores[criteria_name]
+                explanation = explanations[criteria_name]
+                actual_parts.append(f"  • {criteria_name}: {score:.2f} - {explanation}")
+
         return EvaluatorResult(
             passed=passed,
             score=overall_score,
             expected="Meets all criteria"
             if self.require_all_pass
             else f"Score ≥ {pass_threshold:.2f}",
-            actual=f"Overall score: {overall_score:.2f}",
+            actual="\n".join(actual_parts),
             details={
                 "criteria_scores": scores,
                 "explanations": explanations,
                 "confidences": confidences,
                 "summary": summary,
-                "failed_criteria": [
-                    c.name for c in self.criteria if scores[c.name] < c.min_score
-                ],
+                "failed_criteria": failed_criteria_names,
             },
         )
 
