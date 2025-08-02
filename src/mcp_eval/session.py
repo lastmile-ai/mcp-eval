@@ -420,7 +420,7 @@ class TestSession:
         if hasattr(tracer_provider, "force_flush"):
             tracer_provider.force_flush(timeout_millis=5000)
 
-        spans = []
+        spans: list[TraceSpan] = []
         if os.path.exists(self.trace_file):
             with open(self.trace_file, "r", encoding="utf-8") as f:
                 for line in f:
@@ -435,7 +435,7 @@ class TestSession:
 
         # Build span tree for advanced analysis
         if spans:
-            span_nodes = {}
+            span_nodes: dict[str, SpanNode] = {}
             for span in spans:
                 node = SpanNode(
                     span_id=span.context.get("span_id", ""),
@@ -449,16 +449,27 @@ class TestSession:
                 span_nodes[node.span_id] = node
 
             # Build parent-child relationships
-            root_node = None
+            orphaned_nodes: list[SpanNode] = []
             for node in span_nodes.values():
                 if node.parent_id and node.parent_id in span_nodes:
                     parent = span_nodes[node.parent_id]
                     parent.children.append(node)
                 else:
-                    root_node = node
+                    orphaned_nodes.append(node)
 
-            if root_node:
-                self._span_tree = SpanTree(root_node)
+            # Create synthetic root to connect all orphaned spans (including the actual root)
+            if orphaned_nodes:
+                synthetic_root = SpanNode(
+                    span_id="synthetic_root",
+                    name="Execution Root",
+                    start_time=min(node.start_time for node in orphaned_nodes),
+                    end_time=max(node.end_time for node in orphaned_nodes),
+                    attributes={},
+                    events=[],
+                    parent_id=None,
+                    children=orphaned_nodes,
+                )
+                self._span_tree = SpanTree(synthetic_root)
 
         return metrics
 
