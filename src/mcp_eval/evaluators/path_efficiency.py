@@ -13,13 +13,13 @@ class PathEfficiency(SyncEvaluator):
     """Evaluates if agent took the optimal path to complete task."""
 
     optimal_steps: Optional[int] = None
-    """Expected optimal number of steps (auto-calculated if None)."""
+    """Expected optimal number of tool calls (auto-calculated if None)."""
 
     expected_tool_sequence: Optional[List[str]] = None
     """Expected sequence of tool calls."""
 
     allow_extra_steps: int = 0
-    """Tolerance for additional steps beyond optimal."""
+    """Tolerance for additional tool calls beyond optimal."""
 
     penalize_backtracking: bool = True
     """Whether to penalize returning to previous tools."""
@@ -34,17 +34,13 @@ class PathEfficiency(SyncEvaluator):
     """Default limit for tools not in tool_usage_limits."""
 
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
-        actual_steps = ctx.metrics.iteration_count
+        actual_steps = ctx.metrics.tool_calls
         tool_sequence = [call.name for call in ctx.tool_calls]
 
         # Auto-calculate optimal if not provided
         if self.optimal_steps is None:
-            # Try to get from context or use heuristic
-            if hasattr(ctx, "baseline_steps"):
-                self.optimal_steps = ctx.baseline_steps
-            else:
-                # Heuristic: unique tools used
-                self.optimal_steps = len(set(tool_sequence))
+            # Heuristic: unique tools used
+            self.optimal_steps = len(set(tool_sequence))
 
         # Calculate efficiency score
         efficiency_score = self.optimal_steps / actual_steps if actual_steps > 0 else 0
@@ -86,7 +82,7 @@ class PathEfficiency(SyncEvaluator):
         # Build comprehensive expected description
         expected = "Optimal path"
         actual = f"{actual_steps} steps"
-        
+
         if not sequence_correct:
             expected = f"sequence: {self.expected_tool_sequence}"
             actual = f"sequence: {tool_sequence}"
