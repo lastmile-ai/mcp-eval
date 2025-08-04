@@ -16,7 +16,7 @@ def configure_advanced_tests():
             "name": "advanced_fetch_agent",
             "instruction": "You are an expert web content agent with advanced capabilities.",
             "llm_factory": "AnthropicAugmentedLLM",
-            "model": "claude-3-sonnet-20240229",
+            "model": "claude-sonnet-4-20250514",
             "max_iterations": 10,
         }
     )

@@ -153,7 +153,7 @@ async def run_decorator_tests(
 
     display = TestProgressDisplay(files_with_counts)
 
-    with Live(display.create_display(type="tests"), refresh_per_second=10) as live:
+    with Live(display.create_display(type="test"), refresh_per_second=10) as live:
         # Process each file's tests
         for source_file, file_test_cases in grouped_tests.items():
             display.set_current_file(source_file)

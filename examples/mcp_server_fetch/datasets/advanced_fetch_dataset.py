@@ -104,7 +104,7 @@ advanced_fetch_dataset = Dataset(
         You excel at handling multiple URLs, error recovery, and content analysis.
         Always be thorough and provide detailed information about what you fetch.""",
         "llm_factory": "AnthropicAugmentedLLM",
-        "model": "claude-3-sonnet-20240229",
+        "model": "claude-sonnet-4-20250514",
         "max_iterations": 10,
     },
     evaluators=[

@@ -100,7 +100,7 @@ agents:
 
 # Judge configuration
 judge:
-  model: "claude-3-haiku-20240307"
+  model: "claude-3-5-haiku-20241022"
   min_score: 0.8
 
 # Reporting configuration

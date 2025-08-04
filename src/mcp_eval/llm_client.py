@@ -1,51 +1,47 @@
 """Simple LLM client for judge evaluations."""
 
-from typing import Optional
+from typing import Optional, TypeVar
+from pydantic import BaseModel
 from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
 from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class JudgeLLMClient:
     """Simple LLM client for judge evaluations."""
 
-    def __init__(self, model: str = "claude-3-haiku-20240307"):
+    def __init__(self, model: str = "claude-3-5-haiku-20241022"):
         self.model = model
         self._client = None
 
     async def generate_str(self, prompt: str) -> str:
         """Generate a string response."""
-        import openai
-        import os
-        
-        # Get OpenAI API key
-        api_key = os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            # Fallback to mock for demo if no API key
-            return await self._mock_llm_call(prompt)
-        
-        try:
-            # Use OpenAI client directly for judge evaluations
-            client = openai.AsyncOpenAI(api_key=api_key)
-            
-            response = await client.chat.completions.create(
-                model=self.model if "gpt" in self.model else "gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system", 
-                        "content": "You are an expert evaluator. Analyze the provided context and respond with valid JSON containing score, reasoning, passed, and confidence fields."
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1,
-                max_tokens=1000
-            )
-            
-            return response.choices[0].message.content
-            
-        except Exception as e:
-            print(f"OpenAI API call failed: {e}")
-            # Fallback to mock
-            return await self._mock_llm_call(prompt)
+        if not self._client:
+            if "claude" in self.model:
+                self._client = AnthropicAugmentedLLM()
+            elif "gpt" in self.model:
+                self._client = OpenAIAugmentedLLM()
+            else:
+                self._client = AnthropicAugmentedLLM()  # Default
+
+        return await self._client.generate_str(prompt)
+
+    async def generate_structured(self, prompt: str, response_model: type[T]) -> T:
+        """Generate a structured response using Pydantic model."""
+        if not self._client:
+            if "claude" in self.model:
+                self._client = AnthropicAugmentedLLM()
+            elif "gpt" in self.model:
+                self._client = OpenAIAugmentedLLM()
+            else:
+                self._client = AnthropicAugmentedLLM()  # Default
+
+        # Use the underlying LLM client's structured generation
+        response = await self._client.generate_structured(
+            prompt, response_model=response_model
+        )
+        return response
 
     async def _mock_llm_call(self, prompt: str) -> str:
         """Mock LLM call for demo purposes."""
@@ -58,4 +54,4 @@ class JudgeLLMClient:
 
 def get_judge_client(model: Optional[str] = None) -> JudgeLLMClient:
     """Get a judge LLM client."""
-    return JudgeLLMClient(model or "claude-3-haiku-20240307")
+    return JudgeLLMClient(model or "claude-3-5-haiku-20241022")

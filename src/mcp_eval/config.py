@@ -21,14 +21,14 @@ class AgentConfig(BaseSettings):
     name: str = "default_agent"
     instruction: str = "You are a helpful test agent."
     llm_factory: str = "AnthropicAugmentedLLM"
-    model: str = "claude-3-haiku-20240307"
+    model: str = "claude-3-5-haiku-20241022"
     max_iterations: int = 5
 
 
 class JudgeConfig(BaseSettings):
     """Configuration for LLM judge."""
 
-    model: str = "claude-3-haiku-20240307"
+    model: str = "claude-3-5-haiku-20241022"
     min_score: float = 0.8
     max_tokens: int = 1000
     system_prompt: str = "You are an expert evaluator of AI assistant responses."
@@ -48,8 +48,8 @@ class MetricsConfig(BaseSettings):
     )
     token_prices: Dict[str, Dict[str, float]] = Field(
         default_factory=lambda: {
-            "claude-3-haiku-20240307": {"input": 0.00000025, "output": 0.00000125},
-            "claude-3-sonnet-20240229": {"input": 0.000003, "output": 0.000015},
+            "claude-3-5-haiku-20241022": {"input": 0.00000025, "output": 0.00000125},
+            "claude-sonnet-4-20250514": {"input": 0.000003, "output": 0.000015},
             "gpt-4-turbo": {"input": 0.00001, "output": 0.00003},
         }
     )
