@@ -476,6 +476,7 @@ class TestSession:
     async def _save_test_artifacts(self):
         """Save test artifacts (traces, reports) based on configuration."""
         from .config import get_current_config
+        import re
 
         config = get_current_config()
         reporting_config = config.get("reporting", {})
@@ -490,13 +491,17 @@ class TestSession:
         logger.info(f"Current working directory: {os.getcwd()}")
         logger.info(f"Absolute output path: {output_dir.resolve()}")
 
+        # Sanitize test name for filesystem
+        safe_test_name = re.sub(r'[<>:"/\\|?*\[\]]', "_", self.test_name)
+        logger.info(f"Sanitized test name: {safe_test_name}")
+
         try:
             # Create output directory if it doesn't exist
             output_dir.mkdir(parents=True, exist_ok=True)
 
             # Save trace file if it exists
             if os.path.exists(self.trace_file):
-                trace_dest = output_dir / f"{self.test_name}_trace.jsonl"
+                trace_dest = output_dir / f"{safe_test_name}_trace.jsonl"
                 shutil.copy2(self.trace_file, trace_dest)
                 logger.info(f"Saved trace file to {trace_dest}")
             else:
@@ -505,7 +510,7 @@ class TestSession:
                 )
 
             # Also save test results/metrics as JSON
-            results_dest = output_dir / f"{self.test_name}.json"
+            results_dest = output_dir / f"{safe_test_name}.json"
             test_data = {
                 "test_name": self.test_name,
                 "server_name": self.server_name,
