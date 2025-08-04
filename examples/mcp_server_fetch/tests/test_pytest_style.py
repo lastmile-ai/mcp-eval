@@ -4,6 +4,7 @@ import pytest
 import mcp_eval
 from mcp_eval import ToolWasCalled, ResponseContains, LLMJudge
 from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
+from mcp_eval.evaluators.shared import EvaluatorResult
 from mcp_eval.metrics import TestMetrics
 from mcp_eval.session import TestAgent
 
@@ -144,10 +145,10 @@ async def test_large_content_chunking(mcp_agent: TestAgent):
 
 
 # Complex test cases to verify OTEL trace parsing and metrics
-class MetricsValidationEvaluator(Evaluator):
+class CustomMetricsValidationEvaluator(Evaluator):
     """Evaluator that validates metrics are being collected correctly."""
 
-    async def evaluate(self, context: EvaluatorContext) -> dict:
+    async def evaluate(self, context: EvaluatorContext) -> EvaluatorResult:
         metrics = context.metrics
 
         # Check that we have metrics
@@ -173,13 +174,15 @@ class MetricsValidationEvaluator(Evaluator):
         assert metrics.llm_metrics.model_name != "", "Model name should be set"
         assert metrics.llm_metrics.total_tokens > 0, "Should have token usage"
 
-        return {
-            "passed": True,
-            "tool_calls": len(metrics.tool_calls),
-            "unique_tools": metrics.unique_tools_used,
-            "duration_ms": metrics.total_duration_ms,
-            "tokens": metrics.llm_metrics.total_tokens,
-        }
+        return EvaluatorResult(
+            passed=True,
+            details={
+                "tool_calls": len(metrics.tool_calls),
+                "unique_tools": metrics.unique_tools_used,
+                "duration_ms": metrics.total_duration_ms,
+                "tokens": metrics.llm_metrics.total_tokens,
+            },
+        )
 
 
 @pytest.mark.asyncio
@@ -188,7 +191,7 @@ async def test_metrics_collection_single_fetch(mcp_agent: TestAgent):
     """Test that metrics are properly collected for a single fetch."""
     # Add metrics validation evaluator
     mcp_agent.session.add_deferred_evaluator(
-        MetricsValidationEvaluator(), "metrics_validation"
+        CustomMetricsValidationEvaluator(), "metrics_validation"
     )
 
     response = await mcp_agent.generate_str(
@@ -226,7 +229,7 @@ async def test_multiple_sequential_fetches_metrics(mcp_agent: TestAgent):
 
     # Add deferred evaluator to verify at session end
     mcp_agent.session.add_deferred_evaluator(
-        MetricsValidationEvaluator(), "multi_fetch_metrics"
+        CustomMetricsValidationEvaluator(), "multi_fetch_metrics"
     )
 
 
@@ -320,7 +323,7 @@ async def test_comprehensive_metrics_validation(mcp_agent: TestAgent):
     """Comprehensive test that validates all aspects of metrics collection."""
     # Add comprehensive metrics evaluator
     mcp_agent.session.add_deferred_evaluator(
-        MetricsValidationEvaluator(), "comprehensive_metrics"
+        CustomMetricsValidationEvaluator(), "comprehensive_metrics"
     )
 
     # Complex prompt that exercises multiple features
