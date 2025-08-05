@@ -2,8 +2,8 @@
 
 import re
 import json
-from typing import Any, Dict, List, Literal, Optional, Union, Pattern
-from dataclasses import dataclass
+from typing import Any, Dict, List, Literal, Optional, Union, Pattern, Tuple
+from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 from collections import defaultdict
 
