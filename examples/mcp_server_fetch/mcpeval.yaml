@@ -49,6 +49,7 @@ metrics:
     - "cost_estimate"
     - "error_recovery"
     - "content_extraction_quality"
+    - "input_tokens"
 
 # Reporting
 reporting:
