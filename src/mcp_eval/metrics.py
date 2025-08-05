@@ -863,6 +863,13 @@ def _is_trace_user_query_span(span: TraceSpan) -> bool:
     # Check for user-related span names
     if any(keyword in span_name for keyword in ['chat']):
         return True
+    
+    # Check for MCPAgentClientSession.send_request spans with tool calls
+    if span.name == 'MCPAgentClientSession.send_request':
+        # Check if this span has tool-related attributes indicating a user query/tool request
+        if any(key.startswith('mcp.tool.') or key.startswith('mcp.request.argument.') 
+               for key in attributes.keys()):
+            return True
         
     # Check attributes for user content
     for key in attributes.keys():
@@ -1082,6 +1089,25 @@ def extract_user_query(trace: Dict[str, Any]) -> Optional[str]:
             for key, value in attributes.items():
                 if key.startswith('request.argument.') and isinstance(value, str) and value.strip():
                     return value.strip()
+        
+        # Look for tool call requests - construct user query from tool name and arguments
+        elif method_name == 'tools/call':
+            tool_name = attributes.get('mcp.tool.name', '')
+            if tool_name:
+                # Construct a user query from tool name and arguments
+                query_parts = [f"Use the {tool_name} tool"]
+                
+                # Add arguments to the query
+                args = []
+                for key, value in attributes.items():
+                    if key.startswith('mcp.request.argument.') and isinstance(value, str):
+                        arg_name = key.replace('mcp.request.argument.', '')
+                        args.append(f"{arg_name}: {value}")
+                
+                if args:
+                    query_parts.append(f"with arguments: {', '.join(args)}")
+                
+                return ' '.join(query_parts)
     
     # Also check span attributes directly for user messages
     for key, value in attributes.items():
@@ -1156,6 +1182,35 @@ def extract_tool_info_from_llm_span(trace: Dict[str, Any]) -> Optional[Dict[str,
                         func_name_key = desc_key.replace('.description', '.name')
                         if attributes.get(func_name_key) == tool_name:
                             description = desc_value
+                            break
+                
+                return {
+                    'name': tool_name,
+                    'description': description,
+                    'arguments': arguments
+                }
+    
+    # Check for MCP tool calls in MCPAgentClientSession.send_request spans
+    if span_name == 'MCPAgentClientSession.send_request':
+        method_name = attributes.get('mcp.method.name', '')
+        
+        if method_name == 'tools/call':
+            tool_name = attributes.get('mcp.tool.name', '')
+            if tool_name:
+                # Extract tool arguments from mcp.request.argument.* attributes
+                arguments = {}
+                for key, value in attributes.items():
+                    if key.startswith('mcp.request.argument.'):
+                        arg_name = key.replace('mcp.request.argument.', '')
+                        arguments[arg_name] = value
+                
+                # Try to find tool description from result type or other attributes
+                description = attributes.get('result_type', '')
+                if not description:
+                    # Look for any description-like attributes
+                    for key, value in attributes.items():
+                        if 'description' in key.lower() and isinstance(value, str):
+                            description = value
                             break
                 
                 return {

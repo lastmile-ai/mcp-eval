@@ -50,8 +50,8 @@ def process_server_optimization(server_name: str, trace_files: List[str], proces
         
     # Simple train/test split
     train_size = int(len(examples) * args.train_ratio)
-    train_examples = examples
-    test_examples = []
+    train_examples = examples[:train_size]
+    test_examples = examples[train_size:]
     predictor = ToolPredictor(model_name=args.model)
 
     print(f"Loaded {len(examples)} examples for {server_name}")

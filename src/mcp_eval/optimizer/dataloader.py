@@ -15,13 +15,10 @@ class DataExample(dspy.Example):
             user_query: The user's query/prompt
             metrics: Dictionary containing performance metrics and tool usage data
         """
-        unique_tools = metrics.get('unique_tools_used', [])
         
         super().__init__(
             user_query=user_query,
-            query=user_query,
             tool_calls=metrics.get('tool_calls', []),
-            unique_tools_used=unique_tools,
             iteration_count=metrics.get('iteration_count', 0),
             total_duration_ms=metrics.get('total_duration_ms', 0.0),
             latency_ms=metrics.get('latency_ms', 0.0),
