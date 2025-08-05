@@ -116,7 +116,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
 
                         # Combine case-specific and global evaluators
                         all_evaluators = case.evaluators + self.evaluators
-                        evaluation_results = []
+                        evaluation_results: list[EvaluationRecord] = []
 
                         for evaluator in all_evaluators:
                             try:
