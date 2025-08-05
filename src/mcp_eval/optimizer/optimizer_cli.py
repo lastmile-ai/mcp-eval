@@ -39,10 +39,10 @@ def save_results(results: dict, output_path: str) -> None:
     
     print(f"Results saved to {output_path}")
 
-def process_server_optimization(server_name: str, trace_files: List[str], processed_files: List[str], args) -> dict:
+async def process_server_optimization(server_name: str, trace_files: List[str], processed_files: List[str], args) -> dict:
     """Process optimization for a specific server"""
     print(f"\n=== Processing server: {server_name} ===")
-    examples, list_of_available_tools = create_trace_dataset(trace_files)
+    examples, list_of_available_tools = await create_trace_dataset(trace_files)
     
     if args.limit:
         examples = examples[:args.limit]
@@ -79,7 +79,7 @@ def process_server_optimization(server_name: str, trace_files: List[str], proces
     return results
 
 
-def main(args) -> None:
+async def main(args) -> None:
     """Main function to run the tool selection optimization with DSPy"""
     print(f"Loading trace dataset from {args.trace_directory}")
     
@@ -131,7 +131,7 @@ def main(args) -> None:
                     break
         
         # Process the specific server
-        results = process_server_optimization(args.server_name, server_trace_files, server_processed_files, args)
+        results = await process_server_optimization(args.server_name, server_trace_files, server_processed_files, args)
         
         # Save results if output path provided
         if args.output:
@@ -167,7 +167,7 @@ def main(args) -> None:
                         break
             
             # Process this server
-            results = process_server_optimization(server_name, server_trace_files, server_processed_files, args)
+            results = await process_server_optimization(server_name, server_trace_files, server_processed_files, args)
             all_results[server_name] = results
             
             # Save individual server results
@@ -224,4 +224,5 @@ if __name__ == "__main__":
                       help="Batch size for MIPRO")
     
     args = parser.parse_args()
-    main(args)
+    import asyncio
+    asyncio.run(main(args))

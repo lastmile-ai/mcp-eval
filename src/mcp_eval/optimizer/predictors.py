@@ -1,3 +1,4 @@
+import json
 import os
 import dspy
 from typing import List, Dict, Any, Tuple
@@ -205,9 +206,11 @@ class ToolPredictor(dspy.Module):
         
         # Store optimization report data
         self.optimization_report = {}
-        
+
+        unique_dicts = list({json.dumps(d, sort_keys=True) for d in tools_list})
+        unique_dicts = [json.loads(d) for d in unique_dicts]
         # Optimize docstrings for tools that have both failed and successful examples
-        for tool in tools_list:
+        for tool in unique_dicts:
             try:
                 tool_name = tool.get('name', '')
                 tool_docstring = tool.get('description', '')
@@ -218,12 +221,13 @@ class ToolPredictor(dspy.Module):
                 # Analyze examples to find successful and failed cases for this tool
                 for example in examples:
                     # Check if this tool was used in the example
-                    if any([True for tool in example.get('tool_calls') if tool_name in tool.name]):
-                        # Determine if the example was successful                        
-                        if example.is_successful:
-                            successful_queries.append(example.user_query)
-                        else:
-                            failed_queries.append(example.user_query)
+                    if any(example.get('tool_calls')):
+                        if any([True for tool in example.get('tool_calls') if tool_name in tool.get("name", "")]):
+                            # Determine if the example was successful                        
+                            if example.is_successful:
+                                successful_queries.append(example.user_query)
+                            else:
+                                failed_queries.append(example.user_query)
                 
                 # Initialize report entry for this tool
                 self.optimization_report[tool_name] = {

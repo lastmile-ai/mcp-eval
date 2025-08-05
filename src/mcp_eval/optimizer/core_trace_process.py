@@ -271,8 +271,6 @@ def get_tools_info(trace_file_path: str) -> List[Dict[str, Any]]:
                     }
                     tools_info.append(tool_info)
     
-    print(f"Total spans read: {len(traces)}")
-    print(f"Tools found: {len(tools_info)}")
     return tools_info
 
 
@@ -431,7 +429,7 @@ def create_span_tree_from_raw_file(trace_raw_file_path: str) -> Optional[SpanTre
         return SpanTree(artificial_root)
 
 
-def extract_trace_dataset(trace_raw_file_path: str) -> List[DataExample]:
+async def extract_trace_dataset(trace_raw_file_path: str) -> List[DataExample]:
     """Extract dataset from raw trace file.
     
     Args:
@@ -447,7 +445,7 @@ def extract_trace_dataset(trace_raw_file_path: str) -> List[DataExample]:
     data_examples = []
     current_server_name, current_user_query, current_available_tools = None, None, None
     current_response = ""
-    current_tool_info = None
+    current_tool_info = []
     session_active = False
     
     print(f"Processing {len(traces)} spans from trace file")
@@ -468,7 +466,7 @@ def extract_trace_dataset(trace_raw_file_path: str) -> List[DataExample]:
             # Evaluate task success using LLMJudgeSuccess
             success_evaluation = None
             try:
-                success_evaluation = asyncio.run(evaluate_task_success(comprehensive_info, evaluation_prompts))
+                success_evaluation = await evaluate_task_success(comprehensive_info, evaluation_prompts)
             except Exception as e:
                 print(f"Error evaluating task success: {e}")
                 success_evaluation = {
@@ -502,7 +500,7 @@ def extract_trace_dataset(trace_raw_file_path: str) -> List[DataExample]:
             list_of_available_tools.extend(current_available_tools)
             # Reset for next iteration
             trace_spans = []
-            current_user_query, current_response, current_tool_info = None, "", None
+            current_user_query, current_response, current_tool_info = None, "", []
         span = traces.pop(0)
         # TODO: the trace_spans needed to be carefully constructed to avoid duplicates, data leakage, and comprehensive information
         try:
@@ -518,14 +516,12 @@ def extract_trace_dataset(trace_raw_file_path: str) -> List[DataExample]:
             current_server_name = extract_server_name_from_trace(trace_raw_file_path)
             session_active = True
             trace_spans.append(trace_span)
-            print(f"Found server initialization: {current_server_name}")
             continue
             
         # Check if this is tools listing
         if _is_trace_list_tools_span(trace_span):
             current_available_tools = get_tools_info(trace_raw_file_path)
             trace_spans.append(trace_span)
-            print(f"Found {len(current_available_tools) if current_available_tools else 0} available tools")
             continue
             
         # Check if this contains user query
@@ -535,13 +531,10 @@ def extract_trace_dataset(trace_raw_file_path: str) -> List[DataExample]:
             trace_spans.append(trace_span)
             if user_query:
                 current_user_query = user_query
-                current_tool_info = tool_info
+                current_tool_info.append(tool_info)
                 response = _extract_response_from_span(trace_span)
                 if response and current_user_query:
                     current_response = response
-                    print(f"Found user query: {current_user_query[:100]}...")
-                if tool_info:
-                    print(f"Found tool info: {tool_info['name']} with args: {tool_info['arguments']}")
             continue
                         
             
@@ -549,7 +542,6 @@ def extract_trace_dataset(trace_raw_file_path: str) -> List[DataExample]:
         if _is_the_shutdown_span(trace_span):
             session_active = False
             trace_spans.append(trace_span)
-            print("Found session shutdown")
             
         # Process collected data when we have enough information or session ends
 
@@ -558,7 +550,7 @@ def extract_trace_dataset(trace_raw_file_path: str) -> List[DataExample]:
     return data_examples, list_of_available_tools
 
 
-def create_trace_dataset(trace_files: List[str]) -> List[DataExample]:
+async def create_trace_dataset(trace_files: List[str]) -> List[DataExample]:
     """
     Create a dataset from multiple trace files.
     
@@ -568,12 +560,14 @@ def create_trace_dataset(trace_files: List[str]) -> List[DataExample]:
     Returns:
         List of DataExample instances
     """
+    # for testing I am going to run the optimization with 3 trace files
+    trace_files = trace_files[:5]  
     dataset = []
     list_of_available_tools = []
     for trace_file in trace_files:
         try:
             # extract_trace_dataset now returns a list of DataExample instances
-            examples, available_tools = extract_trace_dataset(trace_file)
+            examples, available_tools = await extract_trace_dataset(trace_file)
             dataset.extend(examples)
             list_of_available_tools.extend(available_tools)
         except Exception as e:
