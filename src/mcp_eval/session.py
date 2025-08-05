@@ -4,13 +4,11 @@ import os
 import json
 import time
 import tempfile
-import asyncio
 import shutil
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 from contextlib import asynccontextmanager
-from opentelemetry import trace
 
 
 from mcp_agent.app import MCPApp
@@ -78,14 +76,18 @@ class TestAgent:
             raise RuntimeError("No LLM attached. Call attach_llm() first.")
 
         # Direct delegation to real agent - no re-implementation
-        return await self._llm.generate_str(prompt, **kwargs)
+        response = await self._llm.generate_str(prompt, **kwargs)
+        await self._session._ensure_traces_flushed()
+        return response
 
     async def generate(self, prompt: str, **kwargs):
         """Generate response - delegates to underlying agent LLM."""
         if not self._llm:
             raise RuntimeError("No LLM attached. Call attach_llm() first.")
 
-        return await self._llm.generate(prompt, **kwargs)
+        response = await self._llm.generate(prompt, **kwargs)
+        await self._session._ensure_traces_flushed()
+        return response
 
     # Evaluation methods that use session context
     def evaluate_now(self, evaluator: Evaluator, response: str, name: str):
@@ -155,6 +157,10 @@ class TestSession:
 
     async def __aenter__(self) -> TestAgent:
         """Initialize the test session with OTEL tracing as source of truth."""
+        # Clear any cached metrics for fresh session
+        self._metrics = None
+        self._span_tree = None
+
         # Configure OpenTelemetry tracing (single source of truth)
         settings = get_settings()
         settings.otel.enabled = True
@@ -234,13 +240,6 @@ class TestSession:
             # Shutdown agent first
             if self.agent:
                 await self.agent.shutdown()
-
-            # Flush traces to ensure they're written to disk
-            if self.app and self.app._context and self.app._context.tracing_config:
-                logger.info(f"Flushing traces for {self.test_name}")
-                await self.app._context.tracing_config.flush()
-                # Small delay to ensure file is written
-                await asyncio.sleep(0.1)
 
             # Save traces if configured
             logger.info(f"About to save test artifacts for {self.test_name}")
@@ -395,6 +394,19 @@ class TestSession:
             self._metrics = self._process_otel_traces()
         return self._metrics
 
+    def cleanup(self):
+        """Cleanup session resources."""
+        try:
+            # Clear cached data
+            self._metrics = None
+            self._span_tree = None
+
+            # Close temp directory
+            if hasattr(self, "temp_dir"):
+                self.temp_dir.cleanup()
+        except Exception as e:
+            logger.warning(f"Error during session cleanup: {e}")
+
     def get_span_tree(self) -> Optional[SpanTree]:
         """Get span tree for advanced analysis."""
         if self._span_tree is None:
@@ -413,12 +425,17 @@ class TestSession:
         """Check if all evaluations passed."""
         return all(r.passed for r in self._results)
 
+    async def _ensure_traces_flushed(self):
+        """Enhanced trace flushing to ensure complete isolation between tests."""
+        try:
+            # Flush app-specific tracing config
+            if self.app and self.app._context and self.app._context.tracing_config:
+                await self.app._context.tracing_config.flush()
+        except Exception as e:
+            logger.warning(f"Error during trace flushing for {self.test_name}: {e}")
+
     def _process_otel_traces(self) -> TestMetrics:
         """Process OTEL traces into metrics and span tree (single source of truth)."""
-        # Force flush to ensure all batched spans are exported before processing
-        tracer_provider = trace.get_tracer_provider()
-        if hasattr(tracer_provider, "force_flush"):
-            tracer_provider.force_flush(timeout_millis=5000)
 
         spans: list[TraceSpan] = []
         if os.path.exists(self.trace_file):
@@ -542,16 +559,6 @@ class TestSession:
 
         except Exception as e:
             logger.warning(f"Failed to save test artifacts: {e}", exc_info=True)
-
-    def cleanup(self):
-        """Clean up temporary files."""
-        try:
-            # Ensure trace file exists and is readable before cleanup
-            if os.path.exists(self.trace_file):
-                logger.debug(f"Trace file exists at {self.trace_file}")
-            self.temp_dir.cleanup()
-        except Exception as e:
-            logger.warning(f"Error cleaning up temp directory: {e}")
 
 
 @asynccontextmanager
