@@ -1,12 +1,10 @@
-"""Rich reporting for evaluation results."""
+"""Data models for evaluation reports."""
 
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-from rich.console import Console
-from rich.table import Table
 
-from mcp_eval.metrics import TestMetrics
-from mcp_eval.evaluators import EvaluationRecord
+from ..metrics import TestMetrics
+from ..evaluators import EvaluationRecord
 
 
 @dataclass
@@ -55,89 +53,6 @@ class EvaluationReport:
         if not self.results:
             return 0.0
         return sum(r.duration_ms for r in self.results) / len(self.results)
-
-    def print(
-        self,
-        include_input: bool = False,
-        include_output: bool = False,
-        include_durations: bool = True,
-        include_scores: bool = True,
-        console: Optional[Console] = None,
-    ):
-        """Print a rich table of evaluation results."""
-        if console is None:
-            console = Console()
-
-        # Summary table
-        table = Table(title=f"Evaluation Summary: {self.task_name}")
-
-        # Add columns based on options
-        table.add_column("Case ID", style="cyan")
-
-        if include_input:
-            table.add_column("Inputs")
-
-        if include_output:
-            table.add_column("Outputs")
-
-        if include_scores:
-            table.add_column("Scores", style="yellow")
-
-        table.add_column("Status", justify="center")
-
-        if include_durations:
-            table.add_column("Duration", justify="right", style="green")
-
-        # Add rows for each case
-        for result in self.results:
-            row_data = []
-
-            # Case ID
-            row_data.append(result.case_name)
-
-            # Inputs
-            if include_input:
-                input_str = str(result.inputs)
-                if len(input_str) > 50:
-                    input_str = input_str[:47] + "..."
-                row_data.append(input_str)
-
-            # Outputs
-            if include_output:
-                output_str = str(result.output)
-                if len(output_str) > 50:
-                    output_str = output_str[:47] + "..."
-                row_data.append(output_str)
-
-            # Scores
-            if include_scores:
-                scores = []
-                for eval_record in result.evaluation_results:
-                    eval_result = eval_record.result
-                    if hasattr(eval_result, "score") and eval_result.score is not None:
-                        scores.append(f"{eval_record.name}: {eval_result.score:.2f}")
-                    else:
-                        scores.append(
-                            f"{eval_record.name}: {'✓' if eval_record.passed else '✗'}"
-                        )
-                row_data.append("\n".join(scores))
-
-            # Status (pass/fail indicators)
-            status = "✅ PASS" if result.passed else "❌ FAIL"
-            if result.error:
-                status += f" ({result.error})"
-            row_data.append(status)
-
-            # Duration
-            if include_durations:
-                row_data.append(f"{result.duration_ms:.0f}ms")
-
-            table.add_row(*row_data)
-
-        console.print(table)
-        console.print(
-            f"\nSummary: {self.passed_cases}/{self.total_cases} cases passed ({self.success_rate:.1%})"
-        )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert report to dictionary for serialization."""

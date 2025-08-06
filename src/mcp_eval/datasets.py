@@ -14,7 +14,7 @@ from mcp_eval.evaluators import (
     get_evaluator_by_name,
 )
 from mcp_eval.metrics import TestMetrics
-from mcp_eval.reports import EvaluationReport, CaseResult
+from mcp_eval.report_generation.models import EvaluationReport, CaseResult
 from mcp_eval.session import TestSession
 
 

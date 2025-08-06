@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..core import TestResult
-from ..reports import EvaluationReport
+from .models import EvaluationReport
 from .base import calculate_overall_stats
 
 

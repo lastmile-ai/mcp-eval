@@ -9,12 +9,12 @@ import typer
 from rich.console import Console
 from rich.live import Live
 
-from mcp_eval.reporting import generate_failure_message
+from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.session import TestAgent, TestSession
 
 from .core import TestResult, _setup_functions, _teardown_functions
 from .datasets import Dataset
-from .reports import EvaluationReport
+from .report_generation.models import EvaluationReport
 from .report_generation import (
     generate_combined_summary,
     generate_combined_markdown_report,

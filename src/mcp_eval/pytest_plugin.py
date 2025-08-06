@@ -11,7 +11,7 @@ import pytest
 
 from mcp_eval import TestSession, TestAgent
 from mcp_eval.config import get_current_config
-from mcp_eval.reporting import generate_failure_message
+from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.core import TestResult
 
 

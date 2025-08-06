@@ -10,7 +10,7 @@ from rich.columns import Columns
 from rich.console import Group
 
 from ..core import TestResult
-from ..reports import EvaluationReport, CaseResult
+from .models import EvaluationReport, CaseResult
 
 
 def pad(text: str, char: str = "=", length=80) -> Text:
@@ -188,3 +188,47 @@ def run_tests_with_live_display(test_cases: List[Dict[str, Any]], test_runner_fu
         results, failed_results = test_runner_func(test_cases, display, live)
 
     return results, failed_results
+
+
+def generate_failure_message(result: "TestResult") -> str:
+    """Generate failure messages for mcp-eval evaluations"""
+    failure_details = []
+
+    eval_record = result.evaluation_results
+    failed_eval_records = [r for r in eval_record if not r.passed]
+
+    for eval_record in failed_eval_records:
+        name = eval_record.name
+        error = eval_record.error
+        evaluation_result = eval_record.result
+
+        if error:
+            failure_details.append(f"  ✗ {name}: {error}")
+        else:
+            # Extract expected vs actual information from detailed results
+            expected = evaluation_result.expected
+            actual = evaluation_result.actual
+            score = evaluation_result.score
+
+            detail_parts = []
+            if expected is not None:
+                if actual is not None:
+                    detail_parts.append(f"expected {expected}, got {actual!r}")
+                else:
+                    detail_parts.append(f"expected {expected}")
+            elif actual is not None:
+                detail_parts.append(f"got {expected!r}")
+            elif score is not None:
+                detail_parts.append(f"score {score}")
+
+            if detail_parts:
+                failure_details.append(f"  ✗ {name}: {', '.join(detail_parts)}")
+            else:
+                failure_details.append(f"  ✗ {name}: {evaluation_result.model_dump()}")
+
+    failure_message = "Evaluation failures:\n" + "\n".join(failure_details)
+
+    if result.error:
+        failure_message += f"\n\n{result.error}"
+
+    return failure_message

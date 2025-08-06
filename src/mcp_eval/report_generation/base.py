@@ -2,7 +2,7 @@
 
 from typing import List, Dict, Any
 from ..core import TestResult
-from ..reports import EvaluationReport
+from .models import EvaluationReport
 
 
 def calculate_overall_stats(
