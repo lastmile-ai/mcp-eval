@@ -28,6 +28,9 @@ from .evaluators.base import Evaluator, EvaluatorContext
 from .evaluators import EvaluatorResult, EvaluationRecord
 
 import logging
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
