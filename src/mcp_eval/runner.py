@@ -310,7 +310,7 @@ async def _run_async(
     max_concurrency: int | None,
 ):
     """Async implementation of the run command."""
-    console.print(pad("MCP-Eval", char="*"), style="magenta")
+    console.print(pad("MCP-Eval", char="*", console=console), style="magenta")
     # Parse pytest-style test specifier for path validation
     if "::" in test_dir:
         file_path, _ = test_dir.split("::", 1)
