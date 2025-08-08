@@ -78,7 +78,7 @@ class SpanTree:
 
     def __init__(self, root: SpanNode):
         self.root = root
-        self._all_spans = {}
+        self._all_spans: dict[str, SpanNode] = {}
         self._build_index()
 
     def _build_index(self):

@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 from dataclasses import dataclass
 
 from mcp_eval.datasets import Case, Dataset
-from mcp_eval.evaluators.builtin import ToolWasCalled, ResponseContains, LLMJudge
+from mcp_eval.evaluators import ToolWasCalled, ResponseContains, LLMJudge
 
 
 @dataclass

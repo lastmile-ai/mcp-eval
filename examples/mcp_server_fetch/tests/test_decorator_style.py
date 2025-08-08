@@ -2,14 +2,15 @@
 
 import mcp_eval
 from mcp_eval import task, setup, teardown, parametrize
-from mcp_eval import (
+from mcp_eval.evaluators import (
     ToolWasCalled,
     ResponseContains,
     LLMJudge,
     ToolSuccessRate,
     MaxIterations,
+    ToolOutputMatches,
+    PathEfficiency,
 )
-from mcp_eval.evaluators.builtin import ToolOutputMatches, PathEfficiency
 from mcp_eval.session import TestAgent, TestSession
 
 

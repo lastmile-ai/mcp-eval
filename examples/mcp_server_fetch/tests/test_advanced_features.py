@@ -3,7 +3,7 @@
 import mcp_eval
 from mcp_eval import task, setup
 from mcp_eval import ToolWasCalled, LLMJudge, ToolSequence
-from mcp_eval.evaluators.builtin import EvaluatorResult
+from mcp_eval.evaluators import EvaluatorResult
 from mcp_eval.session import TestAgent, TestSession
 
 

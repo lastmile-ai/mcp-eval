@@ -2,7 +2,7 @@
 
 import mcp_eval
 from mcp_eval import task, setup
-from mcp_eval.evaluators.builtin import (
+from mcp_eval.evaluators import (
     STANDARD_CRITERIA,
     MultiCriteriaJudge,
     EvaluationCriterion,
@@ -19,7 +19,7 @@ def configure_multi_criteria_tests():
 @task("Test MultiCriteriaJudge with standard criteria")
 async def test_standard_criteria_evaluation(agent: TestAgent, session: TestSession):
     """Test MultiCriteriaJudge using standard evaluation criteria."""
-    input = "Say 'hello my name is Sam. I am 15 years old. I love to play futsal and eat mee pok' in chinese"
+    input = "Fetch https://httpbin.org/json and explain what type of data it returns"
     response = await agent.generate_str(input)
 
     # Create custom criteria for web content evaluation

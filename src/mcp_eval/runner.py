@@ -9,17 +9,18 @@ import typer
 from rich.console import Console
 from rich.live import Live
 
-from mcp_eval.reporting import generate_failure_message
+from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.session import TestAgent, TestSession
 
 from .core import TestResult, _setup_functions, _teardown_functions
 from .datasets import Dataset
-from .reports import EvaluationReport
+from .report_generation.models import EvaluationReport
 from .report_generation import (
     generate_combined_summary,
     generate_combined_markdown_report,
     generate_combined_html_report,
 )
+from .report_generation.utils import load_config_info
 from .report_generation.console import (
     pad,
     print_failure_details,
@@ -409,12 +410,20 @@ async def _run_async(
                 json.dump(combined_report, f, indent=2, default=str)
             console.print(f"JSON report saved to {json_report}", style="blue")
 
+        # Load config to get output directory for test reports
+        config_info = load_config_info()
+        output_dir = "./test-reports"  # default
+        if config_info and "reporting" in config_info:
+            output_dir = config_info["reporting"].get("output_dir", "./test-reports")
+
         if markdown_report:
-            generate_combined_markdown_report(combined_report, markdown_report)
+            generate_combined_markdown_report(
+                combined_report, markdown_report, output_dir=output_dir
+            )
             console.print(f"Markdown report saved to {markdown_report}", style="blue")
 
         if html_report:
-            generate_combined_html_report(combined_report, html_report)
+            generate_combined_html_report(combined_report, html_report, output_dir)
             console.print(f"HTML report saved to {html_report}", style="blue")
 
     # Exit with error if any tests failed

@@ -10,7 +10,7 @@ from mcp_eval.config import use_server, use_agent, use_llm_factory
 
 # Modern Evaluator System (preferred approach)
 from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
-from mcp_eval.evaluators.builtin import (
+from mcp_eval.evaluators import (
     ToolWasCalled,
     ToolSequence,
     ResponseContains,
@@ -25,7 +25,7 @@ from mcp_eval.evaluators.builtin import (
 from mcp_eval.generation import generate_dataset
 
 # Extensibility
-from mcp_eval.evaluators.builtin import register_evaluator
+from mcp_eval.evaluators import register_evaluator
 from mcp_eval.metrics import register_metric
 
 __all__ = [
