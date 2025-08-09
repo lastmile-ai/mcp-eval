@@ -4,7 +4,7 @@ import asyncio
 import importlib.util
 import inspect
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Text
 import typer
 from rich.console import Console
 from rich.live import Live
@@ -387,7 +387,7 @@ async def _run_async(
 
     # Generate combined summary for other reports
     if dataset_reports:
-        console.print(f"\n{'=' * 80}")
+        console.print(Text(console.width * "="))
         generate_combined_summary(test_results, dataset_reports, console)
 
     # Generate reports
