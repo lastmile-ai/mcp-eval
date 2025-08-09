@@ -1,9 +1,8 @@
 """Console output formatting for mcp-eval test results."""
 
-from typing import List, Dict, Any, Literal
+from typing import List, Dict, Literal
 from rich.console import Console
 from rich.text import Text
-from rich.live import Live
 from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.columns import Columns
@@ -13,7 +12,9 @@ from ..core import TestResult
 from .models import EvaluationReport, CaseResult
 
 
-def pad(text: str, char: str = "=", console: Console = None, length: int = None) -> Text:
+def pad(
+    text: str, char: str = "=", console: Console = None, length: int = None
+) -> Text:
     """Add padding to text for console output."""
     # Use provided length, or console width if available, otherwise default to 80
     if length is None:
@@ -21,18 +22,18 @@ def pad(text: str, char: str = "=", console: Console = None, length: int = None)
             length = console.width
         else:
             length = 80
-    
+
     # Calculate padding, accounting for spaces around the text
     text_with_spaces = f" {text} "
     total_padding = length - len(text_with_spaces)
-    
+
     if total_padding < 0:
         # Text is too long, just return it with minimal padding
         return Text(text_with_spaces)
-    
+
     left_padding = total_padding // 2
     right_padding = total_padding - left_padding  # Handle odd numbers
-    
+
     padded_text = Text()
     padded_text.append(char * left_padding)
     padded_text.append(text_with_spaces)
@@ -194,16 +195,6 @@ class TestProgressDisplay:
                 dots.append(".", style="green")
             else:
                 dots.append("F", style="red")
-
-
-def run_tests_with_live_display(test_cases: List[Dict[str, Any]], test_runner_func):
-    """Run tests with live progress display showing pytest-style dots."""
-    display = TestProgressDisplay(len(test_cases))
-
-    with Live(display.create_display(), refresh_per_second=10) as live:
-        results, failed_results = test_runner_func(test_cases, display, live)
-
-    return results, failed_results
 
 
 def generate_failure_message(result: "TestResult") -> str:
