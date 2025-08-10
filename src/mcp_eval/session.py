@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 from contextlib import asynccontextmanager
+import asyncio
 
 
 from mcp_agent.app import MCPApp
@@ -105,6 +106,21 @@ class TestAgent:
         """Add evaluator to run at session end."""
         self._session.add_deferred_evaluator(evaluator, name)
 
+    def assert_that(
+        self,
+        evaluator: Evaluator,
+        name: Optional[str] = None,
+        response: Optional[str] = None,
+        **kwargs,
+    ) -> None:
+        """Unified assertion API delegated to the session."""
+        self._session.assert_that(
+            evaluator,
+            name=name,
+            response=response,
+            **kwargs,
+        )
+
     # Convenience properties
     @property
     def agent(self) -> Agent:
@@ -157,6 +173,8 @@ class TestSession:
         self._metrics: Optional[TestMetrics] = None
         self._span_tree: Optional[SpanTree] = None
         self._results: List[EvaluationRecord] = []
+        # Track async evaluations scheduled to run immediately (no explicit awaits in tests)
+        self._pending_async_evaluations: list[asyncio.Task] = []
 
     async def __aenter__(self) -> TestAgent:
         """Initialize the test session with OTEL tracing as source of truth."""
@@ -237,6 +255,10 @@ class TestSession:
         """Clean up session and process final metrics."""
         logger.info(f"TestSession.__aexit__ called for test {self.test_name}")
         try:
+            # First ensure any immediately-scheduled async evaluations are completed
+            if self._pending_async_evaluations:
+                await asyncio.gather(*self._pending_async_evaluations, return_exceptions=True)
+
             # Process deferred evaluators before cleanup to ensure traces are available
             await self._process_deferred_evaluators()
 
@@ -329,6 +351,58 @@ class TestSession:
             )
             self._record_evaluation_result(name, error_result, str(e))
             raise
+
+    def assert_that(
+        self,
+        evaluator: Evaluator,
+        name: Optional[str] = None,
+        response: Optional[str] = None,
+        *,
+        input: str | None = None,
+        when: str = "auto",
+    ) -> None:
+        """Unified API to record an assertion without worrying about timing.
+
+        Behavior:
+        - If response is provided:
+            - Sync evaluators run immediately and record results.
+            - Async evaluators are scheduled immediately and recorded automatically
+              without requiring explicit await; completion is awaited at session end.
+        - If response is not provided:
+            - The evaluator is deferred and will run at session end with full metrics.
+
+        Args:
+            evaluator: Evaluator instance
+            name: Optional name for the evaluation (defaults to class name)
+            response: Optional response/output to evaluate against
+            input: Optional input/prompt that produced the response
+            when: "auto" (default), "now", or "end" to override scheduling
+        """
+        eval_name = name or evaluator.__class__.__name__
+
+        # Force deferral if requested explicitly
+        if when == "end" or (when == "auto" and response is None):
+            # If a response is provided but we still defer, preserve it so the evaluator
+            # can access it at processing time
+            self._evaluators.append((evaluator, response if response is not None else None, eval_name))
+            return
+
+        # At this point we should evaluate "now" (immediate)
+        if hasattr(evaluator, "evaluate_sync"):
+            # Synchronous immediate evaluation
+            self.evaluate_now(evaluator, response or "", eval_name)
+            return
+
+        # Async immediate evaluation: schedule and record automatically
+        async def _run_async_now():
+            try:
+                await self.evaluate_now_async(evaluator, response or "", eval_name, input=input)
+            except Exception:
+                # evaluate_now_async already records an error result; just ensure exception doesn't bubble
+                return
+
+        task = asyncio.create_task(_run_async_now())
+        self._pending_async_evaluations.append(task)
 
     async def _process_deferred_evaluators(self):
         """Process all deferred evaluators using final OTEL metrics."""

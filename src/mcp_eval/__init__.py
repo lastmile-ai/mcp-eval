@@ -4,6 +4,7 @@
 from mcp_eval.core import task, setup, teardown, parametrize
 from mcp_eval.datasets import Case, Dataset, generate_test_cases
 from mcp_eval.session import TestAgent, TestSession, test_session
+from mcp_eval.catalog import Expect
 
 # Configuration
 from mcp_eval.config import use_server, use_agent, use_llm_factory
@@ -61,4 +62,6 @@ __all__ = [
     "TestSession",
     "TestAgent",
     "test_session",
+    # Discovery catalog
+    "Expect",
 ]

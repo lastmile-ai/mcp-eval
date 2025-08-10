@@ -43,7 +43,7 @@ def contains(
     """Assert that response contains text."""
     session = _get_session() if session is None else session
     evaluator = ResponseContains(text=text, case_sensitive=case_sensitive)
-    session.evaluate_now(evaluator, response, f"contains_{text}")
+    session.assert_that(evaluator, name=f"contains_{text}", response=response)
 
 
 def not_contains(
@@ -51,56 +51,50 @@ def not_contains(
 ):
     """Assert that response does not contain text."""
     session = _get_session() if session is None else session
-
     evaluator = NotContains(text=text, case_sensitive=case_sensitive)
-    session.evaluate_now(evaluator, response, f"not_contains_{text}")
+    session.assert_that(evaluator, name=f"not_contains_{text}", response=response)
 
 
 def matches_regex(session: TestSession, response: str, pattern: str):
     """Assert that response matches regex pattern."""
     session = _get_session() if session is None else session
     evaluator = ResponseContains(text=pattern, regex=True)
-    session.evaluate_now(evaluator, response, "matches_regex")
+    session.assert_that(evaluator, name="matches_regex", response=response)
 
 
 def tool_was_called(session: TestSession, tool_name: str, min_times: int = 1):
     """Assert that a tool was called."""
     session = _get_session() if session is None else session
     evaluator = ToolWasCalled(tool_name=tool_name, min_times=min_times)
-    session.add_deferred_evaluator(evaluator, f"tool_called_{tool_name}")
+    session.assert_that(evaluator, name=f"tool_called_{tool_name}")
 
 
 def tool_was_called_with(session: TestSession, tool_name: str, arguments: dict):
     """Assert that a tool was called with specific arguments."""
     session = _get_session() if session is None else session
-
     evaluator = ToolCalledWith(tool_name, arguments)
-    session.add_deferred_evaluator(evaluator, f"tool_called_with_{tool_name}")
+    session.assert_that(evaluator, name=f"tool_called_with_{tool_name}")
 
 
 def tool_call_count(session: TestSession, tool_name: str, expected_count: int):
     """Assert exact tool call count."""
     session = _get_session() if session is None else session
-
     evaluator = ExactToolCount(tool_name, expected_count)
-    session.add_deferred_evaluator(
-        evaluator, f"tool_count_{tool_name}_{expected_count}"
-    )
+    session.assert_that(evaluator, name=f"tool_count_{tool_name}_{expected_count}")
 
 
 def tool_call_succeeded(session: TestSession, tool_name: str):
     """Assert that tool calls succeeded."""
     session = _get_session() if session is None else session
     evaluator = ToolSuccessRate(min_rate=1.0, tool_name=tool_name)
-    session.add_deferred_evaluator(evaluator, f"tool_succeeded_{tool_name}")
+    session.assert_that(evaluator, name=f"tool_succeeded_{tool_name}")
 
 
 def tool_call_failed(session: TestSession, tool_name: str):
     """Assert that tool calls failed."""
     session = _get_session() if session is None else session
-
     evaluator = ToolFailed(min_rate=0.0, tool_name=tool_name)
-    session.add_deferred_evaluator(evaluator, f"tool_failed_{tool_name}")
+    session.assert_that(evaluator, name=f"tool_failed_{tool_name}")
 
 
 def tool_success_rate(
@@ -109,21 +103,20 @@ def tool_success_rate(
     """Assert minimum tool success rate."""
     session = _get_session() if session is None else session
     evaluator = ToolSuccessRate(min_rate=min_rate, tool_name=tool_name)
-    session.add_deferred_evaluator(evaluator, f"success_rate_{min_rate}")
+    session.assert_that(evaluator, name=f"success_rate_{min_rate}")
 
 
 def completed_within(session: TestSession, max_iterations: int):
     """Assert task completed within max iterations - explicit session passing."""
     evaluator = MaxIterations(max_iterations=max_iterations)
-    session.add_deferred_evaluator(evaluator, f"max_iterations_{max_iterations}")
+    session.assert_that(evaluator, name=f"max_iterations_{max_iterations}")
 
 
 def response_time_under(session: TestSession, max_ms: float):
     """Assert response time is under threshold."""
     session = _get_session() if session is None else session
-
     evaluator = ResponseTimeCheck(max_ms)
-    session.add_deferred_evaluator(evaluator, f"response_time_under_{max_ms}")
+    session.assert_that(evaluator, name=f"response_time_under_{max_ms}")
 
 
 async def judge(
@@ -132,7 +125,8 @@ async def judge(
     """Use LLM to judge response quality."""
     session = _get_session() if session is None else session
     evaluator = LLMJudge(rubric=rubric, min_score=min_score)
-    await session.evaluate_now_async(evaluator, response, f"judge_{rubric[:20]}")
+    # Use unified API; it will schedule async eval now and await at session end.
+    session.assert_that(evaluator, name=f"judge_{rubric[:20]}", response=response)
 
 
 def tool_output_matches(
@@ -182,7 +176,7 @@ def tool_output_matches(
         case_sensitive=case_sensitive,
         call_index=call_index,
     )
-    session.add_deferred_evaluator(evaluator, f"tool_output_{tool_name}")
+    session.assert_that(evaluator, name=f"tool_output_{tool_name}")
 
 
 def path_efficiency(
@@ -235,4 +229,4 @@ def path_efficiency(
         tool_usage_limits=tool_usage_limits,
         default_tool_limit=default_tool_limit,
     )
-    session.add_deferred_evaluator(evaluator, "path_efficiency")
+    session.assert_that(evaluator, name="path_efficiency")
