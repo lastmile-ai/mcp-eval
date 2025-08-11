@@ -7,7 +7,7 @@ from mcp_eval.evaluators.tool_was_called import ToolWasCalled
 
 class ExactToolCount(ToolWasCalled):
     """Evaluator that checks for an exact number of tool calls."""
-    
+
     def __init__(self, tool_name: str, expected_count: int):
         super().__init__(tool_name)
         self.expected_count = expected_count

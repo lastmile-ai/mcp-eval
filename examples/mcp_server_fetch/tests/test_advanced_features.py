@@ -3,6 +3,7 @@
 import mcp_eval
 from mcp_eval import Expect
 from mcp_eval import task, setup
+
 # Note: test code references Expect.* helpers for evaluators
 from mcp_eval.evaluators import EvaluatorResult
 from mcp_eval.session import TestAgent, TestSession
@@ -95,7 +96,9 @@ async def test_enhanced_llm_judge(agent: TestAgent, session: TestSession):
     )
 
     # Basic tool check
-    session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called_for_analysis")
+    session.assert_that(
+        Expect.tools.was_called("fetch"), name="fetch_called_for_analysis"
+    )
 
     # Enhanced LLM judge with structured output
     enhanced_judge = Expect.judge.llm(
@@ -111,7 +114,9 @@ async def test_enhanced_llm_judge(agent: TestAgent, session: TestSession):
         require_reasoning=True,
     )
 
-    session.assert_that(enhanced_judge, name="detailed_content_analysis", response=response)
+    session.assert_that(
+        enhanced_judge, name="detailed_content_analysis", response=response
+    )
 
 
 @task("Test fetch server capabilities under load")
@@ -134,7 +139,9 @@ async def test_fetch_performance_analysis(agent: TestAgent, session: TestSession
         min_score=0.8,
     )
 
-    session.assert_that(performance_judge, name="multi_url_performance", response=response)
+    session.assert_that(
+        performance_judge, name="multi_url_performance", response=response
+    )
 
     # Check final metrics
     metrics = session.get_metrics()
@@ -195,4 +202,6 @@ async def test_comprehensive_error_recovery(agent: TestAgent, session: TestSessi
         include_input=True,
     )
 
-    session.assert_that(error_recovery_judge, name="comprehensive_error_recovery", response=response)
+    session.assert_that(
+        error_recovery_judge, name="comprehensive_error_recovery", response=response
+    )

@@ -9,6 +9,7 @@ from mcp_eval.session import TestAgent, TestSession
 @setup
 def configure_decorator_tests():
     """Configure mcp-eval for decorator-style tests."""
+    # Prefer setting server_names on the Agent/AgentSpec; use_server kept for back-compat
     mcp_eval.use_server("fetch")
 
 
@@ -24,14 +25,21 @@ async def test_basic_fetch_decorator(agent: TestAgent, session: TestSession):
     response = await agent.generate_str("Fetch the content from https://example.com")
 
     # Modern evaluator approach - unified assertion API
-    session.assert_that(Expect.tools.was_called("fetch"), name="fetch_tool_called", response=response)
+    session.assert_that(
+        Expect.tools.was_called("fetch"), name="fetch_tool_called", response=response
+    )
 
     session.assert_that(
-        Expect.content.contains("Example Domain"), name="contains_domain_text", response=response
+        Expect.content.contains("Example Domain"),
+        name="contains_domain_text",
+        response=response,
     )
 
     # Deferred evaluation for tool success
-    session.assert_that(Expect.tools.success_rate(min_rate=1.0, tool_name="fetch"), name="fetch_success_rate")
+    session.assert_that(
+        Expect.tools.success_rate(min_rate=1.0, tool_name="fetch"),
+        name="fetch_success_rate",
+    )
 
 
 @task("Test tool output")
@@ -61,7 +69,9 @@ async def test_content_extraction_decorator(agent: TestAgent, session: TestSessi
     )
 
     # Tool usage check
-    session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called_for_extraction")
+    session.assert_that(
+        Expect.tools.was_called("fetch"), name="fetch_called_for_extraction"
+    )
 
     # LLM judge for extraction quality
     extraction_judge = Expect.judge.llm(
@@ -71,7 +81,9 @@ async def test_content_extraction_decorator(agent: TestAgent, session: TestSessi
         require_reasoning=True,
     )
 
-    session.assert_that(extraction_judge, name="extraction_quality_assessment", response=response)
+    session.assert_that(
+        extraction_judge, name="extraction_quality_assessment", response=response
+    )
 
 
 @task("Test efficiency and iteration limits")
@@ -82,7 +94,9 @@ async def test_efficiency_decorator(agent: TestAgent, session: TestSession):
     )
 
     # Should complete efficiently
-    session.assert_that(Expect.performance.max_iterations(max_iterations=3), name="efficiency_check")
+    session.assert_that(
+        Expect.performance.max_iterations(max_iterations=3), name="efficiency_check"
+    )
 
     session.assert_that(Expect.tools.was_called("fetch"), name="fetch_completed")
 
@@ -108,7 +122,10 @@ async def test_content_types_decorator(
         f"Fetch {url} and identify what type of content it contains",
     )
 
-    session.assert_that(Expect.tools.was_called("fetch"), name=f"fetch_called_for_{content_type.lower()}")
+    session.assert_that(
+        Expect.tools.was_called("fetch"),
+        name=f"fetch_called_for_{content_type.lower()}",
+    )
 
     session.assert_that(
         Expect.content.contains(expected_indicator, case_sensitive=False),
@@ -137,7 +154,9 @@ async def test_error_recovery_decorator(agent: TestAgent, session: TestSession):
         min_score=0.8,
     )
 
-    session.assert_that(recovery_judge, name="error_recovery_demonstration", response=response)
+    session.assert_that(
+        recovery_judge, name="error_recovery_demonstration", response=response
+    )
 
 
 @task("Test path efficiency")

@@ -10,9 +10,9 @@ from .base import calculate_overall_stats
 
 
 def generate_combined_summary(
-    test_results: List[TestResult], 
+    test_results: List[TestResult],
     dataset_reports: List[EvaluationReport],
-    console: Console
+    console: Console,
 ) -> None:
     """Generate a combined summary of all results."""
     table = Table(title="Combined Test Results Summary")

@@ -7,7 +7,7 @@ from mcp_eval.evaluators.tool_was_called import ToolWasCalled
 
 class ToolCalledWith(ToolWasCalled):
     """Evaluator that checks if a tool was called with specific arguments."""
-    
+
     def __init__(self, tool_name: str, expected_args: dict):
         super().__init__(tool_name)
         self.expected_args = expected_args

@@ -43,3 +43,38 @@ After installing dependencies with `uv pip install`, you can run commands direct
 # Run the example test file
 mcp_eval run usage_example.py
 ```
+
+## Defining agents
+
+- Prefer defining agents declaratively via mcp-agent AgentSpecs in your config or in the `subagents.search_paths`, then use `agent_spec_name` in `test_session`.
+- For complex programmatic agents, pass `initial_agent` and optionally `initial_llm` into `test_session`.
+
+Example AgentSpec YAML:
+
+```yaml
+agents:
+  - name: Fetcher
+    instruction: You can fetch URLs and summarise content concisely.
+    server_names: ["fetch"]
+```
+
+Usage (decorator style):
+
+```python
+async with test_session("spec_based", agent_spec_name="Fetcher") as agent:
+    result = await agent.generate_str("Fetch https://example.com")
+```
+
+Usage (pytest markers):
+
+```python
+import pytest
+
+@pytest.mark.mcp_agent("Fetcher")
+async def test_fetch_with_spec_name(mcp_agent, mcp_session):
+    resp = await mcp_agent.generate_str("Fetch https://example.com")
+
+@pytest.mark.mcp_agent(custom_agent_object)
+async def test_fetch_with_custom_agent(mcp_agent, mcp_session):
+    resp = await mcp_agent.generate_str("Fetch https://example.com")
+```

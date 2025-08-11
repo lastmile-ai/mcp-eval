@@ -1,10 +1,35 @@
-"""Dataset generation using LLMs."""
+"""Test scenario generation and code emission for MCP servers.
 
-from typing import List, Dict, Any
+This module provides two complementary approaches:
+- Structured, agent-driven generation of scenarios and assertion specs
+- Backward-compatible simple dataset generation
+"""
+
+from typing import List, Dict, Any, Optional, Union, Annotated, Literal
 from dataclasses import dataclass
 
+from pydantic import BaseModel, Field
+import json
+
 from mcp_eval.datasets import Case, Dataset
-from mcp_eval.evaluators import ToolWasCalled, ResponseContains, LLMJudge
+from mcp_eval.evaluators import (
+    ToolWasCalled,
+    ResponseContains,
+    LLMJudge,
+    ToolCalledWith,
+    ToolOutputMatches,
+    MaxIterations,
+    ResponseTimeCheck,
+    ToolSequence,
+)
+
+# mcp-agent integration for agent-driven scenario generation
+from mcp_agent.app import MCPApp
+from mcp_agent.agents.agent import Agent
+from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
+from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
+from jinja2 import Environment, FileSystemLoader
+from pathlib import Path
 
 
 @dataclass
@@ -205,4 +230,362 @@ async def generate_dataset(
             "generator_version": "0.2.0",
             "extra_instructions": extra_instructions,
         },
+    )
+
+
+# =====================
+# Agent-driven generation
+# =====================
+
+
+class ToolSchema(BaseModel):
+    name: str
+    description: Optional[str] = None
+    input_schema: Optional[Dict[str, Any]] = Field(
+        default=None, description="JSON Schema for tool input"
+    )
+
+
+class ToolWasCalledSpec(BaseModel):
+    kind: Literal["tool_was_called"] = Field("tool_was_called", const=True)
+    tool_name: str
+    min_times: int = 1
+
+
+class ToolCalledWithSpec(BaseModel):
+    kind: Literal["tool_called_with"] = Field("tool_called_with", const=True)
+    tool_name: str
+    arguments: Dict[str, Any]
+
+
+class ResponseContainsSpec(BaseModel):
+    kind: Literal["response_contains"] = Field("response_contains", const=True)
+    text: str
+    case_sensitive: bool = False
+
+
+class NotContainsSpec(BaseModel):
+    kind: Literal["not_contains"] = Field("not_contains", const=True)
+    text: str
+    case_sensitive: bool = False
+
+
+class ToolOutputMatchesSpec(BaseModel):
+    kind: Literal["tool_output_matches"] = Field("tool_output_matches", const=True)
+    tool_name: str
+    expected_output: Union[Dict[str, Any], str, int, float, List[Any]]
+    field_path: Optional[str] = None
+    match_type: str = Field("exact", description="exact|contains|regex|partial")
+    case_sensitive: bool = True
+    call_index: int = -1
+
+
+class MaxIterationsSpec(BaseModel):
+    kind: Literal["max_iterations"] = Field("max_iterations", const=True)
+    max_iterations: int
+
+
+class ResponseTimeUnderSpec(BaseModel):
+    kind: Literal["response_time_under"] = Field("response_time_under", const=True)
+    ms: float
+
+
+class LLMJudgeSpec(BaseModel):
+    kind: Literal["llm_judge"] = Field("llm_judge", const=True)
+    rubric: str
+    min_score: float = 0.8
+
+
+class ToolSequenceSpec(BaseModel):
+    kind: Literal["tool_sequence"] = Field("tool_sequence", const=True)
+    sequence: List[str]
+    allow_other_calls: bool = False
+
+
+AssertionSpec = Annotated[
+    Union[
+        ToolWasCalledSpec,
+        ToolCalledWithSpec,
+        ResponseContainsSpec,
+        NotContainsSpec,
+        ToolOutputMatchesSpec,
+        MaxIterationsSpec,
+        ResponseTimeUnderSpec,
+        LLMJudgeSpec,
+        ToolSequenceSpec,
+    ],
+    Field(discriminator="kind"),
+]
+
+
+class ScenarioSpec(BaseModel):
+    name: str
+    description: Optional[str] = None
+    prompt: str
+    expected_output: Optional[str] = None
+    assertions: List[AssertionSpec]
+
+
+class ScenarioBundle(BaseModel):
+    scenarios: List[ScenarioSpec]
+
+
+class AssertionBundle(BaseModel):
+    assertions: List[AssertionSpec]
+
+
+def _resolve_llm_factory(llm_factory: Union[str, type]) -> type:
+    if isinstance(llm_factory, str):
+        if "anthropic" in llm_factory.lower() or "claude" in llm_factory.lower():
+            return AnthropicAugmentedLLM
+        if "openai" in llm_factory.lower() or "gpt" in llm_factory.lower():
+            return OpenAIAugmentedLLM
+        # Default to Anthropic for robustness
+        return AnthropicAugmentedLLM
+    return llm_factory
+
+
+def _assertion_catalog_prompt() -> str:
+    return (
+        "You can choose from these assertion types (use discriminated 'kind' field):\n"
+        "- tool_was_called: {tool_name, min_times} -> verify tool usage\n"
+        "- tool_called_with: {tool_name, arguments} -> verify arguments\n"
+        "- response_contains: {text, case_sensitive?} -> content contains\n"
+        "- not_contains: {text, case_sensitive?} -> content excludes\n"
+        "- tool_output_matches: {tool_name, expected_output, field_path?, match_type?, case_sensitive?, call_index?}\n"
+        "- max_iterations: {max_iterations} -> iteration budget\n"
+        "- response_time_under: {ms} -> latency budget\n"
+        "- llm_judge: {rubric, min_score?} -> LLM evaluation\n"
+        "- tool_sequence: {sequence: [..], allow_other_calls?} -> path\n"
+    )
+
+
+async def generate_scenarios_with_agent(
+    tools: List[Dict[str, Any]],
+    *,
+    n_examples: int = 8,
+    llm_factory: Union[str, type] = "AnthropicAugmentedLLM",
+    model: Optional[str] = None,
+) -> List[ScenarioSpec]:
+    """Use an mcp-agent Agent to generate structured scenarios and assertion specs."""
+    app = MCPApp()
+    async with app.run() as running:
+        # Minimal agent just for content generation
+        agent = Agent(
+            name="test_generator",
+            instruction="You design high-quality tests.",
+            server_names=[],
+            context=running.context,
+        )
+        factory = _resolve_llm_factory(llm_factory)
+        llm = await agent.attach_llm(factory)
+        if model and hasattr(llm, "set_model"):
+            try:
+                llm.set_model(model)
+            except Exception:
+                pass
+
+        # Build prompt with tool schemas and assertion catalog
+        tool_lines = []
+        for t in tools:
+            nm = t.get("name") or "unknown"
+            desc = t.get("description") or ""
+            input_schema = (
+                t.get("input_schema") or t.get("inputSchema") or t.get("input") or {}
+            )
+            tool_lines.append(
+                {"name": nm, "description": desc, "input_schema": input_schema}
+            )
+
+        guidance = (
+            "You are generating test scenarios for an MCP server. Each scenario is a user-facing prompt to the agent.\n"
+            "For each, propose appropriate assertions using the available assertion catalog.\n"
+            "Include path/efficiency or judge assertions when beneficial.\n"
+        )
+
+        payload = {
+            "tools": tool_lines,
+            "n_examples": n_examples,
+            "assertion_catalog": _assertion_catalog_prompt(),
+            "instructions": guidance,
+        }
+
+        prompt = (
+            "Design high-quality test scenarios for the tools below. Return a JSON object that adheres to the provided Pydantic schema.\n"
+            + json.dumps(payload, indent=2)
+        )
+
+        bundle = await llm.generate_structured(prompt, response_model=ScenarioBundle)
+        return bundle.scenarios
+
+
+async def refine_assertions_with_agent(
+    scenarios: List[ScenarioSpec],
+    tools: List[Dict[str, Any]],
+    *,
+    llm_factory: Union[str, type] = "AnthropicAugmentedLLM",
+    model: Optional[str] = None,
+) -> List[ScenarioSpec]:
+    """For each scenario, ask an agent to propose additional assertions using available tool schemas and the assertion catalog."""
+    if not scenarios:
+        return scenarios
+    app = MCPApp()
+    async with app.run() as running:
+        agent = Agent(
+            name="assertion_refiner",
+            instruction="You propose precise assertions.",
+            server_names=[],
+            context=running.context,
+        )
+        factory = _resolve_llm_factory(llm_factory)
+        llm = await agent.attach_llm(factory)
+        if model and hasattr(llm, "set_model"):
+            try:
+                llm.set_model(model)
+            except Exception:
+                pass
+
+        tool_lines = []
+        for t in tools:
+            tool_lines.append(
+                {
+                    "name": t.get("name"),
+                    "description": t.get("description"),
+                    "input_schema": t.get("input_schema") or {},
+                }
+            )
+
+        updated: List[ScenarioSpec] = []
+        for s in scenarios:
+            payload = {
+                "scenario": {
+                    "name": s.name,
+                    "prompt": s.prompt,
+                    "expected_output": s.expected_output,
+                },
+                "tools": tool_lines,
+                "assertion_catalog": _assertion_catalog_prompt(),
+                "guidance": "Propose additional assertions that increase coverage: argument checks, tool outputs, sequences, performance and judge where applicable.",
+            }
+            prompt = (
+                "Given the scenario and tool specs, return an AssertionBundle JSON following the schema.\n"
+                + json.dumps(payload, indent=2)
+            )
+            try:
+                bundle = await llm.generate_structured(
+                    prompt, response_model=AssertionBundle
+                )
+                # Merge assertions (append; naive de-dupe by kind+repr)
+                have = {f"{a.kind}:{repr(a)}" for a in s.assertions}
+                merged = list(s.assertions)
+                for a in bundle.assertions:
+                    key = f"{a.kind}:{repr(a)}"
+                    if key not in have:
+                        merged.append(a)
+                        have.add(key)
+                s.assertions = merged
+            except Exception:
+                pass
+            updated.append(s)
+        return updated
+
+
+def _spec_to_evaluator(spec: AssertionSpec):
+    kind = getattr(spec, "kind", None)
+    if kind == "tool_was_called":
+        return ToolWasCalled(tool_name=spec.tool_name, min_times=spec.min_times)
+    if kind == "tool_called_with":
+        return ToolCalledWith(spec.tool_name, spec.arguments)
+    if kind == "response_contains":
+        return ResponseContains(text=spec.text, case_sensitive=spec.case_sensitive)
+    if kind == "not_contains":
+        from mcp_eval.evaluators import NotContains
+
+        return NotContains(text=spec.text, case_sensitive=spec.case_sensitive)
+    if kind == "tool_output_matches":
+        return ToolOutputMatches(
+            tool_name=spec.tool_name,
+            expected_output=spec.expected_output,
+            field_path=spec.field_path,
+            match_type=spec.match_type,
+            case_sensitive=spec.case_sensitive,
+            call_index=spec.call_index,
+        )
+    if kind == "max_iterations":
+        return MaxIterations(max_iterations=spec.max_iterations)
+    if kind == "response_time_under":
+        return ResponseTimeCheck(max_ms=spec.ms)
+    if kind == "llm_judge":
+        return LLMJudge(rubric=spec.rubric, min_score=spec.min_score)
+    if kind == "tool_sequence":
+        return ToolSequence(spec.sequence, allow_other_calls=spec.allow_other_calls)
+    raise ValueError(f"Unknown assertion spec kind: {kind}")
+
+
+def scenarios_to_cases(scenarios: List[ScenarioSpec]) -> List[Case]:
+    cases: List[Case] = []
+    for s in scenarios:
+        evaluators = []
+        for a in s.assertions:
+            try:
+                evaluators.append(_spec_to_evaluator(a))
+            except Exception:
+                continue
+        cases.append(
+            Case(
+                name=s.name,
+                inputs=s.prompt,
+                expected_output=s.expected_output,
+                metadata={"description": s.description} if s.description else {},
+                evaluators=evaluators,
+            )
+        )
+    return cases
+
+
+def _create_jinja_env() -> Environment:
+    template_dir = Path(__file__).resolve().parent / "templates"
+    env = Environment(
+        loader=FileSystemLoader(str(template_dir)),
+        autoescape=False,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+
+    def py_ident(value: str) -> str:
+        import re
+
+        s = re.sub(r"[^0-9a-zA-Z_]+", "_", value)
+        if not s:
+            s = "generated"
+        if s[0].isdigit():
+            s = f"gen_{s}"
+        return s
+
+    env.filters["py_ident"] = py_ident
+    return env
+
+
+def render_pytest_tests(scenarios: List[ScenarioSpec], server_name: str) -> str:
+    env = _create_jinja_env()
+    tmpl = env.get_template("test_pytest_generated.py.j2")
+    return tmpl.render(scenarios=scenarios, server_name=server_name)
+
+
+def render_decorator_tests(scenarios: List[ScenarioSpec], server_name: str) -> str:
+    env = _create_jinja_env()
+    tmpl = env.get_template("test_decorators_generated.py.j2")
+    return tmpl.render(scenarios=scenarios, server_name=server_name)
+
+
+def dataset_from_scenarios(scenarios: List[ScenarioSpec], server_name: str) -> Dataset:
+    cases: List[Case] = []
+    for s in scenarios:
+        cases.append(
+            Case(name=s.name, inputs=s.prompt, expected_output=s.expected_output)
+        )
+    return Dataset(
+        name=f"Generated dataset for {server_name}",
+        cases=cases,
+        server_name=server_name,
     )

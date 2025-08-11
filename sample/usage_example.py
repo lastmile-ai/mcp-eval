@@ -1,20 +1,17 @@
 import asyncio
 import mcp_eval
-from mcp_eval import task, setup, test_session, ToolWasCalled, LLMJudge, Case, Dataset
+from mcp_eval import task, setup, ToolWasCalled, LLMJudge, Case, Dataset
+from mcp_eval.core import with_agent
 from mcp_eval.evaluators.shared import EvaluatorResult
 from mcp_eval.session import TestAgent, TestSession
+from mcp_agent.agents.agent import Agent
+from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
 
 
 @setup
 def configure_tests():
+    # Prefer consolidated mcp-agent config; optional lightweight overrides
     mcp_eval.use_server("fetch")
-    mcp_eval.use_agent(
-        {
-            "name": "enhanced_tester",
-            "instruction": "You can fetch web content and analyze it thoroughly.",
-            "llm_factory": "AnthropicAugmentedLLM",
-        }
-    )
 
 
 @task("Test with enhanced LLM judge")
@@ -113,8 +110,21 @@ async def dataset_with_enhanced_features():
     """Dataset evaluation using enhanced features."""
 
     async def enhanced_fetch_task(inputs: str) -> str:
-        async with test_session("fetch", "enhanced_task") as agent:
+        # Example A: Programmatic Agent + LLM via with_agent per-test override
+        prog_agent = Agent(
+            name="prog",
+            instruction="You can fetch and summarize.",
+            server_names=["fetch"],
+        )
+        prog_llm = OpenAIAugmentedLLM(agent=prog_agent)
+
+        @with_agent(prog_llm)
+        @task("enhanced_task_prog")
+        async def run(agent: TestAgent, session: TestSession):
             return await agent.generate_str(inputs)
+
+        result = await run()
+        return result.output if hasattr(result, "output") else ""
 
     # Run evaluation
     report = await dataset.evaluate(enhanced_fetch_task, max_concurrency=2)

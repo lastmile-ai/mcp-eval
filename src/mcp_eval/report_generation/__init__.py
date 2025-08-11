@@ -18,7 +18,7 @@ __all__ = [
     "generate_failure_message",
     # Report generators
     "generate_combined_summary",
-    "generate_combined_markdown_report", 
+    "generate_combined_markdown_report",
     "generate_combined_html_report",
     "format_config_for_html",
 ]

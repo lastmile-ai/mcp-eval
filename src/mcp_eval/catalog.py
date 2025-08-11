@@ -66,7 +66,9 @@ class Tools:
         return ExactToolCount(tool_name, expected_count)
 
     @staticmethod
-    def success_rate(min_rate: float, tool_name: Optional[str] = None) -> ToolSuccessRate:
+    def success_rate(
+        min_rate: float, tool_name: Optional[str] = None
+    ) -> ToolSuccessRate:
         return ToolSuccessRate(min_rate=min_rate, tool_name=tool_name)
 
     @staticmethod
@@ -93,7 +95,9 @@ class Tools:
         )
 
     @staticmethod
-    def sequence(sequence: List[str], *, allow_other_calls: bool = False) -> ToolSequence:
+    def sequence(
+        sequence: List[str], *, allow_other_calls: bool = False
+    ) -> ToolSequence:
         return ToolSequence(sequence, allow_other_calls=allow_other_calls)
 
 
@@ -113,8 +117,19 @@ class Judge:
     """LLM judge options."""
 
     @staticmethod
-    def llm(rubric: str, *, min_score: float = 0.8, include_input: bool = False, require_reasoning: bool = True) -> LLMJudge:
-        return LLMJudge(rubric=rubric, min_score=min_score, include_input=include_input, require_reasoning=require_reasoning)
+    def llm(
+        rubric: str,
+        *,
+        min_score: float = 0.8,
+        include_input: bool = False,
+        require_reasoning: bool = True,
+    ) -> LLMJudge:
+        return LLMJudge(
+            rubric=rubric,
+            min_score=min_score,
+            include_input=include_input,
+            require_reasoning=require_reasoning,
+        )
 
     @staticmethod
     def multi_criteria(
@@ -192,5 +207,3 @@ __all__ = [
     "Judge",
     "Path",
 ]
-
-

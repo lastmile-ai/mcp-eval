@@ -79,7 +79,7 @@ fetch_dataset = Dataset(
 
 async def fetch_task_function(inputs: str) -> str:
     """Task function for dataset evaluation."""
-    async with test_session("fetch", "dataset_evaluation") as agent:
+    async with test_session("dataset_evaluation") as agent:
         return await agent.generate_str(inputs)
 
 

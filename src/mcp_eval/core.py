@@ -9,6 +9,9 @@ from dataclasses import dataclass
 
 from mcp_eval.session import TestSession
 from mcp_eval.config import get_current_config
+from mcp_agent.agents.agent import Agent
+from mcp_agent.agents.agent_spec import AgentSpec
+from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM
 
 if TYPE_CHECKING:
     from mcp_eval.evaluators import EvaluationRecord
@@ -80,7 +83,7 @@ def parametrize(param_names: str, values: List[Any]):
     return decorator
 
 
-def task(description: str = "", server: str = None):
+def task(description: str = ""):
     """Mark a function as an MCP evaluation task.
 
     The decorated function will receive (agent: TestAgent, session: TestSession)
@@ -100,12 +103,10 @@ def task(description: str = "", server: str = None):
             try:
                 # Get configuration
                 config = get_current_config()
-                server_name = server or config.get("default_server", "default")
                 agent_config = config.get("agent_config", {})
 
-                # Create unified session
+                # Create unified session – servers come from config defaults unless overridden via with_agent
                 session = TestSession(
-                    server_name=server_name,
                     test_name=func.__name__,
                     agent_config=agent_config,
                 )
@@ -131,7 +132,11 @@ def task(description: str = "", server: str = None):
                 return TestResult(
                     test_name=func.__name__,
                     description=description,
-                    server_name=server_name,
+                    server_name=",".join(session.agent.agent.server_names)
+                    if session.agent
+                    and getattr(session.agent, "agent", None)
+                    and getattr(session.agent.agent, "server_names", None)
+                    else "",
                     parameters=kwargs,
                     passed=session.all_passed(),
                     evaluation_results=session.get_results(),
@@ -143,7 +148,12 @@ def task(description: str = "", server: str = None):
                 return TestResult(
                     test_name=func.__name__,
                     description=description,
-                    server_name=server_name,
+                    server_name=",".join(session.agent.agent.server_names)
+                    if session
+                    and getattr(session, "agent", None)
+                    and getattr(session.agent, "agent", None)
+                    and getattr(session.agent.agent, "server_names", None)
+                    else "",
                     parameters=kwargs,
                     passed=False,
                     evaluation_results=session.get_results() if session else [],
@@ -163,7 +173,42 @@ def task(description: str = "", server: str = None):
         # Mark as MCP eval task
         wrapper._is_mcpeval_task = True
         wrapper._description = description
-        wrapper._server = server
+
+        return wrapper
+
+    return decorator
+
+
+def with_agent(agent: Agent | AugmentedLLM | AgentSpec | str):
+    """Per-test override for the agent.
+
+    Accepts:
+    - Agent instance
+    - AugmentedLLM instance (its agent is used)
+    - AgentSpec instance
+    - AgentSpec name (string)
+    """
+
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Build a session using the override agent/LLM/spec
+            config = get_current_config()
+            session = TestSession(
+                test_name=func.__name__,
+                agent_config=config.get("agent_config", {}),
+                agent_override=agent,  # type: ignore[arg-type]
+            )
+
+            async with session as test_agent:
+                sig = inspect.signature(func)
+                if "session" in sig.parameters and "agent" in sig.parameters:
+                    return await func(test_agent, session, **kwargs)
+                if "agent" in sig.parameters:
+                    return await func(test_agent, **kwargs)
+                if "session" in sig.parameters:
+                    return await func(session, **kwargs)
+                return await func(**kwargs)
 
         return wrapper
 

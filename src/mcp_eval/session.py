@@ -6,7 +6,7 @@ import time
 import tempfile
 import shutil
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Union
+from typing import Any, List, Dict, Optional, Union
 from datetime import datetime
 from contextlib import asynccontextmanager
 import asyncio
@@ -14,11 +14,8 @@ import asyncio
 
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
-from mcp_agent.config import (
-    get_settings,
-    MCPServerSettings,
-    MCPSettings,
-)
+from mcp_agent.agents.agent_spec import AgentSpec
+from .config import get_settings
 from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM
 from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
 from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
@@ -29,9 +26,16 @@ from .evaluators.base import Evaluator, EvaluatorContext
 from .evaluators import EvaluatorResult, EvaluationRecord
 
 import logging
-from dotenv import load_dotenv
 
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except Exception:  # pragma: no cover - optional dependency
+
+    def load_dotenv():
+        return None
+
 
 logger = logging.getLogger(__name__)
 
@@ -146,15 +150,18 @@ class TestSession:
 
     def __init__(
         self,
-        server_name: str,
         test_name: str,
-        agent_config: Optional[Dict[str, Any]] = None,
+        agent_config: Optional[Dict[str, object]] = None,
         verbose: bool = False,
+        *,
+        agent_override: Optional[
+            Union[Agent, AugmentedLLM, AgentSpec, str, Dict[str, object]]
+        ] = None,
     ):
-        self.server_name = server_name
         self.test_name = test_name
         self.agent_config = agent_config or {}
         self.verbose = verbose
+        self._agent_override = agent_override
 
         # Core objects
         self.app: Optional[MCPApp] = None
@@ -203,49 +210,252 @@ class TestSession:
                 settings.openai = OpenAISettings()
                 # API key will be picked up from environment variable OPENAI_API_KEY
 
-        # Load mcp-eval config to get server definitions
-        from .config import get_current_config
-
-        mcp_eval_config = get_current_config()
-
-        # Configure servers from mcp-eval config
-        if "servers" in mcp_eval_config and mcp_eval_config["servers"]:
-            # Ensure mcp settings exist
-            if settings.mcp is None:
-                settings.mcp = MCPSettings(servers={})
-
-            # Register each server from mcp-eval config
-            for server_name, server_config in mcp_eval_config["servers"].items():
-                # Convert mcp-eval server config to MCPServerSettings
-                mcp_server_settings = MCPServerSettings(
-                    name=server_name,
-                    command=server_config.get("command"),
-                    args=server_config.get("args", []),
-                    env=server_config.get("env", {}),
-                    transport=server_config.get("transport", "stdio"),
-                )
-                settings.mcp.servers[server_name] = mcp_server_settings
+        # No legacy server merging: servers should be defined in mcp-agent config
 
         # Initialize MCP app (sets up OTEL instrumentation automatically)
         self.app = MCPApp(settings=settings)
         await self.app.initialize()
 
-        # Create agent with configuration
-        self.agent = Agent(
-            name=self.agent_config.get("name", f"test_agent_{self.test_name}"),
-            instruction=self.agent_config.get(
-                "instruction", "Complete the task as requested."
-            ),
-            server_names=[self.server_name],
-            context=self.app.context,
-        )
+        # Construct agent based on precedence:
+        # 1) Per-call agent_override (Agent | AugmentedLLM | AgentSpec | name | dict)
+        # 2) Global programmatic_agent from settings (use_agent/use_agent_object)
+        # 3) Fallback to agent_config lightweight dict
+        from .config import get_settings as get_eval_settings
+
+        eval_settings = get_eval_settings()
+
+        async def _agent_from_spec(spec: AgentSpec) -> Agent:
+            return Agent(
+                name=spec.name,
+                instruction=spec.instruction,
+                server_names=spec.server_names or [],
+                functions=spec.functions or [],
+                connection_persistence=spec.connection_persistence,
+                human_input_callback=spec.human_input_callback,
+                context=self.app.context,
+            )
+
+        # Global programmatic agent or LLM
+        def _effective_servers(existing: List[str] | None) -> List[str]:
+            if existing:
+                return existing
+            # Defaults from config
+            default_servers = getattr(eval_settings, "default_servers", None)
+            if default_servers:
+                return list(default_servers)
+            # No defaults
+            return []
+
+        # 1) Per-call override
+        if self._agent_override is not None:
+            override = self._agent_override
+            if isinstance(override, AugmentedLLM):
+                if override.agent is None:
+                    override.agent = Agent(
+                        name=f"test_agent_{self.test_name}",
+                        instruction="Complete the task as requested.",
+                        server_names=_effective_servers(None),
+                        context=self.app.context,
+                    )
+                self.agent = override.agent
+                if getattr(override, "context", None) is None:
+                    override.context = self.app.context
+                await self.agent.attach_llm(llm=override)
+            elif isinstance(override, Agent):
+                if not override.server_names:
+                    override.server_names = _effective_servers(None)
+                if override.context is None:
+                    override.context = self.app.context
+                self.agent = override
+            elif isinstance(override, AgentSpec):
+                self.agent = await _agent_from_spec(
+                    AgentSpec(
+                        name=override.name,
+                        instruction=override.instruction,
+                        server_names=_effective_servers(override.server_names),
+                        functions=override.functions,
+                        connection_persistence=override.connection_persistence,
+                        human_input_callback=override.human_input_callback,
+                    )
+                )
+            elif isinstance(override, str):
+                loaded_specs = getattr(self.app.context, "loaded_subagents", []) or []
+                matched = next(
+                    (s for s in loaded_specs if getattr(s, "name", None) == override),
+                    None,
+                )
+                if matched is None:
+                    raise ValueError(
+                        f"AgentSpec named '{override}' not found in loaded subagents."
+                    )
+                # Normalize servers
+                matched.server_names = _effective_servers(matched.server_names)
+                self.agent = await _agent_from_spec(matched)
+            elif isinstance(override, dict):
+                self.agent = Agent(
+                    name=str(override.get("name", f"test_agent_{self.test_name}")),
+                    instruction=str(
+                        override.get("instruction", "Complete the task as requested.")
+                    ),
+                    server_names=_effective_servers(
+                        list(override.get("server_names", [])) or None
+                    ),
+                    context=self.app.context,
+                )
+            else:
+                raise TypeError("Unsupported agent_override type")
+        else:
+            # 2) Global programmatic config
+            pa_cfg = getattr(eval_settings, "programmatic_agent", None)
+            if pa_cfg is not None:
+                if pa_cfg.kind == "llm_object" and pa_cfg.llm is not None:
+                    pa = pa_cfg.llm
+                    if getattr(pa, "agent", None) is None:
+                        pa.agent = Agent(
+                            name=f"test_agent_{self.test_name}",
+                            server_names=_effective_servers(None),
+                            context=self.app.context,
+                        )
+                    self.agent = pa.agent
+                    if getattr(pa, "context", None) is None:
+                        pa.context = self.app.context
+                    await self.agent.attach_llm(llm=pa)
+                elif pa_cfg.kind == "agent_object" and pa_cfg.agent is not None:
+                    agent_obj = pa_cfg.agent
+                    if not agent_obj.server_names:
+                        agent_obj.server_names = _effective_servers(None)
+                    if getattr(agent_obj, "context", None) is None:
+                        agent_obj.context = self.app.context
+                    self.agent = agent_obj
+                elif pa_cfg.kind == "agent_spec" and pa_cfg.agent_spec is not None:
+                    spec = pa_cfg.agent_spec
+                    self.agent = await _agent_from_spec(
+                        AgentSpec(
+                            name=spec.name,
+                            instruction=spec.instruction,
+                            server_names=_effective_servers(spec.server_names),
+                            functions=spec.functions,
+                            connection_persistence=spec.connection_persistence,
+                            human_input_callback=spec.human_input_callback,
+                        )
+                    )
+                elif (
+                    pa_cfg.kind == "agent_spec_name"
+                    and pa_cfg.agent_spec_name is not None
+                ):
+                    loaded_specs = (
+                        getattr(self.app.context, "loaded_subagents", []) or []
+                    )
+                    matched = next(
+                        (
+                            s
+                            for s in loaded_specs
+                            if getattr(s, "name", None) == pa_cfg.agent_spec_name
+                        ),
+                        None,
+                    )
+                    if matched is None:
+                        raise ValueError(
+                            f"AgentSpec named '{pa_cfg.agent_spec_name}' not found in loaded subagents."
+                        )
+                    matched.server_names = _effective_servers(matched.server_names)
+                    self.agent = await _agent_from_spec(matched)
+                elif pa_cfg.kind == "overrides" and pa_cfg.overrides is not None:
+                    overrides = pa_cfg.overrides
+                    self.agent = Agent(
+                        name=str(overrides.get("name", f"test_agent_{self.test_name}")),
+                        instruction=str(
+                            overrides.get(
+                                "instruction", "Complete the task as requested."
+                            )
+                        ),
+                        server_names=_effective_servers(
+                            list(overrides.get("server_names", [])) or None
+                        ),
+                        context=self.app.context,
+                    )
+                else:
+                    raise ValueError("Invalid programmatic_agent configuration")
+            else:
+                # 3) Fallback to lightweight dict
+                self.agent = Agent(
+                    name=self.agent_config.get("name", f"test_agent_{self.test_name}"),
+                    instruction=self.agent_config.get(
+                        "instruction", "Complete the task as requested."
+                    ),
+                    server_names=_effective_servers(
+                        self.agent_config.get("server_names")  # type: ignore[arg-type]
+                        if isinstance(self.agent_config.get("server_names"), list)
+                        else None
+                    ),
+                    context=self.app.context,
+                )
+            if pa_cfg and pa_cfg.kind == "llm_object" and pa_cfg.llm is not None:
+                pa = pa_cfg.llm
+                # Use LLM's agent
+                if getattr(pa, "agent", None) is None:
+                    pa.agent = Agent(
+                        name=f"test_agent_{self.test_name}",
+                        server_names=[],
+                        context=self.app.context,
+                    )
+                self.agent = pa.agent
+                if getattr(pa, "context", None) is None:
+                    pa.context = self.app.context
+                await self.agent.attach_llm(llm=pa)
+            elif pa_cfg and pa_cfg.kind == "agent_object" and pa_cfg.agent is not None:
+                agent_obj = pa_cfg.agent
+                if getattr(agent_obj, "context", None) is None:
+                    agent_obj.context = self.app.context
+                self.agent = agent_obj
+            elif (
+                pa_cfg and pa_cfg.kind == "agent_spec" and pa_cfg.agent_spec is not None
+            ):
+                self.agent = await _agent_from_spec(pa_cfg.agent_spec)
+            elif (
+                pa_cfg
+                and pa_cfg.kind == "agent_spec_name"
+                and pa_cfg.agent_spec_name is not None
+            ):
+                loaded_specs = getattr(self.app.context, "loaded_subagents", []) or []
+                matched = next(
+                    (
+                        s
+                        for s in loaded_specs
+                        if getattr(s, "name", None) == pa_cfg.agent_spec_name
+                    ),
+                    None,
+                )
+                if matched is None:
+                    raise ValueError(
+                        f"AgentSpec named '{pa_cfg.agent_spec_name}' not found in loaded subagents."
+                    )
+                self.agent = await _agent_from_spec(matched)
+            elif pa_cfg and pa_cfg.kind == "overrides" and pa_cfg.overrides is not None:
+                overrides = pa_cfg.overrides
+                self.agent = Agent(
+                    name=str(overrides.get("name", f"test_agent_{self.test_name}")),
+                    instruction=str(
+                        overrides.get("instruction", "Complete the task as requested.")
+                    ),
+                    server_names=list(overrides.get("server_names", [])),
+                    context=self.app.context,
+                )
+            else:
+                if pa_cfg is not None:
+                    raise ValueError("Invalid programmatic_agent configuration")
+
         await self.agent.initialize()
 
         # Create clean test agent wrapper
         self.test_agent = TestAgent(self.agent, self)
 
-        # Configure LLM if specified (do this after creating TestAgent)
-        llm_factory = self.agent_config.get("llm_factory")
+        # Configure LLM from factory if provided via overrides (dict path)
+        llm_factory = (
+            self.agent_config.get("llm_factory")
+            if isinstance(self._agent_override, dict) or self._agent_override is None
+            else None
+        )
         if llm_factory:
             await self.test_agent.attach_llm(llm_factory)
 
@@ -257,7 +467,9 @@ class TestSession:
         try:
             # First ensure any immediately-scheduled async evaluations are completed
             if self._pending_async_evaluations:
-                await asyncio.gather(*self._pending_async_evaluations, return_exceptions=True)
+                await asyncio.gather(
+                    *self._pending_async_evaluations, return_exceptions=True
+                )
 
             # Process deferred evaluators before cleanup to ensure traces are available
             await self._process_deferred_evaluators()
@@ -318,7 +530,11 @@ class TestSession:
             raise
 
     async def evaluate_now_async(
-        self, evaluator: Evaluator, response: str, name: str, input: str | None = None
+        self,
+        evaluator: Evaluator,
+        response: str,
+        name: str,
+        input_text: str | None = None,
     ):
         """Evaluate immediately with async evaluator.
 
@@ -330,7 +546,7 @@ class TestSession:
         """
         try:
             ctx = EvaluatorContext(
-                inputs=input if input is not None else "",
+                inputs=input_text if input_text is not None else "",
                 output=response,
                 expected_output=None,
                 metadata={},
@@ -358,7 +574,7 @@ class TestSession:
         name: Optional[str] = None,
         response: Optional[str] = None,
         *,
-        input: str | None = None,
+        input_text: str | None = None,
         when: str = "auto",
     ) -> None:
         """Unified API to record an assertion without worrying about timing.
@@ -384,7 +600,9 @@ class TestSession:
         if when == "end" or (when == "auto" and response is None):
             # If a response is provided but we still defer, preserve it so the evaluator
             # can access it at processing time
-            self._evaluators.append((evaluator, response if response is not None else None, eval_name))
+            self._evaluators.append(
+                (evaluator, response if response is not None else None, eval_name)
+            )
             return
 
         # At this point we should evaluate "now" (immediate)
@@ -396,7 +614,9 @@ class TestSession:
         # Async immediate evaluation: schedule and record automatically
         async def _run_async_now():
             try:
-                await self.evaluate_now_async(evaluator, response or "", eval_name, input=input)
+                await self.evaluate_now_async(
+                    evaluator, response or "", eval_name, input_text=input_text
+                )
             except Exception:
                 # evaluate_now_async already records an error result; just ensure exception doesn't bubble
                 return
@@ -607,7 +827,9 @@ class TestSession:
             results_dest = output_dir / f"{safe_test_name}.json"
             test_data = {
                 "test_name": self.test_name,
-                "server_name": self.server_name,
+                "server_name": ",".join(self.agent.server_names)
+                if self.agent and getattr(self.agent, "server_names", None)
+                else "",
                 "timestamp": self._start_time,
                 "duration_ms": self.get_duration_ms(),
                 "results": self.get_results(),
@@ -640,10 +862,25 @@ class TestSession:
 
 @asynccontextmanager
 async def test_session(
-    server_name: str, test_name: str, agent_config: Optional[Dict[str, Any]] = None
+    test_name: str,
+    agent_config: Optional[Dict[str, Any]] = None,
+    *,
+    initial_agent: Optional[Agent] = None,
+    initial_llm: Optional[AugmentedLLM] = None,
+    agent_spec: Optional[AgentSpec] = None,
+    agent_spec_name: Optional[str] = None,
 ):
-    """Context manager for creating test sessions."""
-    session = TestSession(server_name, test_name, agent_config)
+    """Context manager for creating test sessions.
+
+    Supports programmatic initialization of `Agent` and `AugmentedLLM`, as well as
+    declarative initialization from `AgentSpec` or a named AgentSpec discovered by
+    the mcp-agent app from configured search paths.
+    """
+    session = TestSession(
+        test_name=test_name,
+        agent_config=agent_config,
+        agent_override=initial_llm or initial_agent or agent_spec or agent_spec_name,
+    )
     try:
         agent = await session.__aenter__()
         yield agent

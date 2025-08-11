@@ -5,11 +5,12 @@ from pathlib import Path
 from rich.console import Console
 
 from mcp_eval.runner import app as runner_app
+from mcp_eval.cli.generator import run_generator
 
 app = typer.Typer(help="MCP-Eval: Comprehensive testing framework for MCP servers")
 console = Console()
 
-# Add the runner commands
+# Subcommands
 app.add_typer(runner_app, name="run", help="Run tests")
 
 
@@ -47,33 +48,24 @@ def init(
     console.print(f"[green]Initialized MCP-Eval project in {project_path}[/green]")
 
 
-@app.command()
+@app.command("generate")
 def generate(
-    server_name: str = typer.Argument(..., help="Name of MCP server"),
-    output: str = typer.Option("generated_tests.yaml", help="Output file"),
-    n_examples: int = typer.Option(10, help="Number of test cases to generate"),
+    out_dir: str = typer.Option(".", help="Project directory to write configs/tests"),
+    style: str = typer.Option("pytest", help="Test style: pytest|decorators|dataset"),
+    n_examples: int = typer.Option(6, help="Number of scenarios to generate"),
+    llm_factory: str = typer.Option(
+        "AnthropicAugmentedLLM", help="LLM factory for generation"
+    ),
+    model: str = typer.Option(None, help="Model hint for generation (optional)"),
 ):
-    """Generate test cases for an MCP server."""
-    import asyncio
-    from mcp_eval.generation import generate_dataset
-
-    async def _generate():
-        # Would introspect server to get available tools
-        available_tools = ["example_tool"]  # Placeholder
-
-        dataset = await generate_dataset(
-            dataset_type=None,  # Would be determined from server
-            server_name=server_name,
-            available_tools=available_tools,
-            n_examples=n_examples,
-        )
-
-        dataset.to_file(output)
-        console.print(
-            f"[green]Generated {len(dataset.cases)} test cases in {output}[/green]"
-        )
-
-    asyncio.run(_generate())
+    """Interactive generator to create configs and tests for an MCP server."""
+    run_generator(
+        out_dir=out_dir,
+        style=style,
+        n_examples=n_examples,
+        llm_factory=llm_factory,
+        model=model,
+    )
 
 
 def _create_basic_template(project_path: Path):
@@ -187,7 +179,7 @@ dataset = Dataset(
 
 async def my_server_task(inputs: str) -> str:
     \"\"\"System under test.\"\"\"
-    async with test_session('my_server', 'dataset_task') as agent:
+    async with test_session('dataset_task') as agent:
         return await agent.generate_str(inputs)
 
 async def main():

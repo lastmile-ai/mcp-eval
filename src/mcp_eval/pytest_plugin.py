@@ -20,12 +20,18 @@ class MCPEvalPytestSession:
 
     def __init__(
         self,
-        server_name: str,
         test_name: str,
         agent_config: dict | None = None,
         verbose: bool = False,
+        *,
+        agent_override=None,
     ):
-        self._session = TestSession(server_name, test_name, agent_config, verbose)
+        self._session = TestSession(
+            test_name=test_name,
+            agent_config=agent_config,
+            verbose=verbose,
+            agent_override=agent_override,
+        )
         self._agent: TestAgent | None = None
 
     async def __aenter__(self):
@@ -39,10 +45,20 @@ class MCPEvalPytestSession:
         if not self._session.all_passed():
             # Create a TestResult object from session results for compatibility with generate_failure_message
             evaluation_results = self._session.get_results()
+            # Derive server names string from the constructed agent if available
+            server_names_str = ""
+            try:
+                if self._session.agent and getattr(
+                    self._session.agent, "server_names", None
+                ):
+                    server_names_str = ",".join(self._session.agent.server_names)
+            except Exception:
+                server_names_str = ""
+
             test_result = TestResult(
                 test_name=self._session.test_name,
                 description=f"Pytest test: {self._session.test_name}",
-                server_name=self._session.server_name,
+                server_name=server_names_str,
                 parameters={},
                 passed=False,
                 evaluation_results=evaluation_results,
@@ -72,7 +88,6 @@ async def mcp_session(request) -> AsyncGenerator[MCPEvalPytestSession, None]:
     """
     # Get test configuration
     config = get_current_config()
-    server_name = config.get("default_server", "default")
     agent_config = config.get("agent_config", {})
 
     test_name = request.node.name
@@ -81,8 +96,19 @@ async def mcp_session(request) -> AsyncGenerator[MCPEvalPytestSession, None]:
     verbose = request.config.getoption("verbose") > 0
 
     # Create and yield session
+    # Allow per-test markers for agents and servers
+    agent_marker = request.node.get_closest_marker("mcp_agent")
+    _servers_marker = request.node.get_closest_marker("mcp_servers")
+
+    # Build session – allow agent override from marker
+    agent_override = (
+        agent_marker.args[0] if agent_marker and agent_marker.args else None
+    )
     pytest_session_wrapper = MCPEvalPytestSession(
-        server_name, test_name, agent_config, verbose
+        test_name=test_name,
+        agent_config=agent_config,
+        verbose=verbose,
+        agent_override=agent_override,
     )
     async with pytest_session_wrapper:
         yield pytest_session_wrapper
@@ -105,6 +131,10 @@ async def mcp_agent(mcp_session: MCPEvalPytestSession) -> TestAgent | None:
 def pytest_configure(config):
     """Configure pytest to work with mcp-eval."""
     config.addinivalue_line("markers", "mcp-eval: mark test as an mcp-eval test")
+    config.addinivalue_line(
+        "markers", "mcp_agent(name_or_object): override agent for this test"
+    )
+    # No per-test servers override; define servers on the agent instead
 
     # Suppress Pydantic serialization warnings from MCP library
     # These warnings are due to MCP's internal union type handling and are not user-actionable

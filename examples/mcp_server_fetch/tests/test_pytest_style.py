@@ -7,12 +7,13 @@ from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
 from mcp_eval.evaluators.shared import EvaluatorResult
 from mcp_eval.metrics import TestMetrics
 from mcp_eval.session import TestAgent
+from mcp_agent.agents.agent import Agent
 
 
 @mcp_eval.setup
 def configure_for_pytest():
     """Configure mcp-eval for pytest integration."""
-    mcp_eval.use_server("fetch")
+    # Define servers on your Agent/AgentSpec; no global server selection needed here
 
 
 @pytest.mark.asyncio
@@ -28,12 +29,15 @@ async def test_basic_fetch_with_pytest(mcp_agent: TestAgent):
         Expect.tools.was_called("fetch"), name="fetch_tool_called", response=response
     )
     mcp_agent.session.assert_that(
-        Expect.content.contains("Example Domain"), name="contains_example_domain", response=response
+        Expect.content.contains("Example Domain"),
+        name="contains_example_domain",
+        response=response,
     )
 
 
 @pytest.mark.asyncio
 @pytest.mark.network
+@pytest.mark.mcp_agent("Fetcher")
 async def test_fetch_with_markdown_conversion(mcp_agent: TestAgent):
     """Test that HTML is properly converted to markdown."""
     response = await mcp_agent.generate_str(
@@ -49,7 +53,9 @@ async def test_fetch_with_markdown_conversion(mcp_agent: TestAgent):
         min_score=0.7,
         include_input=True,
     )
-    mcp_agent.session.assert_that(markdown_judge, name="markdown_conversion_check", response=response)
+    mcp_agent.session.assert_that(
+        markdown_judge, name="markdown_conversion_check", response=response
+    )
 
 
 @pytest.mark.asyncio
@@ -75,12 +81,15 @@ async def test_fetch_multiple_urls(
     )
 
     mcp_agent.session.assert_that(
-        Expect.content.contains(expected_content), name="contains_expected_content", response=response
+        Expect.content.contains(expected_content),
+        name="contains_expected_content",
+        response=response,
     )
 
 
 @pytest.mark.asyncio
 @pytest.mark.network
+@pytest.mark.mcp_agent("Fetcher")
 async def test_fetch_error_handling(mcp_agent: TestAgent):
     """Test error handling for invalid URLs."""
     response = await mcp_agent.generate_str(
@@ -88,14 +97,28 @@ async def test_fetch_error_handling(mcp_agent: TestAgent):
     )
 
     # Should still call the fetch tool
-    mcp_agent.session.assert_that(Expect.tools.was_called("fetch"), name="fetch_attempted")
+    mcp_agent.session.assert_that(
+        Expect.tools.was_called("fetch"), name="fetch_attempted"
+    )
 
     # Should handle the error gracefully
     error_handling_judge = Expect.judge.llm(
         rubric="Response should acknowledge the fetch failed and explain the error appropriately",
         min_score=0.8,
     )
-    mcp_agent.session.assert_that(error_handling_judge, name="error_handling_quality", response=response)
+    mcp_agent.session.assert_that(
+        error_handling_judge, name="error_handling_quality", response=response
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.network
+@pytest.mark.mcp_agent(
+    Agent(name="custom_fetcher", instruction="You fetch", server_names=["fetch"])
+)
+async def test_with_custom_agent_instance(mcp_agent: TestAgent):
+    response = await mcp_agent.generate_str("Fetch https://example.com and summarise")
+    assert "Example Domain" in response
 
 
 @pytest.mark.asyncio
@@ -107,11 +130,15 @@ async def test_fetch_with_raw_content(mcp_agent: TestAgent):
     )
 
     # Check that fetch was called
-    mcp_agent.session.assert_that(Expect.tools.was_called("fetch"), name="fetch_raw_called")
+    mcp_agent.session.assert_that(
+        Expect.tools.was_called("fetch"), name="fetch_raw_called"
+    )
 
     # Check for HTML tags in response
     mcp_agent.session.assert_that(
-        Expect.content.contains("<html", case_sensitive=False), name="contains_html_tags", response=response
+        Expect.content.contains("<html", case_sensitive=False),
+        name="contains_html_tags",
+        response=response,
     )
 
 
@@ -135,7 +162,9 @@ async def test_large_content_chunking(mcp_agent: TestAgent):
         rubric="Response should contain complete JSON data or acknowledge if chunking was needed",
         min_score=0.8,
     )
-    mcp_agent.session.assert_that(completeness_judge, name="content_completeness", response=response)
+    mcp_agent.session.assert_that(
+        completeness_judge, name="content_completeness", response=response
+    )
 
 
 # Complex test cases to verify OTEL trace parsing and metrics
