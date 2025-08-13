@@ -12,7 +12,7 @@ class ToolCall(dspy.Module):
 
 
 class DocstringImprover(dspy.Signature):
-    """Signature for improving tool docstrings based on failed examples"""
+    """Signature for improving tool docstrings based on successful and failed examples"""
     tool_name = dspy.InputField(desc="Name of the tool to optimize docstring for")
     original_docstring = dspy.InputField(desc="Original docstring of the tool")
     failed_examples = dspy.InputField(desc="List of examples where the tool selection failed")
