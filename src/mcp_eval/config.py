@@ -5,14 +5,7 @@ import yaml
 from typing import Dict, Any, Optional, List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator
-
-
-class ServerConfig(BaseSettings):
-    """Configuration for an MCP server."""
-
-    command: str
-    args: List[str] = Field(default_factory=list)
-    env: Dict[str, str] = Field(default_factory=dict)
+from mcp_agent.config import MCPServerSettings
 
 
 class AgentConfig(BaseSettings):
@@ -95,7 +88,7 @@ class MCPEvalSettings(BaseSettings):
     description: str = "Comprehensive evaluation of MCP servers"
 
     # Server configurations
-    servers: Dict[str, ServerConfig] = Field(default_factory=dict)
+    servers: Dict[str, MCPServerSettings] = Field(default_factory=dict)
 
     # Agent configurations
     agents: Dict[str, AgentConfig] = Field(
@@ -116,10 +109,12 @@ class MCPEvalSettings(BaseSettings):
     @field_validator("servers", mode="before")
     @classmethod
     def validate_servers(cls, v):
-        """Convert dict configs to ServerConfig objects."""
+        """Convert dict configs to MCPServerSettings objects."""
         if isinstance(v, dict):
             return {
-                name: ServerConfig(**config) if isinstance(config, dict) else config
+                name: MCPServerSettings(**config)
+                if isinstance(config, dict)
+                else config
                 for name, config in v.items()
             }
         return v

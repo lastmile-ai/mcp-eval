@@ -1,9 +1,8 @@
 """Console output formatting for mcp-eval test results."""
 
-from typing import List, Dict, Any, Literal
+from typing import List, Dict, Literal
 from rich.console import Console
 from rich.text import Text
-from rich.live import Live
 from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.columns import Columns
@@ -13,13 +12,32 @@ from ..core import TestResult
 from .models import EvaluationReport, CaseResult
 
 
-def pad(text: str, char: str = "=", length=80) -> Text:
+def pad(
+    text: str, char: str = "=", console: Console = None, length: int = None
+) -> Text:
     """Add padding to text for console output."""
-    padding = (length - len(text)) // 2
+    # Use provided length, or console width if available, otherwise default to 80
+    if length is None:
+        if console is not None:
+            length = console.width
+        else:
+            length = 80
+
+    # Calculate padding, accounting for spaces around the text
+    text_with_spaces = f" {text} "
+    total_padding = length - len(text_with_spaces)
+
+    if total_padding < 0:
+        # Text is too long, just return it with minimal padding
+        return Text(text_with_spaces)
+
+    left_padding = total_padding // 2
+    right_padding = total_padding - left_padding  # Handle odd numbers
+
     padded_text = Text()
-    padded_text.append(f"{char * padding} ")
-    padded_text.append(text)
-    padded_text.append(f" {char * padding} ")
+    padded_text.append(char * left_padding)
+    padded_text.append(text_with_spaces)
+    padded_text.append(char * right_padding)
     return padded_text
 
 
@@ -28,11 +46,11 @@ def print_failure_details(console: Console, failed_results: List[TestResult]) ->
     if not failed_results:
         return
 
-    console.print(pad("FAILURES"))
+    console.print(pad("FAILURES", console=console))
     for result in failed_results:
         # Extract function name for header
         func_name = result.test_name.split("[")[0]  # Remove parameters
-        console.print(pad(func_name, "_"), style="red bold")
+        console.print(pad(func_name, "_", console=console), style="red bold")
         console.print("")
         if result.error:
             console.print(Text(result.error), style="red")
@@ -44,7 +62,7 @@ def print_test_summary_info(console: Console, failed_results: List[TestResult]) 
     if not failed_results:
         return
 
-    console.print(pad("short test summary info"), style="blue")
+    console.print(pad("short test summary info", console=console), style="blue")
     for result in failed_results:
         func_name = result.test_name.split("[")[0]
         # Extract file name from module or use test_name as fallback
@@ -79,7 +97,7 @@ def print_dataset_summary_info(
     if not failed_cases:
         return
 
-    console.print(pad("short dataset summary info"), style="blue")
+    console.print(pad("short dataset summary info", console=console), style="blue")
     for case in failed_cases:
         console.print(f"[red]FAILED[/red] {dataset_name}::{case.case_name}")
 
@@ -153,7 +171,6 @@ class TestProgressDisplay:
 
         return Panel(
             Group(*all_content),
-            width=80,
             title="Progress",
             border_style="blue",
         )
@@ -178,16 +195,6 @@ class TestProgressDisplay:
                 dots.append(".", style="green")
             else:
                 dots.append("F", style="red")
-
-
-def run_tests_with_live_display(test_cases: List[Dict[str, Any]], test_runner_func):
-    """Run tests with live progress display showing pytest-style dots."""
-    display = TestProgressDisplay(len(test_cases))
-
-    with Live(display.create_display(), refresh_per_second=10) as live:
-        results, failed_results = test_runner_func(test_cases, display, live)
-
-    return results, failed_results
 
 
 def generate_failure_message(result: "TestResult") -> str:
