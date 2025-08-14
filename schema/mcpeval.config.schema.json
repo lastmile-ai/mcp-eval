@@ -1,9 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/lastmile-ai/mcp-eval/mcpeval.config.schema.json",
   "title": "MCP-Eval Configuration",
   "description": "Configuration schema for MCP-Eval test suites",
   "type": "object",
+  "additionalProperties": true,
   "properties": {
     "$schema": {
       "type": "string",
@@ -24,6 +24,13 @@
       "description": "MCP server configurations",
       "additionalProperties": {
         "$ref": "#/definitions/MCPServerSettings"
+      },
+      "default": {
+        "default": {
+          "command": "uvx",
+          "args": [],
+          "env": {}
+        }
       }
     },
     "agents": {
@@ -43,19 +50,67 @@
       }
     },
     "judge": {
-      "$ref": "#/definitions/JudgeConfig"
+      "$ref": "#/definitions/JudgeConfig",
+      "default": {
+        "model": "claude-3-5-haiku-20241022",
+        "min_score": 0.8,
+        "max_tokens": 1000,
+        "system_prompt": "You are an expert evaluator of AI assistant responses."
+      }
     },
     "metrics": {
-      "$ref": "#/definitions/MetricsConfig"
+      "$ref": "#/definitions/MetricsConfig",
+      "default": {
+        "collect": [
+          "response_time",
+          "tool_coverage",
+          "iteration_count",
+          "token_usage",
+          "cost_estimate"
+        ],
+        "token_prices": {
+          "claude-3-5-haiku-20241022": {
+            "input": 0.00000025,
+            "output": 0.00000125
+          },
+          "claude-sonnet-4-20250514": {
+            "input": 0.000003,
+            "output": 0.000015
+          },
+          "gpt-4-turbo": {
+            "input": 0.00001,
+            "output": 0.00003
+          }
+        }
+      }
     },
     "reporting": {
-      "$ref": "#/definitions/ReportingConfig"
+      "$ref": "#/definitions/ReportingConfig",
+      "default": {
+        "formats": [
+          "json",
+          "markdown"
+        ],
+        "output_dir": "./test-reports",
+        "include_traces": true
+      }
     },
     "otel": {
-      "$ref": "#/definitions/OTelConfig"
+      "$ref": "#/definitions/OTelConfig",
+      "default": {
+        "enabled": true,
+        "exporter_type": "file",
+        "exporter_config": {},
+        "service_name": "mcp-eval"
+      }
     },
     "execution": {
-      "$ref": "#/definitions/ExecutionConfig"
+      "$ref": "#/definitions/ExecutionConfig",
+      "default": {
+        "max_concurrency": 5,
+        "timeout_seconds": 300,
+        "retry_failed": false
+      }
     },
     "default_server": {
       "type": [
