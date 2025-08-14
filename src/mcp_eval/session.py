@@ -9,13 +9,11 @@ from pathlib import Path
 from typing import Any, List, Literal, Dict, Optional, Union
 from datetime import datetime
 from contextlib import asynccontextmanager
-import asyncio
-
 
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
 from mcp_agent.agents.agent_spec import AgentSpec
-from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM
+from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM, MessageTypes
 from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
 from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
 
@@ -180,8 +178,6 @@ class TestSession:
         self._metrics: Optional[TestMetrics] = None
         self._span_tree: Optional[SpanTree] = None
         self._results: List[EvaluationRecord] = []
-        # Track async evaluations scheduled to run immediately (no explicit awaits in tests)
-        self._pending_async_evaluations: list[asyncio.Task] = []
 
     async def __aenter__(self) -> TestAgent:
         """Initialize the test session with OTEL tracing as source of truth."""
@@ -220,9 +216,7 @@ class TestSession:
         # 1) Per-call agent_override (Agent | AugmentedLLM | AgentSpec | name | dict)
         # 2) Global programmatic_agent from settings (use_agent/use_agent_object)
         # 3) Fallback to agent_config lightweight dict
-        from mcp_eval.config import get_settings as get_eval_settings
-
-        eval_settings = get_eval_settings()
+        eval_settings = get_settings()
 
         async def _agent_from_spec(spec: AgentSpec) -> Agent:
             return Agent(
@@ -465,12 +459,6 @@ class TestSession:
         """Clean up session and process final metrics."""
         logger.info(f"TestSession.__aexit__ called for test {self.test_name}")
         try:
-            # First ensure any immediately-scheduled async evaluations are completed
-            if self._pending_async_evaluations:
-                await asyncio.gather(
-                    *self._pending_async_evaluations, return_exceptions=True
-                )
-
             # Process deferred evaluators before cleanup to ensure traces are available
             await self._process_deferred_evaluators()
 
@@ -534,7 +522,7 @@ class TestSession:
         evaluator: Evaluator,
         response: str,
         name: str,
-        input_text: str | None = None,
+        inputs: MessageTypes | None = None,
     ):
         """Evaluate immediately with async evaluator.
 
@@ -546,7 +534,7 @@ class TestSession:
         """
         try:
             ctx = EvaluatorContext(
-                inputs=input_text if input_text is not None else "",
+                inputs=inputs if inputs is not None else "",
                 output=response,
                 expected_output=None,
                 metadata={},
@@ -574,7 +562,7 @@ class TestSession:
         name: Optional[str] = None,
         response: Optional[str] = None,
         *,
-        input_text: str | None = None,
+        inputs: MessageTypes | None = None,
         when: Literal["auto", "now", "end"] = "auto",
     ) -> None:
         """Unified API to record an assertion without worrying about timing.
@@ -608,21 +596,39 @@ class TestSession:
         if force_defer:
             # Defer evaluation to session end
             self._evaluators.append(
-                (evaluator, response if response is not None else None, eval_name)
+                (
+                    evaluator,
+                    {"inputs": inputs, "output": response}
+                    if (inputs is not None or response is not None)
+                    else None,
+                    eval_name,
+                )
             )
             return
 
         if requires_final and when != "now":
             # Defer evaluation to session end
             self._evaluators.append(
-                (evaluator, response if response is not None else None, eval_name)
+                (
+                    evaluator,
+                    {"inputs": inputs, "output": response}
+                    if (inputs is not None or response is not None)
+                    else None,
+                    eval_name,
+                )
             )
             return
 
         if auto_defer and when != "now":
             # Defer evaluation to session end
             self._evaluators.append(
-                (evaluator, response if response is not None else None, eval_name)
+                (
+                    evaluator,
+                    {"inputs": inputs, "output": response}
+                    if (inputs is not None or response is not None)
+                    else None,
+                    eval_name,
+                )
             )
             return
 
@@ -634,7 +640,7 @@ class TestSession:
 
         # Async evaluator: run immediately and await
         await self.evaluate_now_async(
-            evaluator, response or "", eval_name, input_text=input_text
+            evaluator, response or "", eval_name, inputs=inputs
         )
 
     async def _process_deferred_evaluators(self):
@@ -649,6 +655,15 @@ class TestSession:
                     ctx = EvaluatorContext(
                         inputs="",
                         output=context_or_response,
+                        expected_output=None,
+                        metadata={},
+                        metrics=metrics,
+                        span_tree=span_tree,
+                    )
+                elif isinstance(context_or_response, dict):
+                    ctx = EvaluatorContext(
+                        inputs=context_or_response.get("inputs", ""),
+                        output=context_or_response.get("output", ""),
                         expected_output=None,
                         metadata={},
                         metrics=metrics,
