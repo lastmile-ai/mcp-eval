@@ -1,8 +1,9 @@
 """Base utilities for report generation."""
 
 from typing import List, Dict, Any
-from ..core import TestResult
-from .models import EvaluationReport
+
+from mcp_eval.core import TestResult
+from mcp_eval.report_generation.models import EvaluationReport
 
 
 def calculate_overall_stats(

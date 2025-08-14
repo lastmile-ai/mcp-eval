@@ -4,9 +4,9 @@ from typing import List
 from rich.console import Console
 from rich.table import Table
 
-from ..core import TestResult
-from .models import EvaluationReport
-from .base import calculate_overall_stats
+from mcp_eval.core import TestResult
+from mcp_eval.report_generation.models import EvaluationReport
+from mcp_eval.report_generation.base import calculate_overall_stats
 
 
 def generate_combined_summary(

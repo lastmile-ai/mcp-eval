@@ -106,13 +106,13 @@ from mcp_eval import Expect
 response = await agent.generate_str("Fetch https://example.com")
 
 # Content checks (immediate)
-session.assert_that(Expect.content.contains("Example Domain"), response=response)
+await session.assert_that(Expect.content.contains("Example Domain"), response=response)
 
 # Tool checks (deferred)
-session.assert_that(Expect.tools.was_called("fetch"))
+await session.assert_that(Expect.tools.was_called("fetch"))
 
 # LLM judge (async immediate; no await required)
-session.assert_that(Expect.judge.llm("Summarizes the page accurately", min_score=0.8), response=response)
+await session.assert_that(Expect.judge.llm("Summarizes the page accurately", min_score=0.8), response=response)
 ```
 
 Optionally override timing with `when="now" | "end"`.

@@ -70,9 +70,9 @@ async def test_fetch_example(agent, session):
     response = await agent.generate_str("Fetch https://example.com and summarize in one sentence")
 
     # Immediate content assertion (providing response) + deferred tool usage checks
-    session.assert_that(Expect.content.contains("Example Domain"), name="contains_example_domain", response=response)
-    session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called")
-    session.assert_that(Expect.tools.success_rate(min_rate=1.0, tool_name="fetch"), name="fetch_success_rate")
+    await session.assert_that(Expect.content.contains("Example Domain"), name="contains_example_domain", response=response)
+    await session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called")
+    await session.assert_that(Expect.tools.success_rate(min_rate=1.0, tool_name="fetch"), name="fetch_success_rate")
 ```
 
 Run it:
@@ -146,7 +146,7 @@ from mcp_eval import task, Expect
 @task("Custom agent for one test")
 async def test_custom(agent, session):
     resp = await agent.generate_str("Fetch https://example.com")
-    session.assert_that(Expect.content.contains("Example Domain"), response=resp)
+    await session.assert_that(Expect.content.contains("Example Domain"), response=resp)
 ```
 
 Note: Prefer defining servers on the Agent/AgentSpec via `server_names`. No global project‑wide "use_server" is required.
@@ -242,8 +242,8 @@ def essential_config():
 @task("Parametrized fetch scenarios")
 async def test_fetch(agent, session, url, expect):
     response = await agent.generate_str(f"Fetch {url}")
-    session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called")
-    session.assert_that(Expect.content.contains(expect), name="contains_expected", response=response)
+    await session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called")
+    await session.assert_that(Expect.content.contains(expect), name="contains_expected", response=response)
 ```
 
 2) Pytest style (native fixtures)
@@ -256,8 +256,8 @@ from mcp_eval import Expect
 @pytest.mark.asyncio
 async def test_agent_with_pytest(mcp_agent):  # provided by plugin
     response = await mcp_agent.generate_str("Fetch https://example.com")
-    mcp_agent.session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called")
-    mcp_agent.session.assert_that(Expect.content.contains("Example Domain"), response=response)
+    await mcp_agent.session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called")
+    await mcp_agent.session.assert_that(Expect.content.contains("Example Domain"), response=response)
 
 # Per-test agent override
 from mcp_agent.agents.agent import Agent
@@ -320,10 +320,43 @@ async def test_legacy(agent, session):
     A.completed_within(session, 3)
 ```
 
-### Unified Assertion API (Expect + session.assert_that)
+### Unified Assertion API (Expect + await session.assert_that)
 
 - Immediate vs deferred: If you pass `response=...`, synchronous evaluators run immediately and async ones are scheduled; if you don’t pass a response, the evaluator is deferred to run at session end with full metrics.
 - Force timing with `when="now" | "end"` if needed.
+
+#### When does an evaluator run immediately vs at the end?
+
+Each evaluator declares whether it needs the full, final metrics (from OTEL traces) before it can run reliably. The flag is `requires_final_metrics` on the evaluator class.
+
+- Runs immediately (requires_final_metrics=False):
+  - `Expect.content.contains`, `Expect.content.not_contains`, `Expect.content.regex`
+  - `Expect.judge.llm`, `Expect.judge.multi_criteria`
+  These operate on the provided `response` and do not need the final session metrics.
+
+- Defers automatically to the end (requires_final_metrics=True):
+  - `Expect.tools.was_called`, `Expect.tools.called_with`, `Expect.tools.count`, `Expect.tools.success_rate`, `Expect.tools.failed`, `Expect.tools.output_matches`, `Expect.tools.sequence`
+  - `Expect.performance.max_iterations`, `Expect.performance.response_time_under`
+  - `Expect.path.efficiency`
+  These rely on the complete session metrics (tool calls, iteration count, latency, etc.).
+
+You can still override with `when="now"` (force immediate) or `when="end"` (force deferral), but in most cases you can let the framework decide.
+
+Examples:
+
+```python
+# Immediate content check
+await session.assert_that(Expect.content.contains("Example Domain"), response=resp)
+
+# Schedules an async LLM judge now (no await needed); it will finish before deferred checks
+await session.assert_that(Expect.judge.llm("Accurate summary", min_score=0.8), response=resp)
+
+# Defers automatically since it needs final metrics
+await session.assert_that(Expect.tools.was_called("fetch"))
+
+# Explicitly force timing if you really need to
+await session.assert_that(Expect.tools.was_called("fetch"), when="end")
+```
 
 Key assertion families (via `from mcp_eval import Expect`):
 
@@ -352,7 +385,7 @@ Examples:
 
 ```python
 # Match nested fields in a tool output (e.g., content[0].text contains a phrase)
-session.assert_that(
+await session.assert_that(
     Expect.tools.output_matches(
         tool_name="fetch",
         expected_output=r"use.*examples",
@@ -364,7 +397,7 @@ session.assert_that(
 )
 
 # Require an exact tool call sequence
-session.assert_that(Expect.tools.sequence(["fetch", "fetch"], allow_other_calls=True))
+await session.assert_that(Expect.tools.sequence(["fetch", "fetch"], allow_other_calls=True))
 
 # Multi-criteria judging
 criteria = {
@@ -372,7 +405,7 @@ criteria = {
     "completeness": "Covers key points",
     "clarity": "Clear and well-structured",
 }
-session.assert_that(Expect.judge.multi_criteria(criteria, require_all_pass=False), response=response)
+await session.assert_that(Expect.judge.multi_criteria(criteria, require_all_pass=False), response=response)
 ```
 
 ### Inspecting Metrics and Spans
@@ -567,7 +600,7 @@ register_evaluator("MyCustomEvaluator", MyCustomEvaluator)
 Use it anywhere you would use an `Expect.*` evaluator:
 
 ```python
-session.assert_that(MyCustomEvaluator(), name="custom_check", response=response)
+await session.assert_that(MyCustomEvaluator(), name="custom_check", response=response)
 ```
 
 ### Custom Metrics

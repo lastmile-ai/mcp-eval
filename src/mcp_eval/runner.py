@@ -12,16 +12,16 @@ from rich.live import Live
 from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.session import TestAgent, TestSession
 
-from .core import TestResult, _setup_functions, _teardown_functions
-from .datasets import Dataset
-from .report_generation.models import EvaluationReport
-from .report_generation import (
+from mcp_eval.core import TestResult, _setup_functions, _teardown_functions
+from mcp_eval.datasets import Dataset
+from mcp_eval.report_generation.models import EvaluationReport
+from mcp_eval.report_generation import (
     generate_combined_summary,
     generate_combined_markdown_report,
     generate_combined_html_report,
 )
-from .report_generation.utils import load_config_info
-from .report_generation.console import (
+from mcp_eval.report_generation.utils import load_config_info
+from mcp_eval.report_generation.console import (
     pad,
     print_failure_details,
     print_test_summary_info,
@@ -441,7 +441,7 @@ def dataset(
     output: str = typer.Option("report", help="Output file prefix"),
 ):
     """Run evaluation on a specific dataset file."""
-    from .datasets import Dataset
+    from mcp_eval.datasets import Dataset
 
     async def _run_dataset():
         try:

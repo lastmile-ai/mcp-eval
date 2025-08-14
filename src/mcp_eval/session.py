@@ -6,7 +6,7 @@ import time
 import tempfile
 import shutil
 from pathlib import Path
-from typing import Any, List, Dict, Optional, Union
+from typing import Any, List, Literal, Dict, Optional, Union
 from datetime import datetime
 from contextlib import asynccontextmanager
 import asyncio
@@ -15,15 +15,15 @@ import asyncio
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
 from mcp_agent.agents.agent_spec import AgentSpec
-from .config import get_settings
 from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM
 from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
 from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
 
-from .metrics import TestMetrics, process_spans, TraceSpan
-from .otel.span_tree import SpanTree, SpanNode
-from .evaluators.base import Evaluator, EvaluatorContext
-from .evaluators import EvaluatorResult, EvaluationRecord
+from mcp_eval.config import get_settings
+from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan
+from mcp_eval.otel.span_tree import SpanTree, SpanNode
+from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
+from mcp_eval.evaluators import EvaluatorResult, EvaluationRecord
 
 import logging
 
@@ -110,15 +110,15 @@ class TestAgent:
         """Add evaluator to run at session end."""
         self._session.add_deferred_evaluator(evaluator, name)
 
-    def assert_that(
+    async def assert_that(
         self,
         evaluator: Evaluator,
         name: Optional[str] = None,
         response: Optional[str] = None,
         **kwargs,
     ) -> None:
-        """Unified assertion API delegated to the session."""
-        self._session.assert_that(
+        """Unified async assertion API delegated to the session."""
+        await self._session.assert_that(
             evaluator,
             name=name,
             response=response,
@@ -220,7 +220,7 @@ class TestSession:
         # 1) Per-call agent_override (Agent | AugmentedLLM | AgentSpec | name | dict)
         # 2) Global programmatic_agent from settings (use_agent/use_agent_object)
         # 3) Fallback to agent_config lightweight dict
-        from .config import get_settings as get_eval_settings
+        from mcp_eval.config import get_settings as get_eval_settings
 
         eval_settings = get_eval_settings()
 
@@ -568,14 +568,14 @@ class TestSession:
             self._record_evaluation_result(name, error_result, str(e))
             raise
 
-    def assert_that(
+    async def assert_that(
         self,
         evaluator: Evaluator,
         name: Optional[str] = None,
         response: Optional[str] = None,
         *,
         input_text: str | None = None,
-        when: str = "auto",
+        when: Literal["auto", "now", "end"] = "auto",
     ) -> None:
         """Unified API to record an assertion without worrying about timing.
 
@@ -596,10 +596,31 @@ class TestSession:
         """
         eval_name = name or evaluator.__class__.__name__
 
-        # Force deferral if requested explicitly
-        if when == "end" or (when == "auto" and response is None):
-            # If a response is provided but we still defer, preserve it so the evaluator
-            # can access it at processing time
+        # Decide if we should defer evaluator execution to session end. Done if:
+        # 1) the caller explicitly requested it, or
+        # 2) the evaluator requires final metrics (i.e., after the full trace is processed)
+        # 3) the caller didn't provide a response (i.e., we need to evaluate against the full trace).
+        force_defer = when == "end"
+        requires_final = bool(evaluator.requires_final_metrics)
+        missing_response = response is None
+        auto_defer = when == "auto" and missing_response
+
+        if force_defer:
+            # Defer evaluation to session end
+            self._evaluators.append(
+                (evaluator, response if response is not None else None, eval_name)
+            )
+            return
+
+        if requires_final and when != "now":
+            # Defer evaluation to session end
+            self._evaluators.append(
+                (evaluator, response if response is not None else None, eval_name)
+            )
+            return
+
+        if auto_defer and when != "now":
+            # Defer evaluation to session end
             self._evaluators.append(
                 (evaluator, response if response is not None else None, eval_name)
             )
@@ -611,18 +632,10 @@ class TestSession:
             self.evaluate_now(evaluator, response or "", eval_name)
             return
 
-        # Async immediate evaluation: schedule and record automatically
-        async def _run_async_now():
-            try:
-                await self.evaluate_now_async(
-                    evaluator, response or "", eval_name, input_text=input_text
-                )
-            except Exception:
-                # evaluate_now_async already records an error result; just ensure exception doesn't bubble
-                return
-
-        task = asyncio.create_task(_run_async_now())
-        self._pending_async_evaluations.append(task)
+        # Async evaluator: run immediately and await
+        await self.evaluate_now_async(
+            evaluator, response or "", eval_name, input_text=input_text
+        )
 
     async def _process_deferred_evaluators(self):
         """Process all deferred evaluators using final OTEL metrics."""
@@ -789,7 +802,7 @@ class TestSession:
 
     async def _save_test_artifacts(self):
         """Save test artifacts (traces, reports) based on configuration."""
-        from .config import get_current_config
+        from mcp_eval.config import get_current_config
         import re
 
         config = get_current_config()

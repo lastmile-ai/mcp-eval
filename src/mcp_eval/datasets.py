@@ -310,7 +310,7 @@ async def generate_test_cases(
     categories: List[str] = None,
 ) -> List[Case]:
     """Generate test cases for an MCP server using LLM."""
-    from .generation import MCPCaseGenerator
+    from mcp_eval.generation import MCPCaseGenerator
 
     generator = MCPCaseGenerator()
     return await generator.generate_cases(

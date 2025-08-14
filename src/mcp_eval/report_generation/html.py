@@ -1,7 +1,12 @@
 """HTML report generation for MCP-Eval."""
 
 from typing import Dict, Any
-from .utils import get_environment_info, load_config_info, format_config_for_display
+
+from mcp_eval.report_generation.utils import (
+    get_environment_info,
+    load_config_info,
+    format_config_for_display,
+)
 
 
 def format_config_for_html(config_info: Dict[str, Any]) -> str:

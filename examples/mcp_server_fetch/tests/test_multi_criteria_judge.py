@@ -52,7 +52,7 @@ async def test_standard_criteria_evaluation(agent: TestAgent, session: TestSessi
         model="claude-3-5-haiku-20241022",
     )
 
-    session.assert_that(
+    await session.assert_that(
         judge,
         name="extraction_quality_assessment",
         response=response,
@@ -97,7 +97,7 @@ async def test_require_all_pass_mode(agent: TestAgent, session: TestSession):
         model="claude-3-5-haiku-20241022",
     )
 
-    session.assert_that(
+    await session.assert_that(
         judge, name="strict_all_pass_evaluation", response=response, input=input
     )
 
@@ -116,7 +116,7 @@ async def test_predefined_criteria_sets(agent: TestAgent, session: TestSession):
         model="claude-3-5-haiku-20241022",
     )
 
-    session.assert_that(
+    await session.assert_that(
         judge, name="standard_criteria_harmonic", response=response, input=input
     )
 
@@ -162,7 +162,7 @@ async def test_error_handling(agent: TestAgent, session: TestSession):
         model="claude-3-5-haiku-20241022",
     )
 
-    session.assert_that(
+    await session.assert_that(
         judge_weighted, name="error_handling_weighted", response=response, input=input
     )
 
@@ -173,6 +173,6 @@ async def test_error_handling(agent: TestAgent, session: TestSession):
         model="claude-3-5-haiku-20241022",
     )
 
-    session.assert_that(
+    await session.assert_that(
         judge_min, name="error_handling_min", response=response, input=input
     )

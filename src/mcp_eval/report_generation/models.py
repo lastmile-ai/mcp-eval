@@ -3,8 +3,8 @@
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
-from ..metrics import TestMetrics
-from ..evaluators import EvaluationRecord
+from mcp_eval.metrics import TestMetrics
+from mcp_eval.evaluators import EvaluationRecord
 
 
 @dataclass

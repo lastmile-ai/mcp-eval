@@ -25,10 +25,10 @@ async def test_basic_fetch_with_pytest(mcp_agent: TestAgent):
     )
 
     # Modern evaluator approach
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         Expect.tools.was_called("fetch"), name="fetch_tool_called", response=response
     )
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         Expect.content.contains("Example Domain"),
         name="contains_example_domain",
         response=response,
@@ -45,7 +45,9 @@ async def test_fetch_with_markdown_conversion(mcp_agent: TestAgent):
     )
 
     # Check tool usage
-    mcp_agent.session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called")
+    await mcp_agent.session.assert_that(
+        Expect.tools.was_called("fetch"), name="fetch_called"
+    )
 
     # Use LLM judge to evaluate markdown conversion
     markdown_judge = Expect.judge.llm(
@@ -53,7 +55,7 @@ async def test_fetch_with_markdown_conversion(mcp_agent: TestAgent):
         min_score=0.7,
         include_input=True,
     )
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         markdown_judge, name="markdown_conversion_check", response=response
     )
 
@@ -74,13 +76,13 @@ async def test_fetch_multiple_urls(
     """Parametrized test for multiple URLs."""
     response = await mcp_agent.generate_str(f"Fetch content from {url}")
 
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         Expect.tools.was_called("fetch"),
         name=f"fetch_called_for_{url.split('//')[1].replace('.', '_')}",
         response=response,
     )
 
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         Expect.content.contains(expected_content),
         name="contains_expected_content",
         response=response,
@@ -97,7 +99,7 @@ async def test_fetch_error_handling(mcp_agent: TestAgent):
     )
 
     # Should still call the fetch tool
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         Expect.tools.was_called("fetch"), name="fetch_attempted"
     )
 
@@ -106,7 +108,7 @@ async def test_fetch_error_handling(mcp_agent: TestAgent):
         rubric="Response should acknowledge the fetch failed and explain the error appropriately",
         min_score=0.8,
     )
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         error_handling_judge, name="error_handling_quality", response=response
     )
 
@@ -130,12 +132,12 @@ async def test_fetch_with_raw_content(mcp_agent: TestAgent):
     )
 
     # Check that fetch was called
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         Expect.tools.was_called("fetch"), name="fetch_raw_called"
     )
 
     # Check for HTML tags in response
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         Expect.content.contains("<html", case_sensitive=False),
         name="contains_html_tags",
         response=response,
@@ -153,7 +155,7 @@ async def test_large_content_chunking(mcp_agent: TestAgent):
     )
 
     # Should call fetch tool (possibly multiple times for chunking)
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         Expect.tools.was_called("fetch", min_times=1), name="fetch_called_for_chunking"
     )
 
@@ -162,7 +164,7 @@ async def test_large_content_chunking(mcp_agent: TestAgent):
         rubric="Response should contain complete JSON data or acknowledge if chunking was needed",
         min_score=0.8,
     )
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         completeness_judge, name="content_completeness", response=response
     )
 
@@ -213,7 +215,7 @@ class CustomMetricsValidationEvaluator(Evaluator):
 async def test_metrics_collection_single_fetch(mcp_agent: TestAgent):
     """Test that metrics are properly collected for a single fetch."""
     # Add metrics validation evaluator
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         CustomMetricsValidationEvaluator(), name="metrics_validation"
     )
 
@@ -251,7 +253,7 @@ async def test_multiple_sequential_fetches_metrics(mcp_agent: TestAgent):
     assert all(name == "fetch" for name in tool_names), "All tool calls should be fetch"
 
     # Add deferred evaluator to verify at session end
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         CustomMetricsValidationEvaluator(), name="multi_fetch_metrics"
     )
 
@@ -345,7 +347,7 @@ async def test_error_metrics_tracking(mcp_agent: TestAgent):
 async def test_comprehensive_metrics_validation(mcp_agent: TestAgent):
     """Comprehensive test that validates all aspects of metrics collection."""
     # Add comprehensive metrics evaluator
-    mcp_agent.session.assert_that(
+    await mcp_agent.session.assert_that(
         CustomMetricsValidationEvaluator(), name="comprehensive_metrics"
     )
 

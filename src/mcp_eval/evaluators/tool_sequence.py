@@ -9,10 +9,14 @@ from mcp_eval.evaluators.shared import EvaluatorResult
 
 @dataclass
 class ToolSequence(SyncEvaluator):
-    """Evaluator that checks if tools were called in a specific sequence."""
+    """Evaluator that checks if tools were called in a specific sequence.
+
+    Requires final metrics: True (runs after full OTEL trace is processed).
+    """
 
     expected_sequence: List[str]
     allow_other_calls: bool = True
+    requires_final_metrics: bool = True
 
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         actual_sequence = [call.name for call in ctx.tool_calls]

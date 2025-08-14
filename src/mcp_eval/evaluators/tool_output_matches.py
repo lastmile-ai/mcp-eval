@@ -75,6 +75,7 @@ class ToolOutputMatches(SyncEvaluator):
     """
 
     call_index: int = -1
+    requires_final_metrics: bool = True
     """Which tool call to validate when multiple calls exist:
     
     - -1: Last call (most recent, default)

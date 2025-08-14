@@ -4,8 +4,8 @@ This module provides a single, IntelliSense-friendly surface area to discover
 what MCP-Eval supports. Use with the unified assertion API:
 
     from mcp_eval import Expect
-    session.assert_that(Expect.tools.was_called("fetch"))
-    session.assert_that(Expect.content.contains("Example Domain"), response=response)
+    await session.assert_that(Expect.tools.was_called("fetch"))
+    await session.assert_that(Expect.content.contains("Example Domain"), response=response)
 
 The functions below return evaluator instances; they do not execute assertions
 themselves. Pair them with `session.assert_that(...)`.
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Pattern, Union
 
-from .evaluators import (
+from mcp_eval.evaluators import (
     ToolWasCalled,
     ToolSequence,
     ResponseContains,

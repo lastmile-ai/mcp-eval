@@ -33,7 +33,7 @@ async def test_span_tree_analysis(agent: TestAgent, session: TestSession):
     )
 
     # Expected tool sequence
-    session.assert_that(
+    await session.assert_that(
         Expect.tools.sequence(["fetch", "fetch"], allow_other_calls=True),
         name="correct_fetch_sequence",
     )
@@ -96,7 +96,7 @@ async def test_enhanced_llm_judge(agent: TestAgent, session: TestSession):
     )
 
     # Basic tool check
-    session.assert_that(
+    await session.assert_that(
         Expect.tools.was_called("fetch"), name="fetch_called_for_analysis"
     )
 
@@ -114,7 +114,7 @@ async def test_enhanced_llm_judge(agent: TestAgent, session: TestSession):
         require_reasoning=True,
     )
 
-    session.assert_that(
+    await session.assert_that(
         enhanced_judge, name="detailed_content_analysis", response=response
     )
 
@@ -129,7 +129,7 @@ async def test_fetch_performance_analysis(agent: TestAgent, session: TestSession
     )
 
     # Should make multiple fetch calls
-    session.assert_that(
+    await session.assert_that(
         Expect.tools.was_called("fetch", min_times=3), name="multiple_fetch_calls"
     )
 
@@ -139,7 +139,7 @@ async def test_fetch_performance_analysis(agent: TestAgent, session: TestSession
         min_score=0.8,
     )
 
-    session.assert_that(
+    await session.assert_that(
         performance_judge, name="multi_url_performance", response=response
     )
 
@@ -184,7 +184,7 @@ async def test_comprehensive_error_recovery(agent: TestAgent, session: TestSessi
     )
 
     # Should make multiple fetch attempts
-    session.assert_that(
+    await session.assert_that(
         Expect.tools.was_called("fetch", min_times=3), name="multiple_fetch_attempts"
     )
 
@@ -202,6 +202,6 @@ async def test_comprehensive_error_recovery(agent: TestAgent, session: TestSessi
         include_input=True,
     )
 
-    session.assert_that(
+    await session.assert_that(
         error_recovery_judge, name="comprehensive_error_recovery", response=response
     )

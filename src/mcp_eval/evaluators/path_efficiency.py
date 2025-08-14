@@ -33,6 +33,8 @@ class PathEfficiency(SyncEvaluator):
     default_tool_limit: int = 1
     """Default limit for tools not in tool_usage_limits."""
 
+    requires_final_metrics: bool = True
+
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         actual_steps = len(ctx.metrics.tool_calls)
         tool_sequence = [call.name for call in ctx.tool_calls]

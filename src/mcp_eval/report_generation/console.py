@@ -8,8 +8,8 @@ from rich.spinner import Spinner
 from rich.columns import Columns
 from rich.console import Group
 
-from ..core import TestResult
-from .models import EvaluationReport, CaseResult
+from mcp_eval.core import TestResult
+from mcp_eval.report_generation.models import EvaluationReport, CaseResult
 
 
 def pad(

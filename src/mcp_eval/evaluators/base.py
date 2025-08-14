@@ -8,7 +8,7 @@ from mcp_eval.metrics import TestMetrics
 from mcp_eval.otel.span_tree import SpanTree
 
 if TYPE_CHECKING:
-    from . import EvaluatorResult
+    from mcp_eval.evaluators import EvaluatorResult
 
 
 InputType = TypeVar("InputType")
@@ -39,6 +39,10 @@ class EvaluatorContext(Generic[InputType, OutputType]):
 
 class Evaluator(ABC, Generic[InputType, OutputType]):
     """Base class for all evaluators."""
+
+    # If True, evaluator prefers to run after the full trace/metrics are finalized
+    # (i.e., at session end). Defaults to False for immediate-capable checks.
+    requires_final_metrics: bool = False
 
     @abstractmethod
     async def evaluate(

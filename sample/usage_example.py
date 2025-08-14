@@ -1,11 +1,14 @@
 import asyncio
+from mcp_agent.agents.agent import Agent
+from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
+
+
 import mcp_eval
+
 from mcp_eval import task, setup, ToolWasCalled, LLMJudge, Case, Dataset
 from mcp_eval.core import with_agent
 from mcp_eval.evaluators.shared import EvaluatorResult
 from mcp_eval.session import TestAgent, TestSession
-from mcp_agent.agents.agent import Agent
-from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
 
 
 @setup
@@ -29,8 +32,16 @@ async def test_enhanced_judge(agent: TestAgent, session: TestSession):
         require_reasoning=True,
     )
 
-    await session.evaluate_now_async(enhanced_judge, response, "enhanced_judge_test")
-    session.add_deferred_evaluator(ToolWasCalled("fetch"), "fetch_called")
+    await session.assert_that(
+        enhanced_judge,
+        name="enhanced_judge_test",
+        response=response,
+    )
+
+    await session.assert_that(
+        ToolWasCalled("fetch"),
+        name="fetch_called",
+    )
 
 
 @task("Test with span tree analysis")
@@ -120,7 +131,7 @@ async def dataset_with_enhanced_features():
 
         @with_agent(prog_llm)
         @task("enhanced_task_prog")
-        async def run(agent: TestAgent, session: TestSession):
+        async def run(agent: TestAgent, _session: TestSession):
             return await agent.generate_str(inputs)
 
         result = await run()

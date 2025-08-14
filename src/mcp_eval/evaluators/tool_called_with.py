@@ -6,11 +6,15 @@ from mcp_eval.evaluators.tool_was_called import ToolWasCalled
 
 
 class ToolCalledWith(ToolWasCalled):
-    """Evaluator that checks if a tool was called with specific arguments."""
+    """Evaluator that checks if a tool was called with specific arguments.
+
+    Requires final metrics: True (runs after full OTEL trace is processed).
+    """
 
     def __init__(self, tool_name: str, expected_args: dict):
         super().__init__(tool_name)
         self.expected_args = expected_args
+        self.requires_final_metrics = True
 
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         tool_calls = [call for call in ctx.tool_calls if call.name == self.tool_name]

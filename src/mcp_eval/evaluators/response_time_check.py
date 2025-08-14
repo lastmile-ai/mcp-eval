@@ -6,10 +6,14 @@ from mcp_eval.evaluators.max_iterations import MaxIterations
 
 
 class ResponseTimeCheck(MaxIterations):
-    """Evaluator that checks if the response time is under the threshold"""
+    """Evaluator that checks if the response time is under the threshold.
+
+    Requires final metrics: True (runs after full OTEL trace is processed).
+    """
 
     def __init__(self, max_ms: float):
         self.max_ms = max_ms
+        self.requires_final_metrics = True
 
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         passed = ctx.metrics.latency_ms <= self.max_ms
