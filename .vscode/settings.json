@@ -1,3 +1,10 @@
 {
-    "makefile.configureOnOpen": false
+  "makefile.configureOnOpen": false,
+  "yaml.schemas": {
+    // TODO: jerron - currently this is not working as repo is private.
+    "https://raw.githubusercontent.com/lastmile-ai/mcp-eval/main/schema/mcpeval.config.schema.json": [
+      "mcpeval.yaml",
+      "mcpeval.yml"
+    ]
+  }
 }
