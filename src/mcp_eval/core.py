@@ -85,6 +85,10 @@ def task(description: str = "", server: str = None):
 
     The decorated function will receive (agent: TestAgent, session: TestSession)
     as arguments, making all dependencies explicit.
+
+    Args:
+        description (str, optional): The description of the evaluation task. Defaults to "".
+        server (str, optional): Name of the MCP server. Defaults to None.
     """
 
     def decorator(func: Callable):
