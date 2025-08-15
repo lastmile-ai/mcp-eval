@@ -10,14 +10,19 @@ servers:
       "UV_NO_PROGRESS": "1"
     }
 
-# Agent Configurations
+# Global defaults for LLM used in tests
+provider: "anthropic"
+model: "claude-3-5-haiku-20241022"
+
+# Named AgentSpecs used by tests
 agents:
   default:
     name: "fetch_tester"
     instruction: |
       You are a web content fetching agent. You can fetch URLs and extract their content.
       Be thorough in your responses and handle errors gracefully.
-    llm_factory: "AnthropicAugmentedLLM"
+    server_names: ["fetch"]
+    provider: "anthropic"
     model: "claude-3-5-haiku-20241022"
     max_iterations: 5
 
@@ -26,7 +31,8 @@ agents:
     instruction: |
       You are an expert web scraping agent. You can fetch content from multiple URLs,
       handle various content types, and process large documents efficiently using chunking.
-    llm_factory: "AnthropicAugmentedLLM"
+    server_names: ["fetch"]
+    provider: "anthropic"
     model: "claude-sonnet-4-20250514"
     max_iterations: 10
 

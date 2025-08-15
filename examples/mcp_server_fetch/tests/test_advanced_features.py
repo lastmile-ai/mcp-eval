@@ -17,7 +17,8 @@ def configure_advanced_tests():
         {
             "name": "advanced_fetch_agent",
             "instruction": "You are an expert web content agent with advanced capabilities.",
-            "llm_factory": "AnthropicAugmentedLLM",
+            "provider": "anthropic",
+            "model": "claude-3-5-haiku-20241022",
             "model": "claude-sonnet-4-20250514",
             "max_iterations": 10,
         }

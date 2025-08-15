@@ -15,6 +15,7 @@ from mcp_eval.evaluators import (
 )
 from mcp_eval.metrics import TestMetrics
 from mcp_eval.report_generation.models import EvaluationReport, CaseResult
+from mcp_agent.agents.agent_spec import AgentSpec
 from mcp_eval.session import TestSession
 
 
@@ -53,15 +54,16 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         cases: List[Case[InputType, OutputType, MetadataType]] = None,
         evaluators: List[Evaluator] = None,
         server_name: Optional[str] = None,
-        agent_config: Optional[Dict[str, Any]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        agent_spec: AgentSpec | str | None = None,
     ):
         self.name = name
         self.cases = cases or []
         self.evaluators = evaluators or []
         self.server_name = server_name
-        self.agent_config = agent_config or {}
         self.metadata = metadata or {}
+        # Agent selection for dataset evaluation (AgentSpec object or spec name)
+        self.agent_spec: AgentSpec | str | None = agent_spec
 
     def add_case(self, case: Case[InputType, OutputType, MetadataType]):
         """Add a test case to the dataset."""
@@ -75,7 +77,6 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         self,
         task_func: Callable,
         max_concurrency: Optional[int] = None,
-        agent_config: Optional[Dict[str, Any]] = None,
         progress_callback: Optional[Callable[[bool, bool], None]] = None,
     ) -> EvaluationReport:
         """Evaluate the task function against all cases using unified TestSession.
@@ -84,8 +85,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         """
         import asyncio
 
-        # Merge agent configurations
-        final_agent_config = {**self.agent_config, **(agent_config or {})}
+        # No agent_config support; rely on AgentSpecs and global settings
 
         # Create semaphore for concurrency control
         semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency else None
@@ -94,9 +94,8 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
             async def _eval():
                 # Use the same unified TestSession as @task decorators
                 session = TestSession(
-                    server_name=self.server_name or "default",
                     test_name=case.name,
-                    agent_config=final_agent_config,
+                    agent_override=self.agent_spec,
                 )
 
                 try:
@@ -204,12 +203,11 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         self,
         task_func: Callable[[InputType], OutputType],
         max_concurrency: Optional[int] = None,
-        agent_config: Optional[Dict[str, Any]] = None,
     ) -> EvaluationReport:
         """Synchronous wrapper for evaluate."""
         import asyncio
 
-        return asyncio.run(self.evaluate(task_func, max_concurrency, agent_config))
+        return asyncio.run(self.evaluate(task_func, max_concurrency))
 
     def to_file(self, path: Union[str, Path], format: Optional[str] = None):
         """Save dataset to file in YAML or JSON format."""
@@ -224,8 +222,12 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         data = {
             "name": self.name,
             "server_name": self.server_name,
-            "agent_config": self.agent_config,
+            # Agent configuration removed; configure via AgentSpecs and settings
             "metadata": self.metadata,
+            # Persist agent_spec as a name if possible; otherwise omit complex objects
+            "agent_spec": (
+                self.agent_spec.name if isinstance(self.agent_spec, AgentSpec) else self.agent_spec
+            ),
             "cases": [
                 {
                     "name": case.name,
@@ -242,10 +244,10 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         }
 
         if format in ["yaml", "yml"]:
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 yaml.dump(data, f, default_flow_style=False)
         else:
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, default=str)
 
     @classmethod
@@ -260,10 +262,10 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         path = Path(path)
 
         if path.suffix.lower() in [".yaml", ".yml"]:
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f)
         else:
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
         cases = []
@@ -297,8 +299,8 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
             cases=cases,
             evaluators=global_evaluators,
             server_name=data.get("server_name"),
-            agent_config=data.get("agent_config", {}),
             metadata=data.get("metadata", {}),
+            agent_spec=data.get("agent_spec"),
         )
 
 

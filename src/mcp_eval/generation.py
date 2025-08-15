@@ -5,7 +5,7 @@ This module provides two complementary approaches:
 - Backward-compatible simple dataset generation
 """
 
-from typing import List, Dict, Any, Optional, Union, Annotated, Literal
+from typing import List, Dict, Any, Optional, Annotated, Literal, Union
 from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
@@ -26,8 +26,7 @@ from mcp_eval.evaluators import (
 # mcp-agent integration for agent-driven scenario generation
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
-from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
-from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
+from mcp_agent.workflows.factory import _llm_factory
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 
@@ -74,8 +73,6 @@ class MCPCaseGenerator:
         client = get_judge_client(self.model)
 
         try:
-            import json
-
             response = await client.generate_str(prompt)
 
             # Parse the JSON response
@@ -334,15 +331,9 @@ class AssertionBundle(BaseModel):
     assertions: List[AssertionSpec]
 
 
-def _resolve_llm_factory(llm_factory: Union[str, type]) -> type:
-    if isinstance(llm_factory, str):
-        if "anthropic" in llm_factory.lower() or "claude" in llm_factory.lower():
-            return AnthropicAugmentedLLM
-        if "openai" in llm_factory.lower() or "gpt" in llm_factory.lower():
-            return OpenAIAugmentedLLM
-        # Default to Anthropic for robustness
-        return AnthropicAugmentedLLM
-    return llm_factory
+def _build_llm(agent: Agent, provider: str, model: Optional[str]):
+    factory = _llm_factory(provider=provider, model=model, context=agent.context)
+    return factory(agent)
 
 
 def _assertion_catalog_prompt() -> str:
@@ -364,7 +355,7 @@ async def generate_scenarios_with_agent(
     tools: List[Dict[str, Any]],
     *,
     n_examples: int = 8,
-    llm_factory: Union[str, type] = "AnthropicAugmentedLLM",
+    provider: str = "anthropic",
     model: Optional[str] = None,
 ) -> List[ScenarioSpec]:
     """Use an mcp-agent Agent to generate structured scenarios and assertion specs."""
@@ -377,13 +368,7 @@ async def generate_scenarios_with_agent(
             server_names=[],
             context=running.context,
         )
-        factory = _resolve_llm_factory(llm_factory)
-        llm = await agent.attach_llm(factory)
-        if model and hasattr(llm, "set_model"):
-            try:
-                llm.set_model(model)
-            except Exception:
-                pass
+        llm = _build_llm(agent, provider, model)
 
         # Build prompt with tool schemas and assertion catalog
         tool_lines = []
@@ -423,7 +408,7 @@ async def refine_assertions_with_agent(
     scenarios: List[ScenarioSpec],
     tools: List[Dict[str, Any]],
     *,
-    llm_factory: Union[str, type] = "AnthropicAugmentedLLM",
+    provider: str = "anthropic",
     model: Optional[str] = None,
 ) -> List[ScenarioSpec]:
     """For each scenario, ask an agent to propose additional assertions using available tool schemas and the assertion catalog."""
@@ -437,13 +422,7 @@ async def refine_assertions_with_agent(
             server_names=[],
             context=running.context,
         )
-        factory = _resolve_llm_factory(llm_factory)
-        llm = await agent.attach_llm(factory)
-        if model and hasattr(llm, "set_model"):
-            try:
-                llm.set_model(model)
-            except Exception:
-                pass
+        llm = _build_llm(agent, provider, model)
 
         tool_lines = []
         for t in tools:

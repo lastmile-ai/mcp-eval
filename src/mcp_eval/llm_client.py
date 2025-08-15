@@ -2,8 +2,8 @@
 
 from typing import Optional, TypeVar
 from pydantic import BaseModel
-from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
-from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
+from mcp_agent.workflows.factory import _llm_factory
+from mcp_eval.config import get_settings
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -18,24 +18,21 @@ class JudgeLLMClient:
     async def generate_str(self, prompt: str) -> str:
         """Generate a string response."""
         if not self._client:
-            if "claude" in self.model:
-                self._client = AnthropicAugmentedLLM()
-            elif "gpt" in self.model:
-                self._client = OpenAIAugmentedLLM()
-            else:
-                self._client = AnthropicAugmentedLLM()  # Default
+            settings = get_settings()
+            provider = settings.provider or ("anthropic" if "claude" in (self.model or "") else "openai")
+            factory = _llm_factory(provider=provider, model=self.model, context=None)
+            # Judge client is LLM-only; we build a client without an Agent
+            self._client = factory  # use factory with callable-style interface
 
         return await self._client.generate_str(prompt)
 
     async def generate_structured(self, prompt: str, response_model: type[T]) -> T:
         """Generate a structured response using Pydantic model."""
         if not self._client:
-            if "claude" in self.model:
-                self._client = AnthropicAugmentedLLM()
-            elif "gpt" in self.model:
-                self._client = OpenAIAugmentedLLM()
-            else:
-                self._client = AnthropicAugmentedLLM()  # Default
+            settings = get_settings()
+            provider = settings.provider or ("anthropic" if "claude" in (self.model or "") else "openai")
+            factory = _llm_factory(provider=provider, model=self.model, context=None)
+            self._client = factory
 
         # Use the underlying LLM client's structured generation
         response = await self._client.generate_structured(

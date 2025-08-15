@@ -1,14 +1,14 @@
 """Configuration management for MCP-Eval built on top of mcp-agent Settings.
 
 This module extends the mcp-agent configuration with evaluation-specific settings
-and provides helpers that preserve backward compatibility with older mcp-eval
-code paths while enabling consolidated configuration in a single file.
+and consolidates configuration in a single typed object.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional, List, Literal, Union, Any
+from typing import Dict, Optional, List, Literal, Union, Any, Callable
+from contextvars import ContextVar
 
 import yaml
 from pydantic import BaseModel, Field
@@ -22,17 +22,12 @@ from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM
 
 
 class AgentConfig(BaseSettings):
-    """Lightweight test-time agent overrides for convenience.
-
-    Note: Prefer AgentSpec discovery via mcp-agent configuration for declarative
-    agents. This structure remains for quick overrides in tests.
-    """
-
-    name: str = "default_agent"
-    instruction: str = "You are a helpful test agent."
+    """Deprecated. No longer used."""
+    name: str | None = None
+    instruction: str | None = None
     llm_factory: Optional[str] = None
     model: Optional[str] = None
-    max_iterations: int = 5
+    max_iterations: int | None = None
 
 
 class JudgeConfig(BaseSettings):
@@ -107,30 +102,19 @@ class MCPEvalSettings(AgentSettings):
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
 
-    # Back-compat default servers for tests (preferred: set on Agent/AgentSpec)
+    # Default servers for tests (preferred: set on Agent/AgentSpec)
     default_servers: List[str] | None = Field(default_factory=list)
 
     # Enable subagent discovery by default so AgentSpec files are picked up
     subagents: SubagentSettings | None = Field(default_factory=SubagentSettings)
 
-    # Test-time overrides/state (not persisted)
-    agent_config: Optional[Dict[str, object]] = None
+    # LLM defaults for tests
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
-    class ProgrammaticAgentConfig(BaseModel):
-        kind: Literal[
-            "agent_object",
-            "llm_object",
-            "agent_spec",
-            "agent_spec_name",
-            "overrides",
-        ]
-        agent: Agent | None = None
-        llm: AugmentedLLM | None = None
-        agent_spec: AgentSpec | None = None
-        agent_spec_name: str | None = None
-        overrides: Dict[str, object] | None = None
-
-    programmatic_agent: ProgrammaticAgentConfig | None = None
+    # Test-time default agent (not persisted)
+    # Keep schema-serializable: AgentSpec or name only
+    default_agent: AgentSpec | str | None = None
 
 
 def _deep_merge(base: dict, update: dict) -> dict:
@@ -145,6 +129,12 @@ def _deep_merge(base: dict, update: dict) -> dict:
 
 # Global configuration state
 _current_settings: Optional[MCPEvalSettings] = None
+_programmatic_default_agent: ContextVar[Union[Agent, AugmentedLLM, None]] = ContextVar(
+    "programmatic_default_agent", default=None
+)
+_programmatic_default_agent_factory: ContextVar[
+    Optional[Callable[[], Union[Agent, AugmentedLLM]]]
+] = ContextVar("programmatic_default_agent_factory", default=None)
 
 
 def _search_upwards_for(paths: List[str]) -> Optional[Path]:
@@ -294,7 +284,7 @@ def load_config(config_path: Optional[Union[str, Path]] = None) -> MCPEvalSettin
 
 
 def get_current_config() -> Dict[str, Any]:
-    """Flattened dict view (no legacy mcpeval.yaml support)."""
+    """Flattened dict view of current settings."""
     if _current_settings is None:
         load_config()
 
@@ -317,7 +307,6 @@ def get_current_config() -> Dict[str, Any]:
     )
 
     return {
-        "agent_config": _current_settings.agent_config or AgentConfig().model_dump(),
         "servers": servers_dict,
         "judge": _current_settings.judge.model_dump(),
         "metrics": _current_settings.metrics.model_dump(),
@@ -332,6 +321,32 @@ def get_settings() -> MCPEvalSettings:
     if _current_settings is None:
         load_config()
     return _current_settings  # type: ignore[return-value]
+
+
+class ProgrammaticDefaults:
+    """Holds programmatic defaults that should not enter the pydantic schema.
+
+    This avoids JSON schema/serialization issues while allowing users to set
+    process-local defaults like a concrete Agent or AugmentedLLM.
+    """
+
+    @staticmethod
+    def set_default_agent(value: Union[Agent, AugmentedLLM, None]) -> None:
+        _programmatic_default_agent.set(value)
+
+    @staticmethod
+    def get_default_agent() -> Union[Agent, AugmentedLLM, None]:
+        return _programmatic_default_agent.get()
+
+    @staticmethod
+    def set_default_agent_factory(
+        value: Optional[Callable[[], Union[Agent, AugmentedLLM]]]
+    ) -> None:
+        _programmatic_default_agent_factory.set(value)
+
+    @staticmethod
+    def get_default_agent_factory() -> Optional[Callable[[], Union[Agent, AugmentedLLM]]]:
+        return _programmatic_default_agent_factory.get()
 
 
 def update_config(config: Dict[str, object]):
@@ -386,49 +401,42 @@ def use_servers(server_names: List[str]):
 
 
 def use_agent(
-    agent_or_config: Union[Agent, AugmentedLLM, AgentSpec, Dict[str, object], str],
+    agent_or_config: Union[Agent, AugmentedLLM, AgentSpec, str],
 ):
-    """Configure default agent using a strongly-typed API.
+    """Configure default agent for tests.
 
-    - Agent: programmatic agent instance
-    - AugmentedLLM: programmatic LLM instance (its agent will be used)
-    - AgentSpec: declarative agent spec
+    Supported:
+    - AgentSpec: declarative agent spec (schema-serializable)
     - str: AgentSpec name (resolved from discovered subagents)
-    - dict: lightweight overrides (name/instruction/llm_factory/model/server_names)
+    - Agent | AugmentedLLM: programmatic defaults (stored outside settings schema)
     """
     if _current_settings is None:
         load_config()
-    if isinstance(agent_or_config, Agent):
-        _current_settings.programmatic_agent = MCPEvalSettings.ProgrammaticAgentConfig(
-            kind="agent_object", agent=agent_or_config
-        )
-        _current_settings.agent_config = None
+    # Schema-safe storage for settings.default_agent (AgentSpec | str)
+    if isinstance(agent_or_config, (AgentSpec, str)):
+        _current_settings.default_agent = agent_or_config
         return
-    if isinstance(agent_or_config, AugmentedLLM):
-        _current_settings.programmatic_agent = MCPEvalSettings.ProgrammaticAgentConfig(
-            kind="llm_object", llm=agent_or_config
-        )
-        _current_settings.agent_config = None
-        return
-    if isinstance(agent_or_config, AgentSpec):
-        _current_settings.programmatic_agent = MCPEvalSettings.ProgrammaticAgentConfig(
-            kind="agent_spec", agent_spec=agent_or_config
-        )
-        _current_settings.agent_config = None
-        return
-    if isinstance(agent_or_config, str):
-        _current_settings.programmatic_agent = MCPEvalSettings.ProgrammaticAgentConfig(
-            kind="agent_spec_name", agent_spec_name=agent_or_config
-        )
-        _current_settings.agent_config = None
+    # For programmatic Agent/AugmentedLLM, store in a side-channel
+    if isinstance(agent_or_config, (Agent, AugmentedLLM)):
+        ProgrammaticDefaults.set_default_agent(agent_or_config)
+        ProgrammaticDefaults.set_default_agent_factory(None)
         return
     if isinstance(agent_or_config, dict):
-        _current_settings.programmatic_agent = MCPEvalSettings.ProgrammaticAgentConfig(
-            kind="overrides", overrides=agent_or_config
-        )
-        _current_settings.agent_config = agent_or_config
-        return
+        raise TypeError("Dict overrides removed. Use AgentSpec or name.")
     raise TypeError("Unsupported agent configuration type")
+
+
+def use_agent_factory(factory: Callable[[], Union[Agent, AugmentedLLM]]):
+    """Configure a factory for creating a default Agent/AugmentedLLM per session.
+
+    This is the concurrency-safe way to set a programmatic default when running
+    tests in parallel. Each TestSession will call the factory to obtain a fresh
+    instance, avoiding shared mutable state.
+    """
+    if _current_settings is None:
+        load_config()
+    ProgrammaticDefaults.set_default_agent(None)
+    ProgrammaticDefaults.set_default_agent_factory(factory)
 
 
 def use_agent_object(obj: Union[Agent, AugmentedLLM]):
@@ -437,13 +445,7 @@ def use_agent_object(obj: Union[Agent, AugmentedLLM]):
 
 
 def use_llm_factory(llm_factory: type):
-    """Configure default LLM factory."""
-    if _current_settings is None:
-        load_config()
-
-    if _current_settings.agent_config is None:
-        _current_settings.agent_config = {}
-    _current_settings.agent_config["llm_factory"] = llm_factory
+    raise NotImplementedError("use_llm_factory removed. Configure provider/model in settings.")
 
 
 # Initialize with file config on import

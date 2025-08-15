@@ -57,13 +57,17 @@ from mcp_agent.agents.agent import Agent
 @setup
 def configure():
     # Define servers on the Agent itself (preferred)
-    mcp_eval.use_agent({
-        "name": "fetch_tester",
-        "instruction": "You can fetch URLs and summarize them.",
-        "llm_factory": "AnthropicAugmentedLLM",
-        # Attach the server by name (from mcp-agent config)
-        "server_names": ["fetch"],
-    })
+    from mcp_agent.agents.agent_spec import AgentSpec
+    mcp_eval.use_agent(
+        AgentSpec(
+            name="fetch_tester",
+            instruction="You can fetch URLs and summarize them.",
+            server_names=["fetch"],
+            # Optionally set per-agent LLM
+            # provider="anthropic",
+            # model="claude-3-5-haiku-20241022",
+        )
+    )
 
 @task("Fetch example.com and verify")
 async def test_fetch_example(agent, session):
@@ -100,15 +104,7 @@ agent = Agent(name="my_agent", instruction="Be concise.", server_names=["fetch"]
 mcp_eval.use_agent(agent)
 ```
 
-2) Programmatic AugmentedLLM (its `.agent` will be used)
-
-```python
-from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
-import mcp_eval
-
-llm = OpenAIAugmentedLLM()
-mcp_eval.use_agent(llm)
-```
+2) Programmatic AugmentedLLM (its `.agent` will be used) — prefer AgentSpec
 
 3) AgentSpec object or by name (discovered by mcp‑agent)
 
@@ -122,18 +118,7 @@ mcp_eval.use_agent(spec)
 mcp_eval.use_agent("Fetcher")  # by name, resolved from discovered subagents
 ```
 
-4) Lightweight overrides dict
-
-```python
-import mcp_eval
-
-mcp_eval.use_agent({
-    "name": "scenario_agent",
-    "instruction": "You test fetch capabilities.",
-    "server_names": ["fetch"],
-    "llm_factory": "AnthropicAugmentedLLM",
-})
-```
+4) (Removed) dict overrides — use AgentSpec or name
 
 5) Per‑test override with `with_agent`
 
@@ -292,12 +277,7 @@ cases = [
     ),
 ]
 
-dataset = Dataset(
-    name="Agent Basic Suite",
-    cases=cases,
-    server_name="fetch",
-    agent_config={"llm_factory": "AnthropicAugmentedLLM"},
-)
+dataset = Dataset(name="Agent Basic Suite", cases=cases, server_name="fetch", agent_spec="Fetcher")
 
 async def task_func(inputs: str, agent, session) -> str:
     return await agent.generate_str(inputs)
@@ -456,17 +436,22 @@ or refer to a discovered AgentSpec that already lists `server_names`.
 
 - Use config‑discovered AgentSpecs (inline or from `subagents.search_paths`) that include `server_names`. You can reference them by name with `mcp_eval.use_agent("SpecName")` or `@pytest.mark.mcp_agent("SpecName")`.
 
-- Back‑compat helper: `mcp_eval.use_server("my_server")` sets a default server list used when an Agent is implicitly constructed. Prefer explicit `server_names` on the Agent/Spec in new code.
+- Optional helper: `mcp_eval.use_server("my_server")` sets a default server list used when an Agent is implicitly constructed. Prefer explicit `server_names` on the Agent/Spec in new code.
 
 ```python
 import mcp_eval
 
-mcp_eval.use_agent({
-    "name": "server_tester",
-    "instruction": "Use the server tools effectively and report results.",
-    "llm_factory": "AnthropicAugmentedLLM",
-    "server_names": ["my_server"],
-})
+from mcp_agent.agents.agent_spec import AgentSpec
+mcp_eval.use_agent(
+    AgentSpec(
+        name="server_tester",
+        instruction="Use the server tools effectively and report results.",
+        server_names=["my_server"],
+        # Optionally per-agent provider/model
+        # provider="anthropic",
+        # model="claude-3-5-haiku-20241022",
+    )
+)
 ```
 
 ### 2) Define Configuration
@@ -494,17 +479,7 @@ otel:
 
 MCP‑Eval also has typed evaluation settings layered on top of the mcp‑agent settings, including judge, metrics, reporting, and execution knobs. These are auto‑loaded from your mcp‑agent config; a separate `mcpeval.yaml` is optional and used mainly for displaying config in reports.
 
-Programmatic helpers:
-
-```python
-import mcp_eval
-from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
-
-# Use a specific LLM factory for tests
-mcp_eval.use_llm_factory(AnthropicAugmentedLLM)
-
-# Set/override the default agent as shown in Part 1
-```
+Note: Choose the LLM by setting `provider` and `model` globally and/or per AgentSpec. MCP‑Eval prefers per‑AgentSpec provider/model over global defaults.
 
 ### 3) Write Tests for Your Server
 
@@ -637,7 +612,7 @@ About mcpeval.yaml
 - Optional; used primarily for display in combined reports (Markdown/HTML). Typed configuration is sourced from `mcp-agent` files.
 - You may keep metadata (e.g., run labels) here if you want them in reports.
 
-Programmatic helpers (already shown): `use_agent(...)`, `use_llm_factory(...)`.
+Programmatic helpers (already shown): `use_agent(...)`.
 
 ### MCP‑Eval configuration files (mcpeval.*)
 

@@ -65,11 +65,7 @@ fetch_dataset = Dataset(
     name="MCP Fetch Server Basic Tests",
     cases=basic_fetch_cases,
     server_name="fetch",
-    agent_config={
-        "name": "dataset_fetch_tester",
-        "instruction": "You are a web content fetching agent. Be thorough and handle errors gracefully.",
-        "llm_factory": "AnthropicAugmentedLLM",
-    },
+    # Agent configuration is now driven by global provider/model settings in mcpeval.yaml
     evaluators=[
         # Global evaluators applied to all cases
         ToolSuccessRate(min_rate=0.8, tool_name="fetch"),

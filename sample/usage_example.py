@@ -1,6 +1,6 @@
 import asyncio
 from mcp_agent.agents.agent import Agent
-from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
+from mcp_agent.workflows.factory import _llm_factory
 
 
 import mcp_eval
@@ -110,10 +110,7 @@ dataset = Dataset(
     name="Enhanced Fetch Tests",
     cases=cases,
     server_name="fetch",
-    agent_config={
-        "llm_factory": "AnthropicAugmentedLLM",
-        "max_iterations": 10,
-    },
+    # LLM provider/model now configured globally in mcpeval.yaml
 )
 
 
@@ -127,7 +124,8 @@ async def dataset_with_enhanced_features():
             instruction="You can fetch and summarize.",
             server_names=["fetch"],
         )
-        prog_llm = OpenAIAugmentedLLM(agent=prog_agent)
+        llm_factory = _llm_factory(provider="openai", model=None, context=None)
+        prog_llm = llm_factory(prog_agent)
 
         @with_agent(prog_llm)
         @task("enhanced_task_prog")

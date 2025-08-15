@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 import re
 from datetime import datetime
 
@@ -24,8 +24,7 @@ from mcp_agent.app import MCPApp
 from mcp_agent.mcp.gen_client import gen_client
 from mcp_agent.config import MCPServerSettings
 from mcp_agent.agents.agent import Agent
-from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
-from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
+from mcp_agent.workflows.factory import _llm_factory
 
 from mcp_eval.generation import (
     generate_scenarios_with_agent,
@@ -115,18 +114,12 @@ def _sanitize_slug(value: str) -> str:
     return s or "gen"
 
 
-def _resolve_llm_factory(llm_factory: Union[str, type]) -> type:
-    if isinstance(llm_factory, str):
-        lf = llm_factory.lower()
-        if "openai" in lf or "gpt" in lf:
-            return OpenAIAugmentedLLM
-        return AnthropicAugmentedLLM
-    return llm_factory
+def _build_llm(agent: Agent, provider: str, model: Optional[str]) -> Any:
+    factory = _llm_factory(provider=provider, model=model, context=agent.context)
+    return factory(agent)
 
 
-async def _generate_llm_slug(
-    server_name: str, llm_factory: Union[str, type], model: Optional[str]
-) -> Optional[str]:
+async def _generate_llm_slug(server_name: str, provider: str, model: Optional[str]) -> Optional[str]:
     try:
         mcp_app = MCPApp()
         async with mcp_app.run() as running:
@@ -136,13 +129,7 @@ async def _generate_llm_slug(
                 server_names=[],
                 context=running.context,
             )
-            factory = _resolve_llm_factory(llm_factory)
-            llm = await agent.attach_llm(factory)
-            if model and hasattr(llm, "set_model"):
-                try:
-                    llm.set_model(model)
-                except Exception:
-                    pass
+            llm = _build_llm(agent, provider, model)
             prompt = (
                 "Generate a very short, lowercase, hyphenated slug (max 8 chars) to disambiguate a filename for server '"
                 + server_name
@@ -397,7 +384,7 @@ async def _discover_tools(server_name: str) -> List[Dict[str, Any]]:
     return tools
 
 
-def _write_server_to_agent_config(
+def _write_server_to_agent_config_file(
     project: Path, name: str, settings: MCPServerSettings
 ) -> None:
     cfg_path = project / "mcp-agent.config.yaml"
@@ -413,7 +400,7 @@ def _emit_tests(
     style: str,
     server_name: str,
     scenarios: List[Any],
-    llm_factory: Union[str, type] = "AnthropicAugmentedLLM",
+    provider: str,
     model: Optional[str] = None,
 ) -> None:
     style = style.strip().lower()
@@ -428,7 +415,7 @@ def _emit_tests(
             try:
                 import asyncio
 
-                slug = asyncio.run(_generate_llm_slug(server_name, llm_factory, model))
+                slug = asyncio.run(_generate_llm_slug(server_name, provider, model))
             except Exception:
                 slug = None
             if slug:
@@ -463,7 +450,7 @@ def _emit_tests(
         try:
             import asyncio
 
-            slug = asyncio.run(_generate_llm_slug(server_name, llm_factory, model))
+            slug = asyncio.run(_generate_llm_slug(server_name, provider, model))
         except Exception:
             slug = None
         if slug:
@@ -485,12 +472,8 @@ def run_generator(
     out_dir: str = typer.Option(".", help="Project directory to write configs/tests"),
     style: str = typer.Option("pytest", help="Test style: pytest|decorators|dataset"),
     n_examples: int = typer.Option(6, help="Number of scenarios to generate"),
-    llm_factory: str = typer.Option(
-        "AnthropicAugmentedLLM", help="LLM factory for generation"
-    ),
-    model: Optional[str] = typer.Option(
-        None, help="Model hint for generation (optional)"
-    ),
+    provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
+    model: Optional[str] = typer.Option(None, help="Model id (optional)"),
 ):
     project = Path(out_dir)
     _ensure_dir(project)
@@ -530,7 +513,7 @@ def run_generator(
         # No servers known yet; prompt fresh
         server_name, server_settings = _prompt_server_settings(imported)
     # Persist/ensure presence in mcp-agent config
-    _write_server_to_agent_config(project, server_name, server_settings)
+    _write_server_to_agent_config_file(project, server_name, server_settings)
 
     # Discovery
     try:
@@ -550,18 +533,16 @@ def run_generator(
 
         scenarios = asyncio.run(
             generate_scenarios_with_agent(
-                tools=tools, n_examples=n_examples, llm_factory=llm_factory, model=model
+                tools=tools, n_examples=n_examples, provider=provider, model=model
             )
         )
         scenarios = asyncio.run(
             refine_assertions_with_agent(
-                scenarios, tools, llm_factory=llm_factory, model=model
+                scenarios, tools, provider=provider, model=model
             )
         )
     except Exception as e:
         console.print(f"[red]Failed to generate scenarios:[/] {e}")
         return
 
-    _emit_tests(
-        project, style, server_name, scenarios, llm_factory=llm_factory, model=model
-    )
+    _emit_tests(project, style, server_name, scenarios, provider=provider, model=model)

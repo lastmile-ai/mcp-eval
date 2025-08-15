@@ -46,7 +46,7 @@ mcp_eval run usage_example.py
 
 ## Defining agents
 
-- Prefer defining agents declaratively via mcp-agent AgentSpecs in your config or in the `subagents.search_paths`, then use `agent_spec_name` in `test_session`.
+- Prefer defining agents declaratively via mcp-agent AgentSpecs in your config or in the `subagents.search_paths`, then pass `agent_spec` (name or object) in `test_session`.
 - For complex programmatic agents, pass `initial_agent` and optionally `initial_llm` into `test_session`.
 
 Example AgentSpec YAML:
@@ -61,7 +61,7 @@ agents:
 Usage (decorator style):
 
 ```python
-async with test_session("spec_based", agent_spec_name="Fetcher") as agent:
+async with test_session("spec_based", agent_spec="Fetcher") as agent:
     result = await agent.generate_str("Fetch https://example.com")
 ```
 

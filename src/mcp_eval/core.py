@@ -23,7 +23,12 @@ class TestResult:
 
     test_name: str
     description: str
+    # Back-compat single server field
     server_name: str
+    # New: full server list used by the Agent
+    servers: List[str]
+    # New: agent identity
+    agent_name: str
     parameters: Dict[str, Any]
     passed: bool
     evaluation_results: List["EvaluationRecord"]
@@ -101,15 +106,8 @@ def task(description: str = ""):
                     setup_func()
 
             try:
-                # Get configuration
-                config = get_current_config()
-                agent_config = config.get("agent_config", {})
-
-                # Create unified session – servers come from config defaults unless overridden via with_agent
-                session = TestSession(
-                    test_name=func.__name__,
-                    agent_config=agent_config,
-                )
+                # Create unified session (agent built from settings.default_agent_spec and provider/model)
+                session = TestSession(test_name=func.__name__)
 
                 start_time = asyncio.get_event_loop().time()
 
@@ -132,11 +130,11 @@ def task(description: str = ""):
                 return TestResult(
                     test_name=func.__name__,
                     description=description,
-                    server_name=",".join(session.agent.agent.server_names)
-                    if session.agent
-                    and getattr(session.agent, "agent", None)
-                    and getattr(session.agent.agent, "server_names", None)
+                    server_name=",".join(session.agent.server_names)
+                    if session and session.agent and session.agent.server_names
                     else "",
+                    servers=(session.agent.server_names if session and session.agent else []),
+                    agent_name=(session.agent.name if session and session.agent else ""),
                     parameters=kwargs,
                     passed=session.all_passed(),
                     evaluation_results=session.get_results(),
@@ -148,12 +146,11 @@ def task(description: str = ""):
                 return TestResult(
                     test_name=func.__name__,
                     description=description,
-                    server_name=",".join(session.agent.agent.server_names)
-                    if session
-                    and getattr(session, "agent", None)
-                    and getattr(session.agent, "agent", None)
-                    and getattr(session.agent.agent, "server_names", None)
+                    server_name=",".join(session.agent.server_names)
+                    if session and session.agent and session.agent.server_names
                     else "",
+                    servers=(session.agent.server_names if session and session.agent else []),
+                    agent_name=(session.agent.name if session and session.agent else ""),
                     parameters=kwargs,
                     passed=False,
                     evaluation_results=session.get_results() if session else [],
@@ -193,10 +190,8 @@ def with_agent(agent: Agent | AugmentedLLM | AgentSpec | str):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Build a session using the override agent/LLM/spec
-            config = get_current_config()
             session = TestSession(
                 test_name=func.__name__,
-                agent_config=config.get("agent_config", {}),
                 agent_override=agent,  # type: ignore[arg-type]
             )
 

@@ -21,14 +21,12 @@ class MCPEvalPytestSession:
     def __init__(
         self,
         test_name: str,
-        agent_config: dict | None = None,
         verbose: bool = False,
         *,
         agent_override=None,
     ):
         self._session = TestSession(
             test_name=test_name,
-            agent_config=agent_config,
             verbose=verbose,
             agent_override=agent_override,
         )
@@ -59,6 +57,8 @@ class MCPEvalPytestSession:
                 test_name=self._session.test_name,
                 description=f"Pytest test: {self._session.test_name}",
                 server_name=server_names_str,
+                servers=(self._session.agent.server_names if self._session.agent else []),
+                agent_name=(self._session.agent.name if self._session.agent else ""),
                 parameters={},
                 passed=False,
                 evaluation_results=evaluation_results,
@@ -86,9 +86,8 @@ async def mcp_session(request) -> AsyncGenerator[MCPEvalPytestSession, None]:
             response = await mcp_session.agent.generate_str("Hello")
             mcp_session.session.evaluate_now(ResponseContains("hello"), response, "greeting")
     """
-    # Get test configuration
-    config = get_current_config()
-    agent_config = config.get("agent_config", {})
+    # Touch configuration (ensures settings are loaded)
+    _ = get_current_config()
 
     test_name = request.node.name
 
@@ -106,7 +105,6 @@ async def mcp_session(request) -> AsyncGenerator[MCPEvalPytestSession, None]:
     )
     pytest_session_wrapper = MCPEvalPytestSession(
         test_name=test_name,
-        agent_config=agent_config,
         verbose=verbose,
         agent_override=agent_override,
     )

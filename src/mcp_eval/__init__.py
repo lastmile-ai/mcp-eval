@@ -7,7 +7,7 @@ from mcp_eval.session import TestAgent, TestSession, test_session
 from mcp_eval.catalog import Expect
 
 # Configuration
-from mcp_eval.config import use_server, use_agent, use_llm_factory
+from mcp_eval.config import use_server, use_agent
 
 # Modern Evaluator System (preferred approach)
 from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
@@ -38,7 +38,6 @@ __all__ = [
     # Configuration
     "use_server",
     "use_agent",
-    "use_llm_factory",
     # Dataset API
     "Case",
     "Dataset",

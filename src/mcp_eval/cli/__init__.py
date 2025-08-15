@@ -53,19 +53,11 @@ def generate(
     out_dir: str = typer.Option(".", help="Project directory to write configs/tests"),
     style: str = typer.Option("pytest", help="Test style: pytest|decorators|dataset"),
     n_examples: int = typer.Option(6, help="Number of scenarios to generate"),
-    llm_factory: str = typer.Option(
-        "AnthropicAugmentedLLM", help="LLM factory for generation"
-    ),
+    provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
     model: str = typer.Option(None, help="Model hint for generation (optional)"),
 ):
     """Interactive generator to create configs and tests for an MCP server."""
-    run_generator(
-        out_dir=out_dir,
-        style=style,
-        n_examples=n_examples,
-        llm_factory=llm_factory,
-        model=model,
-    )
+    run_generator(out_dir=out_dir, style=style, n_examples=n_examples, provider=provider, model=model)
 
 
 def _create_basic_template(project_path: Path):
@@ -88,7 +80,7 @@ agents:
     name: "test_agent"
     instruction: "You are a test agent. Complete tasks as requested."
     server_names: ["my_server"]
-    llm_factory: "AnthropicAugmentedLLM"
+    provider: "anthropic"
 
 # Judge configuration
 judge:
@@ -139,7 +131,7 @@ def _create_advanced_template(project_path: Path):
     dataset_content = """
 import asyncio
 from mcp_eval import Case, Dataset, ToolWasCalled, ResponseContains, LLMJudge, test_session
-from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
+# Deprecated imports removed; use provider/model in configs
 
 # Define test cases
 cases = [
@@ -170,11 +162,7 @@ dataset = Dataset(
     name='My Server Advanced Tests',
     cases=cases,
     server_name='my_server',
-    agent_config={
-        'name': 'advanced_tester',
-        'instruction': 'You are an advanced test agent with access to multiple tools.',
-        'llm_factory': AnthropicAugmentedLLM,
-    }
+    
 )
 
 async def my_server_task(inputs: str) -> str:

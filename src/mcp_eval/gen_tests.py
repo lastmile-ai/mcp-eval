@@ -159,7 +159,7 @@ async def generate_tests_from_llm(
     if not llm_provider_name:
         raise ValueError("No OpenAI LLM provider found in config to generate tests.")
 
-    def llm_factory(agent):
+    def llm_factory(agent):  # deprecated path retained for legacy generator
         return app.context.llm_provider.get_llm(llm_provider_name, agent=agent)
 
     generator_agent = Agent(name="test-case-generator", context=app.context)
