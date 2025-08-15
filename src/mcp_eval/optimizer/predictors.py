@@ -14,10 +14,25 @@ class ToolCall(dspy.Module):
 class DocstringImprover(dspy.Signature):
     """Signature for improving tool docstrings based on successful and failed examples"""
     tool_name = dspy.InputField(desc="Name of the tool to optimize docstring for")
+    tool_input_arguments = dspy.InputField(desc="List of input arguments for the tool with the type of the argument")
     original_docstring = dspy.InputField(desc="Original docstring of the tool")
-    failed_examples = dspy.InputField(desc="List of examples where the tool selection failed")
     correct_examples = dspy.InputField(desc="List of examples where the tool was correctly selected")
-    improved_docstring = dspy.OutputField(desc="Improved docstring that better describes the tool's purpose")
+    failed_examples = dspy.InputField(desc="List of examples where the tool selection failed")
+    improved_docstring = dspy.OutputField(
+        desc=
+        """ 
+     Your task is to create a concise and effective tool usage description based on the tool documentation. You should ensure the description only contains the purposes of the
+     tool without irrelevant information. Here is an example:
+     /* Examples */
+     {Tool Documentation}
+     Tool usage description:
+     {Tool_name} is a tool that can {General_Purposes}.
+     This tool has {Number} multiple built-in functions:
+     1. {Function_1} is to {Functionality_of_Function_1} 2. {Function_2} is to ...
+     /* Auto generation of tool description */ {ToolDocumentationof'AviationWeatherCenter'} Tool usage description:
+     'Aviation Weather Center' is a tool which can provide official aviation weather data...
+    """
+    )
 
 
 class ToolPredictor(dspy.Module):
@@ -251,6 +266,7 @@ class ToolPredictor(dspy.Module):
                     # Use docstring improver to generate better docstring
                     improved_docstring = self.docstring_improver(
                         tool_name=tool_name,
+                        tool_input_arguments=tool_schema,
                         original_docstring=tool_docstring,
                         failed_examples=str(failed_queries),  # Limit to 3 examples
                         correct_examples=str(successful_queries)  # Limit to 3 examples
