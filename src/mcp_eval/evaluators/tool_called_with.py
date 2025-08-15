@@ -7,7 +7,7 @@ from mcp_eval.evaluators.tool_was_called import ToolWasCalled
 
 class ToolCalledWith(ToolWasCalled):
     """Evaluator that checks if a tool was called with specific arguments."""
-    
+
     def __init__(self, tool_name: str, expected_args: dict):
         super().__init__(tool_name)
         self.expected_args = expected_args
@@ -21,13 +21,24 @@ class ToolCalledWith(ToolWasCalled):
         ]
         matches = bool(matching_calls)
 
+        # Build actual message showing what tool calls were made
+        if tool_calls:
+            actual_calls = []
+            for call in tool_calls:
+                actual_calls.append(f"{self.tool_name}({call.arguments})")
+            actual_msg = f"tool calls: {', '.join(actual_calls)}"
+        else:
+            actual_msg = f"tool '{self.tool_name}' not called"
+
         return EvaluatorResult(
             passed=matches,
             expected=f"tool '{self.tool_name}' called with {self.expected_args}",
-            actual=f"{len(tool_calls)} calls found",
+            actual=actual_msg,
             details={
                 "tool_name": self.tool_name,
                 "expected_args": self.expected_args,
                 "matching_calls": len(matching_calls),
+                "total_calls": len(tool_calls),
+                "actual_calls": [call.arguments for call in tool_calls],
             },
         )
