@@ -3,6 +3,7 @@
 import asyncio
 import inspect
 import traceback
+import hashlib
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Callable
 from functools import wraps
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
 class TestResult:
     """Result of a single test execution."""
 
+    id: str
     test_name: str
     description: str
     server_name: str
@@ -34,6 +36,15 @@ class TestResult:
 # Global test configuration state
 _setup_functions: List[Callable] = []
 _teardown_functions: List[Callable] = []
+
+
+def generate_test_id(file: str, test_name: str) -> str:
+    """Generate a unique test ID from file and test name."""
+    # Generate 20-char hash for file
+    file_hash = hashlib.sha256(file.encode()).hexdigest()[:20]
+    # Generate 20-char hash for test_name
+    name_hash = hashlib.sha256(test_name.encode()).hexdigest()[:20]
+    return f"{file_hash}-{name_hash}"
 
 
 def setup(func: Callable):
@@ -106,6 +117,7 @@ def task(description: str = "", server: str = None):
             # Get file name from the wrapper function (set during discovery)
             source_file = getattr(wrapper, "_source_file", None)
             file_name = Path(source_file).name if source_file else "unknown"
+            test_id = generate_test_id(file_name, func.__name__)
 
             try:
                 # Get configuration
@@ -139,6 +151,7 @@ def task(description: str = "", server: str = None):
 
                 # Create result from session
                 return TestResult(
+                    id=test_id,
                     test_name=func.__name__,
                     description=description,
                     server_name=server_name,
@@ -152,6 +165,7 @@ def task(description: str = "", server: str = None):
 
             except Exception:
                 return TestResult(
+                    id=test_id,
                     test_name=func.__name__,
                     description=description,
                     server_name=server_name,

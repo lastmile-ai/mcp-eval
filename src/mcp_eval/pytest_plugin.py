@@ -13,7 +13,7 @@ import pytest
 from mcp_eval import TestSession, TestAgent
 from mcp_eval.config import get_current_config
 from mcp_eval.report_generation.console import generate_failure_message
-from mcp_eval.core import TestResult
+from mcp_eval.core import TestResult, generate_test_id
 
 
 class MCPEvalPytestSession:
@@ -42,7 +42,9 @@ class MCPEvalPytestSession:
         if not self._session.all_passed():
             # Create a TestResult object from session results for compatibility with generate_failure_message
             evaluation_results = self._session.get_results()
+            test_id = generate_test_id(self._test_file, self._session.test_name)
             test_result = TestResult(
+                id=test_id,
                 test_name=self._session.test_name,
                 description=f"Pytest test: {self._session.test_name}",
                 server_name=self._session.server_name,

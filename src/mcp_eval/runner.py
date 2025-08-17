@@ -12,7 +12,7 @@ from rich.live import Live
 from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.session import TestAgent, TestSession
 
-from .core import TestResult, _setup_functions, _teardown_functions
+from .core import TestResult, generate_test_id, _setup_functions, _teardown_functions
 from .datasets import Dataset
 from .report_generation.models import EvaluationReport
 from .report_generation import (
@@ -186,7 +186,10 @@ async def run_decorator_tests(
                 except Exception as e:
                     display.add_result(passed=False, error=True)
                     console.print(f"  [red]ERROR[/] {test_name}: {e}")
+                    file_name = Path(source_file).name
+                    test_id = generate_test_id(file_name, test_name)
                     result = TestResult(
+                        id=test_id,
                         test_name=test_name,
                         description=getattr(func, "_description", ""),
                         server_name=getattr(func, "_server", "unknown"),
@@ -195,7 +198,7 @@ async def run_decorator_tests(
                         evaluation_results=[],
                         metrics=None,
                         duration_ms=0,
-                        file=Path(source_file).name,
+                        file=file_name,
                         error=str(e),
                     )
                     failed_results.append(result)
@@ -250,7 +253,9 @@ async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationRep
                     # Convert CaseResult to TestResult format for consistency
                     source_file = getattr(dataset, "_source_file", None)
                     file_name = Path(source_file).name if source_file else "unknown"
+                    test_id = generate_test_id(file_name, result.case_name)
                     test_result = TestResult(
+                        id=test_id,
                         test_name=result.case_name,
                         description=f"Dataset case from {dataset.name}",
                         server_name=dataset.server_name or "unknown",
