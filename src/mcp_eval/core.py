@@ -6,6 +6,7 @@ import traceback
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Callable
 from functools import wraps
 from dataclasses import dataclass
+from pathlib import Path
 
 from mcp_eval.session import TestSession
 from mcp_eval.config import get_current_config
@@ -26,6 +27,7 @@ class TestResult:
     evaluation_results: List["EvaluationRecord"]
     metrics: Optional[Dict[str, Any]]
     duration_ms: float
+    file: str
     error: Optional[str] = None
 
 
@@ -101,6 +103,10 @@ def task(description: str = "", server: str = None):
                 else:
                     setup_func()
 
+            # Get file name from the wrapper function (set during discovery)
+            source_file = getattr(wrapper, "_source_file", None)
+            file_name = Path(source_file).name if source_file else "unknown"
+
             try:
                 # Get configuration
                 config = get_current_config()
@@ -141,6 +147,7 @@ def task(description: str = "", server: str = None):
                     evaluation_results=session.get_results(),
                     metrics=session.get_metrics().__dict__,
                     duration_ms=duration_ms,
+                    file=file_name,
                 )
 
             except Exception:
@@ -153,6 +160,7 @@ def task(description: str = "", server: str = None):
                     evaluation_results=session.get_results() if session else [],
                     metrics=None,
                     duration_ms=0,
+                    file=file_name,
                     error=traceback.format_exc(),
                 )
 

@@ -7,6 +7,7 @@ allowing users to write mcp-eval tests that run natively in pytest.
 import asyncio
 import inspect
 from typing import AsyncGenerator
+from pathlib import Path
 import pytest
 
 from mcp_eval import TestSession, TestAgent
@@ -24,9 +25,11 @@ class MCPEvalPytestSession:
         test_name: str,
         agent_config: dict | None = None,
         verbose: bool = False,
+        test_file: str = "pytest",
     ):
         self._session = TestSession(server_name, test_name, agent_config, verbose)
         self._agent: TestAgent | None = None
+        self._test_file = test_file
 
     async def __aenter__(self):
         self._agent = await self._session.__aenter__()
@@ -48,6 +51,7 @@ class MCPEvalPytestSession:
                 evaluation_results=evaluation_results,
                 metrics=None,
                 duration_ms=self._session.get_duration_ms(),
+                file=self._test_file,
             )
             failure_message = generate_failure_message(test_result)
             pytest.fail(failure_message, pytrace=False)
@@ -76,13 +80,16 @@ async def mcp_session(request) -> AsyncGenerator[MCPEvalPytestSession, None]:
     agent_config = config.get("agent_config", {})
 
     test_name = request.node.name
+    
+    # Get the test file name
+    test_file = Path(request.node.fspath).name if hasattr(request.node, 'fspath') else "pytest"
 
     # Check if pytest is running in verbose mode
     verbose = request.config.getoption("verbose") > 0
 
     # Create and yield session
     pytest_session_wrapper = MCPEvalPytestSession(
-        server_name, test_name, agent_config, verbose
+        server_name, test_name, agent_config, verbose, test_file
     )
     async with pytest_session_wrapper:
         yield pytest_session_wrapper

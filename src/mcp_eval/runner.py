@@ -88,6 +88,8 @@ def discover_tests_and_datasets(test_spec: str) -> Dict[str, List]:
                 if target_function is None:
                     for name, obj in inspect.getmembers(module):
                         if isinstance(obj, Dataset):
+                            # Add source file info to dataset
+                            obj._source_file = py_file
                             datasets.append(obj)
 
         except Exception as e:
@@ -193,6 +195,7 @@ async def run_decorator_tests(
                         evaluation_results=[],
                         metrics=None,
                         duration_ms=0,
+                        file=Path(source_file).name,
                         error=str(e),
                     )
                     failed_results.append(result)
@@ -245,6 +248,8 @@ async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationRep
             for result in report.results:
                 if not result.passed:
                     # Convert CaseResult to TestResult format for consistency
+                    source_file = getattr(dataset, "_source_file", None)
+                    file_name = Path(source_file).name if source_file else "unknown"
                     test_result = TestResult(
                         test_name=result.case_name,
                         description=f"Dataset case from {dataset.name}",
@@ -254,6 +259,7 @@ async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationRep
                         evaluation_results=result.evaluation_results,
                         metrics=result.metrics,
                         duration_ms=result.duration_ms,
+                        file=file_name,
                         error=result.error,
                     )
 
