@@ -1,15 +1,12 @@
 """Legacy assertions-style tests with explicit session passing."""
 
-import mcp_eval
-from mcp_eval import task, setup
-from mcp_eval import assertions
+from mcp_eval import task, setup, Expect
 from mcp_eval.session import TestAgent, TestSession
 
 
 @setup
 def configure_assertions_tests():
-    """Configure mcp-eval for assertions-style tests."""
-    mcp_eval.use_server("fetch")
+    """Prefer defining server_names on Agent/AgentSpec via config; no per-test server selection needed."""
 
 
 @task("Test basic fetch with legacy assertions")
@@ -17,10 +14,14 @@ async def test_basic_fetch_assertions(agent, session):
     """Test basic URL fetching using legacy assertion style."""
     response = await agent.generate_str("Fetch https://example.com")
 
-    # Legacy assertions with explicit session passing
-    assertions.tool_was_called(session, "fetch")
-    assertions.contains(session, response, "Example Domain")
-    assertions.tool_call_succeeded(session, "fetch")
+    # Prefer modern Expect-based assertions
+    await session.assert_that(Expect.tools.was_called("fetch"))
+    await session.assert_that(
+        Expect.content.contains("Example Domain"), response=response
+    )
+    await session.assert_that(
+        Expect.tools.success_rate(min_rate=1.0, tool_name="fetch")
+    )
 
 
 @task("Test fetch error handling with assertions")
@@ -29,8 +30,10 @@ async def test_fetch_error_assertions(agent, session):
     response = await agent.generate_str("Fetch https://invalid-domain-xyz-123.com")
 
     # Tool should be called but might fail
-    assertions.tool_was_called(session, "fetch")
-    assertions.contains(session, response, "error", case_sensitive=False)
+    await session.assert_that(Expect.tools.was_called("fetch"))
+    await session.assert_that(
+        Expect.content.contains("error", case_sensitive=False), response=response
+    )
 
 
 @task("Test response time requirements")
@@ -38,9 +41,9 @@ async def test_fetch_performance_assertions(agent, session):
     """Test performance requirements using legacy assertions."""
     await agent.generate_str("Quickly fetch https://httpbin.org/json")
 
-    assertions.tool_was_called(session, "fetch")
-    assertions.response_time_under(session, 10000)  # 10 seconds max
-    assertions.completed_within(session, 3)  # 3 iterations max
+    await session.assert_that(Expect.tools.was_called("fetch"))
+    await session.assert_that(Expect.performance.response_time_under(10000))
+    await session.assert_that(Expect.performance.max_iterations(3))
 
 
 @task("Test multiple fetch calls")
@@ -50,8 +53,8 @@ async def test_multiple_fetch_assertions(agent, session):
         "Fetch content from both https://example.com and https://httpbin.org/html"
     )
 
-    assertions.tool_call_count(session, "fetch", 2)
-    assertions.tool_success_rate(session, 0.8, "fetch")  # 80% success rate minimum
+    await session.assert_that(Expect.tools.count("fetch", 2))
+    await session.assert_that(Expect.tools.success_rate(0.8, tool_name="fetch"))
 
 
 @task("Test content format detection")
@@ -61,15 +64,15 @@ async def test_content_format_assertions(agent, session):
         "Fetch https://httpbin.org/json and tell me what format it's in"
     )
 
-    assertions.tool_was_called(session, "fetch")
-    assertions.contains(session, response, "json", case_sensitive=False)
-
-    # Use LLM judge for complex evaluation
-    await assertions.judge(
-        session,
-        response,
-        "Response correctly identifies the content as JSON format",
-        min_score=0.8,
+    await session.assert_that(Expect.tools.was_called("fetch"))
+    await session.assert_that(
+        Expect.content.contains("json", case_sensitive=False), response=response
+    )
+    await session.assert_that(
+        Expect.judge.llm(
+            "Response correctly identifies the content as JSON format", min_score=0.8
+        ),
+        response=response,
     )
 
 
@@ -79,11 +82,12 @@ async def test_tool_output_assetion(agent, session):
     await agent.generate_str(
         "Print the first line of the paragraph in https://example.com"
     )
-    assertions.tool_output_matches(
-        session,
-        tool_name="fetch",
-        expected_output={"content": {"0": {"type": "text"}}},
-        match_type="partial",
+    await session.assert_that(
+        Expect.tools.output_matches(
+            tool_name="fetch",
+            expected_output={"content": {"0": {"type": "text"}}},
+            match_type="partial",
+        )
     )
 
 
@@ -92,11 +96,12 @@ async def test_path_efficiency_assertions(agent: TestAgent, session: TestSession
     """Test efficient path using legacy assertions."""
     await agent.generate_str("Fetch https://httpbin.org/json and extract the data")
 
-    # Test path efficiency using assertions
-    assertions.path_efficiency(
-        session,
-        expected_tool_sequence=["fetch"],
-        allow_extra_steps=1,
-        tool_usage_limits={"fetch": 1},
-        penalize_backtracking=True,
+    # Test path efficiency using modern Expect
+    await session.assert_that(
+        Expect.path.efficiency(
+            expected_tool_sequence=["fetch"],
+            allow_extra_steps=1,
+            tool_usage_limits={"fetch": 1},
+            penalize_backtracking=True,
+        )
     )

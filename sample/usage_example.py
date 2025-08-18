@@ -1,20 +1,9 @@
 import asyncio
 from mcp_agent.agents.agent import Agent
-from mcp_agent.workflows.factory import _llm_factory
-
 
 import mcp_eval
-
-from mcp_eval import task, setup, ToolWasCalled, LLMJudge, Case, Dataset
-from mcp_eval.core import with_agent
-from mcp_eval.evaluators.shared import EvaluatorResult
+from mcp_eval import task, Case, Dataset, Expect
 from mcp_eval.session import TestAgent, TestSession
-
-
-@setup
-def configure_tests():
-    # Prefer consolidated mcp-agent config; optional lightweight overrides
-    mcp_eval.use_server("fetch")
 
 
 @task("Test with enhanced LLM judge")
@@ -24,22 +13,20 @@ async def test_enhanced_judge(agent: TestAgent, session: TestSession):
         "Fetch https://example.com and explain what it is"
     )
 
-    # Enhanced LLM judge with structured output
-    enhanced_judge = LLMJudge(
-        rubric="Response should fetch the website and provide a clear explanation of what example.com is",
-        min_score=0.8,
-        include_input=True,
-        require_reasoning=True,
-    )
-
+    # Use the new Expect catalog API for cleaner assertions
     await session.assert_that(
-        enhanced_judge,
+        Expect.judge.llm(
+            rubric="Response should fetch the website and provide a clear explanation of what example.com is",
+            min_score=0.8,
+            include_input=True,
+            require_reasoning=True,
+        ),
         name="enhanced_judge_test",
         response=response,
     )
 
     await session.assert_that(
-        ToolWasCalled("fetch"),
+        Expect.tools.was_called("fetch"),
         name="fetch_called",
     )
 
@@ -53,39 +40,33 @@ async def test_span_analysis(agent: TestAgent, session: TestSession):
     span_tree = session.get_span_tree()
     if span_tree:
         # Check for potential issues
-        rephrasing_loops = span_tree.get_llm_rephrasing_loops()
-        if rephrasing_loops:
-            session._record_evaluation_result(
-                "no_rephrasing_loops",
-                EvaluatorResult(passed=False),
-                f"Found {len(rephrasing_loops)} rephrasing loops",
-            )
-        else:
-            session._record_evaluation_result(
-                "no_rephrasing_loops", EvaluatorResult(passed=True), None
-            )
+        _rephrasing_loops = span_tree.get_llm_rephrasing_loops()
+        # Use modern Expect API for better assertions
+        await session.assert_that(
+            Expect.judge.llm(
+                "Agent should avoid unnecessary rephrasing loops", min_score=0.5
+            ),
+            name="avoid_rephrasing",
+        )
 
-        # Analyze tool path efficiency
-        golden_paths = {
-            "fetch_multiple": ["fetch", "fetch"]  # Expected: two fetch calls
-        }
-        path_analyses = span_tree.get_inefficient_tool_paths(golden_paths)
-        for analysis in path_analyses:
-            session._record_evaluation_result(
-                "path_efficiency",
-                EvaluatorResult(passed=analysis.efficiency_score > 0.8),
-                f"Efficiency: {analysis.efficiency_score:.2f}",
-            )
+        # Use path efficiency evaluator
+        await session.assert_that(
+            Expect.path.efficiency(
+                expected_tool_sequence=["fetch", "fetch"],
+                allow_extra_steps=1,
+            ),
+            name="path_efficiency",
+        )
 
 
-# Enhanced test cases
+# Enhanced test cases using catalog-based evaluators
 cases = [
     Case(
         name="fetch_with_structured_judge",
         inputs="Fetch https://example.com and summarize its purpose",
         evaluators=[
-            ToolWasCalled("fetch"),
-            LLMJudge(
+            Expect.tools.was_called("fetch"),
+            Expect.judge.llm(
                 rubric="Response should include both website content and a clear summary",
                 min_score=0.85,
                 include_input=True,
@@ -97,8 +78,8 @@ cases = [
         name="multi_step_task",
         inputs="Fetch both example.com and github.com, then compare them",
         evaluators=[
-            ToolWasCalled("fetch", min_times=2),
-            LLMJudge(
+            Expect.tools.was_called("fetch", min_times=2),
+            Expect.judge.llm(
                 rubric="Response should demonstrate comparison between the two websites",
                 min_score=0.8,
             ),
@@ -124,16 +105,11 @@ async def dataset_with_enhanced_features():
             instruction="You can fetch and summarize.",
             server_names=["fetch"],
         )
-        llm_factory = _llm_factory(provider="openai", model=None, context=None)
-        prog_llm = llm_factory(prog_agent)
 
-        @with_agent(prog_llm)
-        @task("enhanced_task_prog")
-        async def run(agent: TestAgent, _session: TestSession):
-            return await agent.generate_str(inputs)
-
-        result = await run()
-        return result.output if hasattr(result, "output") else ""
+        async with mcp_eval.test_session(
+            "enhanced_task_prog", agent=prog_agent
+        ) as test_agent:
+            return await test_agent.generate_str(inputs)
 
     # Run evaluation
     report = await dataset.evaluate(enhanced_fetch_task, max_concurrency=2)

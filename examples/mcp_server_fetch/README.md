@@ -98,7 +98,7 @@ pytest tests/test_pytest_style.py
 
 The examples use a single assertion entry point so you don't have to choose between immediate vs deferred checks. The framework decides based on whether you provide a `response`.
 
-We also expose a discovery-friendly catalog `A` for IntelliSense-driven exploration:
+We also expose a discovery-friendly catalog `Expect` for IntelliSense-driven exploration:
 
 ```python
 from mcp_eval import Expect

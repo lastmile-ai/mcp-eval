@@ -4,10 +4,11 @@ import asyncio
 import importlib.util
 import inspect
 from pathlib import Path
-from typing import List, Dict, Any, Text
+from typing import List, Dict, Any
 import typer
 from rich.console import Console
 from rich.live import Live
+from rich.text import Text
 
 from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.session import TestAgent, TestSession
@@ -188,6 +189,8 @@ async def run_decorator_tests(
                         test_name=test_name,
                         description=getattr(func, "_description", ""),
                         server_name=getattr(func, "_server", "unknown"),
+                        servers=[],
+                        agent_name="",
                         parameters=kwargs,
                         passed=False,
                         evaluation_results=[],
@@ -216,13 +219,13 @@ async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationRep
     display = TestProgressDisplay(dataset_counts)
 
     with Live(display.create_display(type="case"), refresh_per_second=10) as live:
-        for dataset in datasets:
+        for ds in datasets:
 
             async def standard_task(inputs, agent: TestAgent, session: TestSession):
                 response = await agent.generate_str(inputs)
                 return response
 
-            display.set_current_group(dataset.name)
+            display.set_current_group(ds.name)
 
             def progress_callback(
                 passed: bool,
@@ -230,12 +233,12 @@ async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationRep
             ):
                 """Progress callback for dataset evaluation."""
 
-                display.add_result(passed=passed, error=error, group_key=dataset.name)
+                display.add_result(passed=passed, error=error, group_key=ds.name)
 
                 # Update the live display immediately
                 live.update(display.create_display(type="case"))
 
-            report = await dataset.evaluate(
+            report = await ds.evaluate(
                 standard_task, progress_callback=progress_callback
             )
 
@@ -247,8 +250,12 @@ async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationRep
                     # Convert CaseResult to TestResult format for consistency
                     test_result = TestResult(
                         test_name=result.case_name,
-                        description=f"Dataset case from {dataset.name}",
-                        server_name=dataset.server_name or "unknown",
+                        description=f"Dataset case from {ds.name}",
+                        server_name=ds.server_name or "unknown",
+                        servers=[ds.server_name]
+                        if getattr(ds, "server_name", None)
+                        else [],
+                        agent_name="",
                         parameters={},
                         passed=result.passed,
                         evaluation_results=result.evaluation_results,
@@ -406,7 +413,7 @@ async def _run_async(
         if json_report:
             import json
 
-            with open(json_report, "w") as f:
+            with open(json_report, "w", encoding="utf-8") as f:
                 json.dump(combined_report, f, indent=2, default=str)
             console.print(f"JSON report saved to {json_report}", style="blue")
 
@@ -441,7 +448,6 @@ def dataset(
     output: str = typer.Option("report", help="Output file prefix"),
 ):
     """Run evaluation on a specific dataset file."""
-    from mcp_eval.datasets import Dataset
 
     async def _run_dataset():
         try:
@@ -459,7 +465,7 @@ def dataset(
             # Save reports
             import json
 
-            with open(f"{output}.json", "w") as f:
+            with open(f"{output}.json", "w", encoding="utf-8") as f:
                 json.dump(report.to_dict(), f, indent=2, default=str)
 
             console.print(f"Report saved to {output}.json")

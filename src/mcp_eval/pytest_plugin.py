@@ -57,7 +57,9 @@ class MCPEvalPytestSession:
                 test_name=self._session.test_name,
                 description=f"Pytest test: {self._session.test_name}",
                 server_name=server_names_str,
-                servers=(self._session.agent.server_names if self._session.agent else []),
+                servers=(
+                    self._session.agent.server_names if self._session.agent else []
+                ),
                 agent_name=(self._session.agent.name if self._session.agent else ""),
                 parameters={},
                 passed=False,

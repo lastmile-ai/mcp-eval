@@ -1,6 +1,5 @@
 """Decorator-style tests using modern evaluators."""
 
-import mcp_eval
 from mcp_eval import Expect
 from mcp_eval import task, setup, teardown, parametrize
 from mcp_eval.session import TestAgent, TestSession
@@ -8,9 +7,7 @@ from mcp_eval.session import TestAgent, TestSession
 
 @setup
 def configure_decorator_tests():
-    """Configure mcp-eval for decorator-style tests."""
-    # Prefer setting server_names on the Agent/AgentSpec; use_server kept for back-compat
-    mcp_eval.use_server("fetch")
+    """Servers should be declared on Agent/AgentSpec; no per-test server selection."""
 
 
 @teardown

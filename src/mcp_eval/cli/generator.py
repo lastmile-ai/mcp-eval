@@ -119,7 +119,9 @@ def _build_llm(agent: Agent, provider: str, model: Optional[str]) -> Any:
     return factory(agent)
 
 
-async def _generate_llm_slug(server_name: str, provider: str, model: Optional[str]) -> Optional[str]:
+async def _generate_llm_slug(
+    server_name: str, provider: str, model: Optional[str]
+) -> Optional[str]:
     try:
         mcp_app = MCPApp()
         async with mcp_app.run() as running:

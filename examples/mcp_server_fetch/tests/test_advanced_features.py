@@ -1,6 +1,5 @@
 """Advanced feature tests demonstrating deep analysis capabilities."""
 
-import mcp_eval
 from mcp_eval import Expect
 from mcp_eval import task, setup
 
@@ -11,18 +10,7 @@ from mcp_eval.session import TestAgent, TestSession
 
 @setup
 def configure_advanced_tests():
-    """Configure for advanced feature testing."""
-    mcp_eval.use_server("fetch")
-    mcp_eval.use_agent(
-        {
-            "name": "advanced_fetch_agent",
-            "instruction": "You are an expert web content agent with advanced capabilities.",
-            "provider": "anthropic",
-            "model": "claude-3-5-haiku-20241022",
-            "model": "claude-sonnet-4-20250514",
-            "max_iterations": 10,
-        }
-    )
+    """Servers and agents are configured via mcpeval.yaml or mcp-agent config."""
 
 
 @task("Test span tree analysis for fetch operations")

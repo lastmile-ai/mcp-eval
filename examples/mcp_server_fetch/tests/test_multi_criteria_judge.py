@@ -1,6 +1,5 @@
 """Test MultiCriteriaJudge with enhanced evaluation capabilities."""
 
-import mcp_eval
 from mcp_eval import Expect
 from mcp_eval import task, setup
 from mcp_eval.evaluators import (
@@ -12,8 +11,7 @@ from mcp_eval.session import TestAgent, TestSession
 
 @setup
 def configure_multi_criteria_tests():
-    """Configure for multi-criteria judge testing."""
-    mcp_eval.use_server("fetch")
+    """Servers defined on Agent/AgentSpec; no per-test server selection."""
 
 
 @task("Test MultiCriteriaJudge with standard criteria")
@@ -56,7 +54,7 @@ async def test_standard_criteria_evaluation(agent: TestAgent, session: TestSessi
         judge,
         name="extraction_quality_assessment",
         response=response,
-        input=input,
+        inputs=input,
     )
 
 
@@ -98,7 +96,7 @@ async def test_require_all_pass_mode(agent: TestAgent, session: TestSession):
     )
 
     await session.assert_that(
-        judge, name="strict_all_pass_evaluation", response=response, input=input
+        judge, name="strict_all_pass_evaluation", response=response, inputs=input
     )
 
 
@@ -117,7 +115,7 @@ async def test_predefined_criteria_sets(agent: TestAgent, session: TestSession):
     )
 
     await session.assert_that(
-        judge, name="standard_criteria_harmonic", response=response, input=input
+        judge, name="standard_criteria_harmonic", response=response, inputs=input
     )
 
 
@@ -163,7 +161,7 @@ async def test_error_handling(agent: TestAgent, session: TestSession):
     )
 
     await session.assert_that(
-        judge_weighted, name="error_handling_weighted", response=response, input=input
+        judge_weighted, name="error_handling_weighted", response=response, inputs=input
     )
 
     judge_min = Expect.judge.multi_criteria(
@@ -174,5 +172,5 @@ async def test_error_handling(agent: TestAgent, session: TestSession):
     )
 
     await session.assert_that(
-        judge_min, name="error_handling_min", response=response, input=input
+        judge_min, name="error_handling_min", response=response, inputs=input
     )

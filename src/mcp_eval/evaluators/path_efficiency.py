@@ -33,6 +33,9 @@ class PathEfficiency(SyncEvaluator):
     default_tool_limit: int = 1
     """Default limit for tools not in tool_usage_limits."""
 
+    golden_path: Optional[List[str]] = None
+    """Golden path support (single path or named key in config)."""
+
     requires_final_metrics: bool = True
 
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
@@ -49,6 +52,18 @@ class PathEfficiency(SyncEvaluator):
 
         # Check for inefficiencies
         inefficiencies = []
+
+        # Golden path comparison
+        if self.golden_path:
+            gp_ok, gp_issues, gp_eff = self._compare_to_golden(
+                tool_sequence, self.golden_path
+            )
+            if not gp_ok:
+                inefficiencies.extend(gp_issues)
+            # Blend efficiency score with golden-path efficiency (average)
+            efficiency_score = (
+                (efficiency_score + gp_eff) / 2 if efficiency_score > 0 else gp_eff
+            )
 
         # Check sequence
         sequence_correct = True
@@ -107,7 +122,7 @@ class PathEfficiency(SyncEvaluator):
                 "steps_exceeded": steps_exceeded,
                 "has_inefficiencies": has_inefficiencies,
                 "inefficiencies": inefficiencies,
-                "optimal_path": self.expected_tool_sequence,
+                "optimal_path": self.expected_tool_sequence or self.golden_path,
                 "actual_steps": actual_steps,
                 "max_allowed_steps": self.optimal_steps + self.allow_extra_steps,
             },
@@ -175,6 +190,34 @@ class PathEfficiency(SyncEvaluator):
 
         return repetitions
 
+    def _compare_to_golden(
+        self, actual: List[str], golden: List[str]
+    ) -> Tuple[bool, List[str], float]:
+        """Compare actual path to golden path and compute an efficiency score.
+
+        Returns:
+            (matches, issues, efficiency_score)
+        """
+        issues: List[str] = []
+        # Basic subsequence check (golden should appear in order)
+        g_idx = 0
+        for tool in actual:
+            if g_idx < len(golden) and tool == golden[g_idx]:
+                g_idx += 1
+        if g_idx != len(golden):
+            missing = golden[g_idx:]
+            issues.append(f"Missing golden steps: {missing}")
+
+        # Efficiency: golden_length / actual_length capped at 1.0
+        eff = min(1.0, (len(golden) / len(actual)) if actual else 0.0)
+        # Penalty for unexpected tools not in golden
+        unexpected = [t for t in actual if t not in golden]
+        if unexpected:
+            issues.append(f"Unexpected tools: {unexpected}")
+            eff *= 0.9
+
+        return (len(issues) == 0, issues, eff)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "optimal_steps": self.optimal_steps,
@@ -184,4 +227,5 @@ class PathEfficiency(SyncEvaluator):
             "penalize_repeated_tools": self.penalize_repeated_tools,
             "tool_usage_limits": self.tool_usage_limits,
             "default_tool_limit": self.default_tool_limit,
+            "golden_path": self.golden_path,
         }

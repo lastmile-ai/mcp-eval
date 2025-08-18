@@ -6,31 +6,79 @@ from dataclasses import dataclass, field
 
 
 def unflatten_attributes(attributes: Dict[str, Any], prefix: str) -> Dict[str, Any]:
-    """Unflatten values from span attributes with dot notation support.
+    """Unflatten values from span attributes with dot/list notation support.
+
+    This reconstructs nested dicts and lists from flattened keys like:
+    - "result.content.0.text" -> {"result": {"content": [{"text": ...}]}}
+    - "mcp.request.argument.query" -> {"mcp": {"request": {"argument": {"query": ...}}}}
 
     Args:
         attributes: Span attributes dictionary
         prefix: Prefix to look for in attribute keys
 
     Returns:
-        Nested dictionary with unflattened values
+        Nested dictionary with unflattened values (lists supported where indices are present)
     """
-    arguments = {}
+
+    def _ensure_list_size(lst: list, index: int):
+        if index >= len(lst):
+            lst.extend([None] * (index + 1 - len(lst)))
+
+    def _set_path(root: Any, parts: list[str], value: Any) -> Any:
+        # Returns the possibly new root after setting the path
+        if not parts:
+            return root
+
+        key = parts[0]
+        is_index = False
+        idx = None
+        if key.isdigit():
+            is_index = True
+            idx = int(key)
+
+        # If we're at the last part, set the value
+        if len(parts) == 1:
+            if is_index:
+                if not isinstance(root, list):
+                    root = [] if root is None or isinstance(root, (dict,)) else []
+                _ensure_list_size(root, idx)  # type: ignore[arg-type]
+                root[idx] = value  # type: ignore[index]
+            else:
+                if not isinstance(root, dict):
+                    root = {} if root is None or isinstance(root, (list,)) else {}
+                root[key] = value  # type: ignore[index]
+            return root
+
+        # Not last part – ensure container and recurse
+        if is_index:
+            if not isinstance(root, list):
+                root = []
+            _ensure_list_size(root, idx)  # type: ignore[arg-type]
+            next_val = root[idx]
+            if next_val is None:
+                # Decide next container type based on the next key
+                next_key = parts[1]
+                next_val = [] if next_key.isdigit() else {}
+            root[idx] = _set_path(next_val, parts[1:], value)  # type: ignore[index]
+            return root
+        else:
+            if not isinstance(root, dict):
+                root = {}
+            next_val = root.get(key)
+            if next_val is None:
+                next_key = parts[1] if len(parts) > 1 else ""
+                next_val = [] if next_key.isdigit() else {}
+            root[key] = _set_path(next_val, parts[1:], value)
+            return root
+
+    result: Dict[str, Any] = {}
     for full_key, value in attributes.items():
         if not full_key.startswith(prefix):
             continue
+        path = full_key[len(prefix) :].split(".")
+        result = _set_path(result, path, value)  # type: ignore[assignment]
 
-        # strip prefix and split into path components
-        keys = full_key[len(prefix) :].split(".")
-        current = arguments
-
-        # for each key except the last, descend (or create) a dict
-        for part in keys[:-1]:
-            current = current.setdefault(part, {})
-        # assign the final value
-        current[keys[-1]] = value
-
-    return arguments
+    return result
 
 
 @dataclass
@@ -85,6 +133,13 @@ class TestMetrics:
 
     # Cost estimation
     cost_estimate: float = 0.0
+
+    # Detailed performance breakdown
+    llm_time_ms: float = 0.0
+    tool_time_ms: float = 0.0
+    reasoning_time_ms: float = 0.0
+    idle_time_ms: float = 0.0
+    max_concurrent_operations: int = 0
 
 
 @dataclass
@@ -182,15 +237,20 @@ def process_spans(spans: List[TraceSpan]) -> TestMetrics:
         1.0 - (len(error_calls) / len(tool_calls)) if tool_calls else 1.0
     )
 
-    # Process LLM metrics
+    # Process LLM metrics and time breakdown
     llm_spans = [span for span in spans if _is_llm_span(span)]
     if llm_spans:
         metrics.llm_metrics = _extract_llm_metrics(llm_spans)
+        # Sum LLM time from span durations
+        metrics.llm_time_ms = sum((s.end_time - s.start_time) / 1e6 for s in llm_spans)
 
     # Calculate iteration count (number of agent turns)
-    # TODO: jerron - Investigate a better way to count
-    agent_spans = [span for span in spans if "agent" in span.name.lower()]
-    metrics.iteration_count = len(agent_spans)
+    # Prefer number of LLM calls if present; fallback to agent-* spans heuristic
+    if llm_spans:
+        metrics.iteration_count = len(llm_spans)
+    else:
+        agent_spans = [span for span in spans if "agent" in span.name.lower()]
+        metrics.iteration_count = len(agent_spans)
 
     # Calculate parallel tool calls
     metrics.parallel_tool_calls = _calculate_parallel_calls(tool_calls)
@@ -198,6 +258,31 @@ def process_spans(spans: List[TraceSpan]) -> TestMetrics:
     # Aggregate latency
     if tool_calls:
         metrics.latency_ms = sum(call.duration_ms for call in tool_calls)
+
+    # Tool time is sum of tool call durations
+    if tool_calls:
+        metrics.tool_time_ms = sum(call.duration_ms for call in tool_calls)
+
+    # Reasoning time heuristic: spans with 'reason' in name
+    reasoning_spans = [s for s in spans if "reason" in s.name.lower()]
+    metrics.reasoning_time_ms = sum(
+        (s.end_time - s.start_time) / 1e6 for s in reasoning_spans
+    )
+
+    # Idle time heuristic: total time - active time (llm + tool + reasoning)
+    if spans:
+        total_time_ms = (
+            max(s.end_time for s in spans) - min(s.start_time for s in spans)
+        ) / 1e6
+        active_time_ms = (
+            metrics.llm_time_ms + metrics.tool_time_ms + metrics.reasoning_time_ms
+        )
+        metrics.idle_time_ms = max(0.0, total_time_ms - active_time_ms)
+
+    # Max concurrency across LLM and tool spans
+    metrics.max_concurrent_operations = _calculate_max_concurrent_spans(
+        [s for s in spans if _is_llm_span(s) or _is_tool_call_span(s)]
+    )
 
     # Cost estimation
     metrics.cost_estimate = _estimate_cost(metrics.llm_metrics)
@@ -301,6 +386,30 @@ def _calculate_parallel_calls(tool_calls: List[ToolCall]) -> int:
             current_concurrent -= 1
 
     return max_concurrent - 1
+
+
+def _calculate_max_concurrent_spans(spans: List[TraceSpan]) -> int:
+    """Calculate maximum number of concurrent spans in a set."""
+    if len(spans) <= 1:
+        return 0
+
+    events = []
+    for s in spans:
+        events.append(("start", s.start_time))
+        events.append(("end", s.end_time))
+
+    events.sort(key=lambda x: x[1])
+
+    max_concurrent = 0
+    current = 0
+    for event_type, _ in events:
+        if event_type == "start":
+            current += 1
+            max_concurrent = max(max_concurrent, current)
+        else:
+            current -= 1
+
+    return max_concurrent
 
 
 def _estimate_cost(llm_metrics: LLMMetrics) -> float:

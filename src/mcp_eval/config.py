@@ -7,11 +7,11 @@ and consolidates configuration in a single typed object.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional, List, Literal, Union, Any, Callable
+from typing import Dict, Optional, List, Union, Any, Callable
 from contextvars import ContextVar
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from mcp_agent.config import Settings as AgentSettings
@@ -21,13 +21,7 @@ from mcp_agent.agents.agent_spec import AgentSpec
 from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM
 
 
-class AgentConfig(BaseSettings):
-    """Deprecated. No longer used."""
-    name: str | None = None
-    instruction: str | None = None
-    llm_factory: Optional[str] = None
-    model: Optional[str] = None
-    max_iterations: int | None = None
+# Deprecated AgentConfig removed
 
 
 class JudgeConfig(BaseSettings):
@@ -340,12 +334,14 @@ class ProgrammaticDefaults:
 
     @staticmethod
     def set_default_agent_factory(
-        value: Optional[Callable[[], Union[Agent, AugmentedLLM]]]
+        value: Optional[Callable[[], Union[Agent, AugmentedLLM]]],
     ) -> None:
         _programmatic_default_agent_factory.set(value)
 
     @staticmethod
-    def get_default_agent_factory() -> Optional[Callable[[], Union[Agent, AugmentedLLM]]]:
+    def get_default_agent_factory() -> Optional[
+        Callable[[], Union[Agent, AugmentedLLM]]
+    ]:
         return _programmatic_default_agent_factory.get()
 
 
@@ -376,28 +372,7 @@ def set_settings(settings: Union[MCPEvalSettings, Dict[str, Any]]):
         raise TypeError("settings must be MCPEvalSettings or dict")
 
 
-# Back-compat: use_server/use_servers – prefer defining server_names on Agent/AgentSpec
-
-
-def use_server(server_name: str):
-    """Set default server(s) used when constructing agents implicitly.
-
-    Prefer setting `server_names` on your Agent/AgentSpec. This helper is
-    provided for compatibility with existing examples/tests.
-    """
-    if _current_settings is None:
-        load_config()
-    defaults = _current_settings.default_servers or []
-    if server_name not in defaults:
-        defaults.append(server_name)
-    _current_settings.default_servers = defaults
-
-
-def use_servers(server_names: List[str]):
-    """Replace the default server list used for implicit agent construction."""
-    if _current_settings is None:
-        load_config()
-    _current_settings.default_servers = list(server_names)
+# Deprecated helpers removed: prefer defining server_names on Agent/AgentSpec
 
 
 def use_agent(
@@ -445,7 +420,9 @@ def use_agent_object(obj: Union[Agent, AugmentedLLM]):
 
 
 def use_llm_factory(llm_factory: type):
-    raise NotImplementedError("use_llm_factory removed. Configure provider/model in settings.")
+    raise NotImplementedError(
+        "use_llm_factory removed. Configure provider/model in settings."
+    )
 
 
 # Initialize with file config on import

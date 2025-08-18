@@ -185,7 +185,10 @@ class TestSession:
         pre_attached_llm: Optional[AugmentedLLM] = None
 
         async def _agent_from_spec(spec: AgentSpec) -> Agent:
-            from mcp_agent.workflows.factory import agent_from_spec as _agent_from_spec_factory
+            from mcp_agent.workflows.factory import (
+                agent_from_spec as _agent_from_spec_factory,
+            )
+
             return _agent_from_spec_factory(spec, context=self.app.context)
 
         # Global programmatic agent or LLM
@@ -261,8 +264,14 @@ class TestSession:
             # 2) Global default Programmatic (Agent | AugmentedLLM) or schema default (AgentSpec | name)
             # Context-local programmatic default allows parallel tests in separate tasks
             factory = ProgrammaticDefaults.get_default_agent_factory()
-            programmatic_default = factory() if factory is not None else ProgrammaticDefaults.get_default_agent()
-            default_agent = programmatic_default or getattr(eval_settings, "default_agent", None)
+            programmatic_default = (
+                factory()
+                if factory is not None
+                else ProgrammaticDefaults.get_default_agent()
+            )
+            default_agent = programmatic_default or getattr(
+                eval_settings, "default_agent", None
+            )
             if isinstance(default_agent, AugmentedLLM):
                 if default_agent.agent is None:
                     default_agent.agent = Agent(
@@ -288,13 +297,23 @@ class TestSession:
                 self.agent = await _agent_from_spec(default_agent)
             elif isinstance(default_agent, str):
                 loaded_specs = getattr(self.app.context, "loaded_subagents", []) or []
-                matched = next((s for s in loaded_specs if getattr(s, "name", None) == default_agent), None)
+                matched = next(
+                    (
+                        s
+                        for s in loaded_specs
+                        if getattr(s, "name", None) == default_agent
+                    ),
+                    None,
+                )
                 if matched is None:
-                    raise ValueError(f"AgentSpec named '{default_agent}' not found in loaded subagents.")
+                    raise ValueError(
+                        f"AgentSpec named '{default_agent}' not found in loaded subagents."
+                    )
                 self.agent = await _agent_from_spec(matched)
             else:
                 # 3) Minimal fallback
                 from mcp_agent.agents.agent_spec import AgentSpec as AS
+
                 spec = AS(
                     name=f"test_agent_{self.test_name}",
                     instruction="Complete the task as requested.",
@@ -316,7 +335,10 @@ class TestSession:
         model = spec_model or getattr(settings, "model", None)
         if provider and pre_attached_llm is None:
             from mcp_agent.workflows.factory import _llm_factory
-            llm_factory = _llm_factory(provider=provider, model=model, context=self.app.context)
+
+            llm_factory = _llm_factory(
+                provider=provider, model=model, context=self.app.context
+            )
             # Build the AugmentedLLM bound to this agent
             self.test_agent.set_llm(llm_factory(self.agent))
 
@@ -451,52 +473,26 @@ class TestSession:
         """
         eval_name = name or evaluator.__class__.__name__
 
-        # Decide if we should defer evaluator execution to session end. Done if:
-        # 1) the caller explicitly requested it, or
-        # 2) the evaluator requires final metrics (i.e., after the full trace is processed)
-        # 3) the caller didn't provide a response (i.e., we need to evaluate against the full trace).
-        force_defer = when == "end"
-        requires_final = bool(evaluator.requires_final_metrics)
-        missing_response = response is None
-        auto_defer = when == "auto" and missing_response
-
-        if force_defer:
-            # Defer evaluation to session end
-            self._evaluators.append(
-                (
-                    evaluator,
-                    {"inputs": inputs, "output": response}
-                    if (inputs is not None or response is not None)
-                    else None,
-                    eval_name,
+        # Simplified logic: defer if any of these conditions are true
+        should_defer = (
+            when == "end"  # Explicitly requested deferral
+            or (
+                when != "now"
+                and (
+                    response is None  # No response provided, need full trace
+                    or bool(evaluator.requires_final_metrics)  # Needs final metrics
                 )
             )
-            return
+        )
 
-        if requires_final and when != "now":
+        if should_defer:
             # Defer evaluation to session end
-            self._evaluators.append(
-                (
-                    evaluator,
-                    {"inputs": inputs, "output": response}
-                    if (inputs is not None or response is not None)
-                    else None,
-                    eval_name,
-                )
+            context = (
+                {"inputs": inputs, "output": response}
+                if (inputs is not None or response is not None)
+                else None
             )
-            return
-
-        if auto_defer and when != "now":
-            # Defer evaluation to session end
-            self._evaluators.append(
-                (
-                    evaluator,
-                    {"inputs": inputs, "output": response}
-                    if (inputs is not None or response is not None)
-                    else None,
-                    eval_name,
-                )
-            )
+            self._evaluators.append((evaluator, context, eval_name))
             return
 
         # At this point we should evaluate "now" (immediate)

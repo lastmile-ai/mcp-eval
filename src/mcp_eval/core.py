@@ -8,7 +8,6 @@ from functools import wraps
 from dataclasses import dataclass
 
 from mcp_eval.session import TestSession
-from mcp_eval.config import get_current_config
 from mcp_agent.agents.agent import Agent
 from mcp_agent.agents.agent_spec import AgentSpec
 from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM
@@ -133,8 +132,12 @@ def task(description: str = ""):
                     server_name=",".join(session.agent.server_names)
                     if session and session.agent and session.agent.server_names
                     else "",
-                    servers=(session.agent.server_names if session and session.agent else []),
-                    agent_name=(session.agent.name if session and session.agent else ""),
+                    servers=(
+                        session.agent.server_names if session and session.agent else []
+                    ),
+                    agent_name=(
+                        session.agent.name if session and session.agent else ""
+                    ),
                     parameters=kwargs,
                     passed=session.all_passed(),
                     evaluation_results=session.get_results(),
@@ -149,8 +152,12 @@ def task(description: str = ""):
                     server_name=",".join(session.agent.server_names)
                     if session and session.agent and session.agent.server_names
                     else "",
-                    servers=(session.agent.server_names if session and session.agent else []),
-                    agent_name=(session.agent.name if session and session.agent else ""),
+                    servers=(
+                        session.agent.server_names if session and session.agent else []
+                    ),
+                    agent_name=(
+                        session.agent.name if session and session.agent else ""
+                    ),
                     parameters=kwargs,
                     passed=False,
                     evaluation_results=session.get_results() if session else [],

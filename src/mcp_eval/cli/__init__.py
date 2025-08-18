@@ -57,7 +57,13 @@ def generate(
     model: str = typer.Option(None, help="Model hint for generation (optional)"),
 ):
     """Interactive generator to create configs and tests for an MCP server."""
-    run_generator(out_dir=out_dir, style=style, n_examples=n_examples, provider=provider, model=model)
+    run_generator(
+        out_dir=out_dir,
+        style=style,
+        n_examples=n_examples,
+        provider=provider,
+        model=model,
+    )
 
 
 def _create_basic_template(project_path: Path):
@@ -97,27 +103,24 @@ reporting:
 
     # Example test file
     test_content = """
-import mcp_eval
-from mcp_eval import task, setup, ToolWasCalled, ResponseContains
+from mcp_eval import task, Expect, setup, ToolWasCalled, ResponseContains
 
 @setup
 def configure_tests():
-    mcp_eval.use_server("my_server")
+    pass
 
 @task("Basic functionality test")
-async def test_basic_functionality(agent):
+async def test_basic_functionality(agent, session):
     \"\"\"Test basic server functionality.\"\"\"
     response = await agent.generate_str("Perform a basic operation")
-    
-    agent.evaluate_now(ResponseContains("result"), response, "has_result")
-    agent.add_deferred_evaluator(ToolWasCalled("basic_tool"), "tool_called")
+    await session.assert_that(Expect.content.contains("result"), response=response)
+    await session.assert_that(Expect.tools.was_called("basic_tool"))
 
 @task("Error handling test")
-async def test_error_handling(agent):
+async def test_error_handling(agent, session):
     \"\"\"Test server error handling.\"\"\"
     response = await agent.generate_str("Perform an invalid operation")
-    
-    agent.evaluate_now(ResponseContains("error"), response, "has_error")
+    await session.assert_that(Expect.content.contains("error"), response=response)
 """
 
     (project_path / "tests" / "test_my_server.py").write_text(test_content.strip())

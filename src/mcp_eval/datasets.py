@@ -226,7 +226,9 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
             "metadata": self.metadata,
             # Persist agent_spec as a name if possible; otherwise omit complex objects
             "agent_spec": (
-                self.agent_spec.name if isinstance(self.agent_spec, AgentSpec) else self.agent_spec
+                self.agent_spec.name
+                if isinstance(self.agent_spec, AgentSpec)
+                else self.agent_spec
             ),
             "cases": [
                 {

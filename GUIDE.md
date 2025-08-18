@@ -104,7 +104,21 @@ agent = Agent(name="my_agent", instruction="Be concise.", server_names=["fetch"]
 mcp_eval.use_agent(agent)
 ```
 
-2) Programmatic AugmentedLLM (its `.agent` will be used) — prefer AgentSpec
+2) Programmatic AugmentedLLM using factory functions:
+
+```python
+from mcp_agent.workflows.factory import create_llm
+import mcp_eval
+
+llm = create_llm(
+    agent_name="my_llm",
+    instruction="Be helpful.",
+    server_names=["fetch"],
+    provider="anthropic",
+    model="claude-3-5-haiku-20241022"
+)
+mcp_eval.use_agent(llm)
+```
 
 3) AgentSpec object or by name (discovered by mcp‑agent)
 
@@ -359,19 +373,20 @@ Key assertion families (via `from mcp_eval import Expect`):
   - `Expect.judge.llm(rubric, min_score=0.8, include_input=False, require_reasoning=True)`
   - `Expect.judge.multi_criteria(criteria: dict|EvaluationCriterion[], aggregate_method="weighted", require_all_pass=False, include_confidence=True, use_cot=True, model=None)`
 - **Path**
-  - `Expect.path.efficiency(optimal_steps=None, expected_tool_sequence=None, allow_extra_steps=0, penalize_backtracking=True, penalize_repeated_tools=True, tool_usage_limits=None, default_tool_limit=1)`
+  - `Expect.path.efficiency(optimal_steps=None, expected_tool_sequence=None, golden_path=None, allow_extra_steps=0, penalize_backtracking=True, penalize_repeated_tools=True, tool_usage_limits=None, default_tool_limit=1)`
 
 Examples:
 
 ```python
-# Match nested fields in a tool output (e.g., content[0].text contains a phrase)
+# Match nested fields in a tool output (supports list notation)
+# e.g., content[0].text or content.0.text both work
 await session.assert_that(
     Expect.tools.output_matches(
         tool_name="fetch",
         expected_output=r"use.*examples",
         match_type="regex",
         case_sensitive=False,
-        field_path="content.0.text",
+        field_path="content.0.text",  # Will correctly handle list indices
     ),
     name="fetch_output_match",
 )
@@ -379,13 +394,33 @@ await session.assert_that(
 # Require an exact tool call sequence
 await session.assert_that(Expect.tools.sequence(["fetch", "fetch"], allow_other_calls=True))
 
-# Multi-criteria judging
-criteria = {
-    "accuracy": "Factual correctness",
-    "completeness": "Covers key points",
-    "clarity": "Clear and well-structured",
-}
-await session.assert_that(Expect.judge.multi_criteria(criteria, require_all_pass=False), response=response)
+# Multi-criteria judging with advanced options
+from mcp_eval.evaluators import EvaluationCriterion
+
+criteria = [
+    EvaluationCriterion(
+        name="accuracy",
+        description="Factual correctness",
+        weight=2.0,
+        min_score=0.8
+    ),
+    EvaluationCriterion(
+        name="completeness",
+        description="Covers key points",
+        weight=1.5,
+        min_score=0.7
+    ),
+]
+await session.assert_that(
+    Expect.judge.multi_criteria(
+        criteria=criteria,
+        aggregate_method="weighted",  # or "min", "harmonic_mean"
+        require_all_pass=False,
+        use_cot=True,  # Chain-of-thought reasoning
+    ),
+    response=response,
+    inputs=original_input  # Include original input for context
+)
 ```
 
 ### Inspecting Metrics and Spans
@@ -398,6 +433,13 @@ span_tree = session.get_span_tree()
 
 assert metrics.total_duration_ms > 0
 assert any(call.name == "fetch" for call in metrics.tool_calls)
+
+# Performance breakdown metrics
+print(f"LLM time: {metrics.llm_time_ms}ms")
+print(f"Tool time: {metrics.tool_time_ms}ms")
+print(f"Reasoning time: {metrics.reasoning_time_ms}ms")
+print(f"Idle time: {metrics.idle_time_ms}ms")
+print(f"Max concurrent operations: {metrics.max_concurrent_operations}")
 ```
 
 The span tree supports advanced analyses (e.g., rephrasing loop detection, inefficient paths) for deeper debugging and optimization.
@@ -436,7 +478,7 @@ or refer to a discovered AgentSpec that already lists `server_names`.
 
 - Use config‑discovered AgentSpecs (inline or from `subagents.search_paths`) that include `server_names`. You can reference them by name with `mcp_eval.use_agent("SpecName")` or `@pytest.mark.mcp_agent("SpecName")`.
 
-- Optional helper: `mcp_eval.use_server("my_server")` sets a default server list used when an Agent is implicitly constructed. Prefer explicit `server_names` on the Agent/Spec in new code.
+- Define `server_names` on your `Agent`/`AgentSpec`. Per-test server selection helpers have been removed.
 
 ```python
 import mcp_eval
@@ -572,6 +614,22 @@ from mcp_eval.evaluators import register_evaluator
 register_evaluator("MyCustomEvaluator", MyCustomEvaluator)
 ```
 
+### Judge LLM Configuration
+
+The LLM judge evaluator uses a dedicated JudgeLLMClient that wraps an AugmentedLLM instance:
+
+```python
+# The judge LLM is automatically configured from settings
+# You can override the model in the evaluator:
+await session.assert_that(
+    Expect.judge.llm(
+        "Quality assessment",
+        model="claude-3-5-haiku-20241022"  # Override judge model
+    ),
+    response=response
+)
+```
+
 Use it anywhere you would use an `Expect.*` evaluator:
 
 ```python
@@ -678,6 +736,37 @@ This is useful for CI pipelines or scenarios where you want to override config a
 - Long test runs or timeouts: Use `Expect.performance.response_time_under(...)`, check network reachability, consider `execution.timeout_seconds`
 - Inconsistent outputs: Tighten prompts, reduce creativity settings in your LLM, or use more objective evaluators (e.g., `EqualsExpected`, `IsInstance`)
 
+
+## Technical Details
+
+### Metrics Processing
+
+The metrics system handles nested structures in OTEL span attributes:
+- `"content.0.text"` becomes `{"content": [{"text": ...}]}`
+- Mixed dict/list paths are properly reconstructed
+- Supports arbitrary nesting depth
+
+### Golden Path Support
+
+Path efficiency evaluator supports golden path comparison:
+
+```python
+await session.assert_that(
+    Expect.path.efficiency(
+        golden_path=["read", "analyze", "write"],  # Expected ideal sequence
+        allow_extra_steps=1
+    )
+)
+```
+
+### Performance Metrics
+
+Detailed timing metrics are automatically calculated:
+- `llm_time_ms`: Total time spent in LLM calls
+- `tool_time_ms`: Total time spent in tool execution
+- `reasoning_time_ms`: Time in reasoning/planning spans
+- `idle_time_ms`: Waiting/coordination time
+- `max_concurrent_operations`: Peak parallelism achieved
 
 ## Where To Look in This Repo
 
