@@ -14,6 +14,7 @@ from mcp_eval.evaluators import (
     get_evaluator_by_name,
 )
 from mcp_eval.metrics import TestMetrics
+from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.report_generation.models import EvaluationReport, CaseResult
 from mcp_eval.session import TestSession
 
@@ -153,6 +154,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
                             metrics=session.get_metrics(),
                             passed=all(r.passed for r in evaluation_results),
                             duration_ms=session.get_duration_ms(),
+                            error=generate_failure_message(evaluation_results),
                         )
 
                         # Call progress callback if provided
