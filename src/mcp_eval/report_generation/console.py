@@ -8,6 +8,8 @@ from rich.spinner import Spinner
 from rich.columns import Columns
 from rich.console import Group
 
+from mcp_eval.evaluators.shared import EvaluationRecord
+
 from ..core import TestResult
 from .models import EvaluationReport, CaseResult
 
@@ -197,12 +199,11 @@ class TestProgressDisplay:
                 dots.append("F", style="red")
 
 
-def generate_failure_message(result: "TestResult") -> str:
+def generate_failure_message(eval_records: list[EvaluationRecord]) -> str:
     """Generate failure messages for mcp-eval evaluations"""
     failure_details = []
 
-    eval_record = result.evaluation_results
-    failed_eval_records = [r for r in eval_record if not r.passed]
+    failed_eval_records = [r for r in eval_records if not r.passed]
 
     for eval_record in failed_eval_records:
         name = eval_record.name
@@ -234,8 +235,5 @@ def generate_failure_message(result: "TestResult") -> str:
                 failure_details.append(f"  ✗ {name}: {evaluation_result.model_dump()}")
 
     failure_message = "Evaluation failures:\n" + "\n".join(failure_details)
-
-    if result.error:
-        failure_message += f"\n\n{result.error}"
 
     return failure_message

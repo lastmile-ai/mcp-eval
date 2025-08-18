@@ -55,7 +55,9 @@ class MCPEvalPytestSession:
                 duration_ms=self._session.get_duration_ms(),
                 file=self._test_file,
             )
-            failure_message = generate_failure_message(test_result)
+            failure_message = test_result.error or generate_failure_message(
+                test_result.evaluation_results
+            )
             pytest.fail(failure_message, pytrace=False)
 
     @property
@@ -82,9 +84,11 @@ async def mcp_session(request) -> AsyncGenerator[MCPEvalPytestSession, None]:
     agent_config = config.get("agent_config", {})
 
     test_name = request.node.name
-    
+
     # Get the test file name
-    test_file = Path(request.node.fspath).name if hasattr(request.node, 'fspath') else "pytest"
+    test_file = (
+        Path(request.node.fspath).name if hasattr(request.node, "fspath") else "pytest"
+    )
 
     # Check if pytest is running in verbose mode
     verbose = request.config.getoption("verbose") > 0

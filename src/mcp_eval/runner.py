@@ -179,7 +179,9 @@ async def run_decorator_tests(
                         display.add_result(passed=True)
                     else:
                         display.add_result(passed=False)
-                        failure_message = generate_failure_message(result)
+                        failure_message = result.error or generate_failure_message(
+                            result.evaluation_results
+                        )
                         result.error = failure_message
                         failed_results.append(result)
 
@@ -269,7 +271,9 @@ async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationRep
                     )
 
                     # Generate detailed failure message
-                    failure_message = generate_failure_message(test_result)
+                    failure_message = result.error or generate_failure_message(
+                        result.evaluation_results
+                    )
                     test_result.error = failure_message
                     failed_results.append(test_result)
 
