@@ -17,7 +17,7 @@ def optimize_with_dspy(predictor: ToolPredictor, list_of_available_tools: list, 
 
     # Optimize docstrings using available tools and examples
     print("\n=== Optimizing Docstrings ===")
-    optimization_report = predictor.optimize_docstrings(
+    optimization_report = predictor.opze_docstrings(
         examples=train_examples,
         tools_list=list_of_available_tools
     )

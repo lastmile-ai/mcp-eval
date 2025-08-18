@@ -7,7 +7,7 @@ import os
 import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-from mcp_eval.optimizer.dataloader import DataExample
+from mcp_eval.optimizer.data_example import DataExample
 from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan, extract_comprehensive_trace_information, TraceInformation, extract_user_query, extract_tool_info_from_llm_span, _is_tool_call_span, _extract_tool_call, _is_trace_get_capabilities_span, _is_trace_list_tools_span, _is_trace_user_query_span, _is_response_span, _is_the_shutdown_span, _extract_response_from_span
 from mcp_eval.evaluators.llm_judge_operation import LLMJudgeSuccess
 from mcp_eval.evaluators.base import EvaluatorContext

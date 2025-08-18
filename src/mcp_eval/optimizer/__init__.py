@@ -5,7 +5,7 @@ This package provides tools for optimizing tool selection using DSPy.
 """
 
 from .core_trace_process import create_trace_dataset, get_tools_info
-from .dataloader import DataExample
+from .data_example import DataExample
 from .predictors import ToolPredictor
 
 __all__ = [

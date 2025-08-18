@@ -234,15 +234,25 @@ class ToolPredictor(dspy.Module):
                 successful_queries = []
                 
                 # Analyze examples to find successful and failed cases for this tool
+                successful_examples = []
+                failed_examples = []
                 for example in examples:
                     # Check if this tool was used in the example
                     if any(example.get('tool_calls')):
                         if any([True for tool in example.get('tool_calls') if tool_name in tool.get("name", "")]):
                             # Determine if the example was successful                        
                             if example.is_successful:
-                                successful_queries.append(example.user_query)
+                                successful_examples.append(example)
                             else:
-                                failed_queries.append(example.user_query)
+                                failed_examples.append(example)
+                
+                # Sort successful examples by score (descending) and extract queries
+                successful_examples.sort(key=lambda x: x.score, reverse=True)
+                successful_queries = [example.user_query for example in successful_examples]
+                
+                # Sort failed examples by score (ascending - lowest score first) and extract queries
+                failed_examples.sort(key=lambda x: x.score)
+                failed_queries = [example.user_query for example in failed_examples]
                 
                 # Initialize report entry for this tool
                 self.optimization_report[tool_name] = {
