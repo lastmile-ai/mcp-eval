@@ -25,9 +25,14 @@ from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM
 
 
 class JudgeConfig(BaseSettings):
-    """Configuration for LLM judge."""
+    """Configuration for LLM judge.
+    
+    Supports separate provider/model configuration for judge evaluations.
+    If not specified, falls back to global provider/model settings.
+    """
 
-    model: str = "claude-3-5-haiku-20241022"
+    provider: Optional[str] = None  # Judge-specific provider (falls back to global)
+    model: Optional[str] = None  # Judge-specific model (falls back to global or ModelSelector)
     min_score: float = 0.8
     max_tokens: int = 1000
     system_prompt: str = "You are an expert evaluator of AI assistant responses."
@@ -45,14 +50,6 @@ class MetricsConfig(BaseSettings):
             "cost_estimate",
         ]
     )
-    token_prices: Dict[str, Dict[str, float]] = Field(
-        default_factory=lambda: {
-            "claude-3-5-haiku-20241022": {"input": 0.00000025, "output": 0.00000125},
-            "claude-sonnet-4-20250514": {"input": 0.000003, "output": 0.000015},
-            "gpt-4-turbo": {"input": 0.00001, "output": 0.00003},
-        }
-    )
-
 
 class ReportingConfig(BaseSettings):
     """Configuration for reporting."""
@@ -99,12 +96,9 @@ class MCPEvalSettings(AgentSettings):
     # Default servers for tests (preferred: set on Agent/AgentSpec)
     default_servers: List[str] | None = Field(default_factory=list)
 
-    # Enable subagent discovery by default so AgentSpec files are picked up
-    subagents: SubagentSettings | None = Field(default_factory=SubagentSettings)
-
     # LLM defaults for tests
-    provider: Optional[str] = None
-    model: Optional[str] = None
+    provider: Optional[str] = "anthropic"
+    model: Optional[str] = "claude-sonnet-4-0"
 
     # Test-time default agent (not persisted)
     # Keep schema-serializable: AgentSpec or name only

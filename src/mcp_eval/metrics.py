@@ -4,6 +4,7 @@ import json
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 
+from mcp_agent.tracing.token_counter import TokenCounter
 
 def unflatten_attributes(attributes: Dict[str, Any], prefix: str) -> Dict[str, Any]:
     """Unflatten values from span attributes with dot/list notation support.
@@ -292,12 +293,15 @@ def process_spans(spans: List[TraceSpan]) -> TestMetrics:
 
 def _is_tool_call_span(span: TraceSpan) -> bool:
     """Determine if span represents a tool call."""
-    return (
+    # Check for both MCP and gen_ai tool names
+    # To avoid duplicates, only count spans that have call_tool in the name
+    has_tool_name = (
         span.attributes.get("mcp.tool.name") is not None
-        # # TODO: jerron - This leads to duplicates from *.call_tool
-        # # but neccessary for non-MCP tools
-        # or span.attributes.get("gen_ai.tool.name") is not None
+        or span.attributes.get("gen_ai.tool.name") is not None
     )
+    # Only count actual tool call spans, not list_tools or other operations
+    is_call_tool_span = "call_tool" in span.name.lower()
+    return has_tool_name and is_call_tool_span
 
 
 def _is_llm_span(span: TraceSpan) -> bool:
@@ -314,6 +318,7 @@ def _extract_tool_call(span: TraceSpan) -> Optional[ToolCall]:
     try:
         tool_name = (
             span.attributes.get("mcp.tool.name")
+            or span.attributes.get("gen_ai.tool.name")
             or span.attributes.get("tool.name")
             or span.name.replace("call_tool_", "").replace("tool_", "")
         )
@@ -413,15 +418,32 @@ def _calculate_max_concurrent_spans(spans: List[TraceSpan]) -> int:
 
 
 def _estimate_cost(llm_metrics: LLMMetrics) -> float:
-    """Estimate cost based on token usage."""
-    # Simple cost estimation - would be configurable in real implementation
-    cost_per_input_token = 0.000001
-    cost_per_output_token = 0.000003
+    """Estimate cost based on token usage using mcp-agent's TokenCounter."""
+    try:
+        # Create a TokenCounter instance to use its cost calculation
+        counter = TokenCounter()
 
-    return (
-        llm_metrics.input_tokens * cost_per_input_token
-        + llm_metrics.output_tokens * cost_per_output_token
-    )
+        # Use the model name from metrics if available
+        model_name = llm_metrics.model_name if llm_metrics.model_name else "unknown"
+
+        # Calculate cost using mcp-agent's pricing data
+        cost = counter.calculate_cost(
+            model_name=model_name,
+            input_tokens=llm_metrics.input_tokens,
+            output_tokens=llm_metrics.output_tokens,
+            provider=None  # Will be inferred from model name
+        )
+
+        return cost
+    except Exception:
+        # Fallback to simple estimation if TokenCounter is not available
+        cost_per_input_token = 0.000001
+        cost_per_output_token = 0.000003
+        
+        return (
+            llm_metrics.input_tokens * cost_per_input_token
+            + llm_metrics.output_tokens * cost_per_output_token
+        )
 
 
 # Metric registration for extensibility

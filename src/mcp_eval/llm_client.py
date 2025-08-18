@@ -14,23 +14,46 @@ class JudgeLLMClient:
     This wraps an AugmentedLLM instance configured specifically for judging.
     """
 
-    def __init__(self, model: str = "claude-3-5-haiku-20241022"):
+    def __init__(self, model: Optional[str] = None, provider: Optional[str] = None):
         self.model = model
+        self.provider = provider
         self._llm = None
 
     async def _get_llm(self):
         """Lazy initialization of the AugmentedLLM instance."""
         if not self._llm:
             settings = get_settings()
-            provider = settings.provider or (
-                "anthropic" if "claude" in (self.model or "") else "openai"
-            )
+            
+            # Determine provider: explicit > judge config > global config > infer from model
+            provider = self.provider
+            if not provider:
+                provider = settings.judge.provider
+            if not provider:
+                provider = settings.provider
+            
+            # Determine model: explicit > judge config > global config > ModelSelector
+            model = self.model
+            if not model:
+                model = settings.judge.model
+            if not model:
+                model = settings.model
+            
+            # If still no model, let mcp-agent's ModelSelector pick one
+            if not model:
+                from mcp.types import ModelPreferences
+                # For judging, prioritize intelligence and cost-effectiveness
+                model = ModelPreferences(
+                    costPriority=0.4,
+                    speedPriority=0.2,
+                    intelligencePriority=0.4
+                )
+            
             # Create an AugmentedLLM with minimal agent for judging
             self._llm = create_llm(
                 agent_name="judge",
                 instruction="You are an evaluation judge that provides objective assessments.",
                 provider=provider,
-                model=self.model,
+                model=model,
             )
         return self._llm
 
@@ -55,6 +78,10 @@ class JudgeLLMClient:
         return "The response meets the specified criteria."
 
 
-def get_judge_client(model: Optional[str] = None) -> JudgeLLMClient:
-    """Get a judge LLM client."""
-    return JudgeLLMClient(model or "claude-3-5-haiku-20241022")
+def get_judge_client(model: Optional[str] = None, provider: Optional[str] = None) -> JudgeLLMClient:
+    """Get a judge LLM client.
+    
+    Uses the provided model/provider or falls back to config settings.
+    If no model is configured, mcp-agent will use its model selection.
+    """
+    return JudgeLLMClient(model=model, provider=provider)

@@ -1,9 +1,21 @@
 import asyncio
 from mcp_agent.agents.agent import Agent
+from mcp_agent.agents.agent_spec import AgentSpec
 
 import mcp_eval
-from mcp_eval import task, Case, Dataset, Expect
+from mcp_eval import task, setup, Case, Dataset, Expect
 from mcp_eval.session import TestAgent, TestSession
+
+
+@setup
+def configure_fetch_agent():
+    """Configure agent with fetch server for tests."""
+    spec = AgentSpec(
+        name="FetchTester",
+        instruction="You are a helpful assistant that can fetch and analyze web content.",
+        server_names=["fetch"]
+    )
+    mcp_eval.use_agent(spec)
 
 
 @task("Test with enhanced LLM judge")
@@ -34,7 +46,7 @@ async def test_enhanced_judge(agent: TestAgent, session: TestSession):
 @task("Test with span tree analysis")
 async def test_span_analysis(agent: TestAgent, session: TestSession):
     """Test that demonstrates span tree analysis capabilities."""
-    await agent.generate_str("Fetch multiple URLs: example.com and github.com")
+    response = await agent.generate_str("Fetch multiple URLs: example.com and github.com")
 
     # Wait for execution to complete, then analyze span tree
     span_tree = session.get_span_tree()
@@ -47,6 +59,7 @@ async def test_span_analysis(agent: TestAgent, session: TestSession):
                 "Agent should avoid unnecessary rephrasing loops", min_score=0.5
             ),
             name="avoid_rephrasing",
+            response=response,  # Pass the response to the judge
         )
 
         # Use path efficiency evaluator
@@ -54,6 +67,8 @@ async def test_span_analysis(agent: TestAgent, session: TestSession):
             Expect.path.efficiency(
                 expected_tool_sequence=["fetch", "fetch"],
                 allow_extra_steps=1,
+                tool_usage_limits={"fetch": 2},  # Allow up to 2 fetch calls
+                penalize_repeated_tools=False,  # Don't penalize using fetch twice
             ),
             name="path_efficiency",
         )
@@ -90,7 +105,11 @@ cases = [
 dataset = Dataset(
     name="Enhanced Fetch Tests",
     cases=cases,
-    server_name="fetch",
+    agent_spec=AgentSpec(
+        name="DatasetFetchTester",
+        instruction="You are a helpful assistant that can fetch and analyze web content.",
+        server_names=["fetch"]
+    )
     # LLM provider/model now configured globally in mcpeval.yaml
 )
 
@@ -98,27 +117,39 @@ dataset = Dataset(
 async def dataset_with_enhanced_features():
     """Dataset evaluation using enhanced features."""
 
-    async def enhanced_fetch_task(inputs: str) -> str:
-        # Example A: Programmatic Agent + LLM via with_agent per-test override
-        prog_agent = Agent(
-            name="prog",
-            instruction="You can fetch and summarize.",
-            server_names=["fetch"],
-        )
-
-        async with mcp_eval.test_session(
-            "enhanced_task_prog", agent=prog_agent
-        ) as test_agent:
-            return await test_agent.generate_str(inputs)
+    async def enhanced_fetch_task(inputs: str, agent: TestAgent, session: TestSession) -> str:
+        # The Dataset.evaluate method passes the agent and session
+        # We should use them instead of creating our own
+        print(f"DEBUG: Agent name: {agent.agent.name}")
+        print(f"DEBUG: Agent has LLM: {agent._llm is not None}")
+        print(f"DEBUG: Input: {inputs}")
+        response = await agent.generate_str(inputs)
+        print(f"DEBUG: Response: {response[:200] if len(response) > 200 else response}")
+        return response
 
     # Run evaluation
     report = await dataset.evaluate(enhanced_fetch_task, max_concurrency=2)
-    report.print(include_input=True, include_output=True, include_scores=True)
+    
+    # Print results manually since there's no print method
+    print(f"\n{'='*60}")
+    print(f"Evaluation Report: {report.dataset_name}")
+    print(f"Task: {report.task_name}")
+    print(f"{'='*60}")
+    
+    for result in report.results:
+        print(f"\nCase: {result.case_name}")
+        print(f"  Input: {result.inputs}")
+        print(f"  Output: {result.output[:100]}..." if result.output and len(str(result.output)) > 100 else f"  Output: {result.output}")
+        print(f"  Passed: {result.passed}")
+        for eval_result in result.evaluation_results:
+            print(f"    - {eval_result.name}: {'✓' if eval_result.passed else '✗'}")
+            if eval_result.error:
+                print(f"      Error: {eval_result.error}")
 
-    print(
-        f"Results: {report.passed_cases}/{report.total_cases} cases passed ({report.success_rate:.1%})"
-    )
+    print(f"\n{'='*60}")
+    print(f"Results: {report.passed_cases}/{report.total_cases} cases passed ({report.success_rate:.1%})")
     print(f"Average duration: {report.average_duration_ms:.0f}ms")
+    print(f"{'='*60}")
 
 
 if __name__ == "__main__":

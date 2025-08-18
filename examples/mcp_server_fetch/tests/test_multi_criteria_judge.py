@@ -42,12 +42,12 @@ async def test_standard_criteria_evaluation(agent: TestAgent, session: TestSessi
         ),
     ]
 
-    # # Use MultiCriteriaJudge with weighted aggregation
+    # Use MultiCriteriaJudge with weighted aggregation
     judge = Expect.judge.multi_criteria(
         criteria=web_content_criteria,
         aggregate_method="weighted",
         use_cot=True,
-        model="claude-3-5-haiku-20241022",
+        # model not specified - will use judge config or ModelSelector
     )
 
     await session.assert_that(
@@ -92,7 +92,7 @@ async def test_require_all_pass_mode(agent: TestAgent, session: TestSession):
         require_all_pass=True,
         aggregate_method="min",
         use_cot=False,
-        model="claude-3-5-haiku-20241022",
+        # model not specified - will use judge config or ModelSelector
     )
 
     await session.assert_that(
@@ -111,7 +111,7 @@ async def test_predefined_criteria_sets(agent: TestAgent, session: TestSession):
         criteria=STANDARD_CRITERIA,
         aggregate_method="harmonic_mean",
         include_confidence=True,
-        model="claude-3-5-haiku-20241022",
+        # model not specified - will use judge config or ModelSelector
     )
 
     await session.assert_that(
@@ -157,7 +157,7 @@ async def test_error_handling(agent: TestAgent, session: TestSession):
         criteria=error_handling_criteria,
         aggregate_method="weighted",
         use_cot=True,
-        model="claude-3-5-haiku-20241022",
+        # model not specified - will use judge config or ModelSelector
     )
 
     await session.assert_that(
@@ -168,7 +168,7 @@ async def test_error_handling(agent: TestAgent, session: TestSession):
         criteria=error_handling_criteria,
         aggregate_method="min",
         use_cot=True,
-        model="claude-3-5-haiku-20241022",
+        # model not specified - will use judge config or ModelSelector
     )
 
     await session.assert_that(

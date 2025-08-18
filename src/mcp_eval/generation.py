@@ -35,7 +35,11 @@ from pathlib import Path
 class MCPCaseGenerator:
     """Generates test cases for MCP servers using LLM."""
 
-    def __init__(self, model: str = "claude-3-5-haiku-20241022"):
+    def __init__(self, model: Optional[str] = None):
+        """Initialize generator with optional model override.
+        
+        If no model is provided, will use settings configuration.
+        """
         self.model = model
 
     async def generate_cases(
@@ -244,31 +248,31 @@ class ToolSchema(BaseModel):
 
 
 class ToolWasCalledSpec(BaseModel):
-    kind: Literal["tool_was_called"] = Field("tool_was_called", const=True)
+    kind: Literal["tool_was_called"] = "tool_was_called"
     tool_name: str
     min_times: int = 1
 
 
 class ToolCalledWithSpec(BaseModel):
-    kind: Literal["tool_called_with"] = Field("tool_called_with", const=True)
+    kind: Literal["tool_called_with"] = "tool_called_with"
     tool_name: str
     arguments: Dict[str, Any]
 
 
 class ResponseContainsSpec(BaseModel):
-    kind: Literal["response_contains"] = Field("response_contains", const=True)
+    kind: Literal["response_contains"] = "response_contains"
     text: str
     case_sensitive: bool = False
 
 
 class NotContainsSpec(BaseModel):
-    kind: Literal["not_contains"] = Field("not_contains", const=True)
+    kind: Literal["not_contains"] = "not_contains"
     text: str
     case_sensitive: bool = False
 
 
 class ToolOutputMatchesSpec(BaseModel):
-    kind: Literal["tool_output_matches"] = Field("tool_output_matches", const=True)
+    kind: Literal["tool_output_matches"] = "tool_output_matches"
     tool_name: str
     expected_output: Union[Dict[str, Any], str, int, float, List[Any]]
     field_path: Optional[str] = None
@@ -278,23 +282,23 @@ class ToolOutputMatchesSpec(BaseModel):
 
 
 class MaxIterationsSpec(BaseModel):
-    kind: Literal["max_iterations"] = Field("max_iterations", const=True)
+    kind: Literal["max_iterations"] = "max_iterations"
     max_iterations: int
 
 
 class ResponseTimeUnderSpec(BaseModel):
-    kind: Literal["response_time_under"] = Field("response_time_under", const=True)
+    kind: Literal["response_time_under"] = "response_time_under"
     ms: float
 
 
 class LLMJudgeSpec(BaseModel):
-    kind: Literal["llm_judge"] = Field("llm_judge", const=True)
+    kind: Literal["llm_judge"] = "llm_judge"
     rubric: str
     min_score: float = 0.8
 
 
 class ToolSequenceSpec(BaseModel):
-    kind: Literal["tool_sequence"] = Field("tool_sequence", const=True)
+    kind: Literal["tool_sequence"] = "tool_sequence"
     sequence: List[str]
     allow_other_calls: bool = False
 

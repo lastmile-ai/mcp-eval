@@ -1,8 +1,11 @@
 """Enhanced test runner supporting both decorator and dataset approaches."""
 
 import asyncio
+import atexit
 import importlib.util
 import inspect
+import os
+import sys
 from pathlib import Path
 from typing import List, Dict, Any
 import typer
@@ -34,6 +37,14 @@ from mcp_eval.report_generation.console import (
 
 app = typer.Typer()
 console = Console()
+
+# Register an atexit handler to suppress subprocess cleanup warnings
+def suppress_cleanup_warnings():
+    """Suppress stderr during final cleanup to avoid subprocess warnings."""
+    sys.stderr = open(os.devnull, 'w')
+
+# Register the suppression to happen at program exit
+atexit.register(suppress_cleanup_warnings)
 
 
 def discover_tests_and_datasets(test_spec: str) -> Dict[str, List]:
@@ -209,7 +220,7 @@ async def run_decorator_tests(
     return results
 
 
-async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationReport]:
+async def run_dataset_evaluations(datasets: List[Dataset], *, max_concurrency: int | None = None) -> List[EvaluationReport]:
     """Run dataset-style evaluations with live progress display."""
     reports: list[EvaluationReport] = []
     failed_results: list[TestResult] = []
@@ -239,7 +250,7 @@ async def run_dataset_evaluations(datasets: List[Dataset]) -> List[EvaluationRep
                 live.update(display.create_display(type="case"))
 
             report = await ds.evaluate(
-                standard_task, progress_callback=progress_callback
+                standard_task, max_concurrency=max_concurrency, progress_callback=progress_callback
             )
 
             reports.append(report)
@@ -375,7 +386,7 @@ async def _run_async(
 
     if datasets and format in ["auto", "dataset"]:
         console.print(f"\n[blue]Running {len(datasets)} dataset evaluations...[/blue]")
-        dataset_reports = await run_dataset_evaluations(datasets)
+        dataset_reports = await run_dataset_evaluations(datasets, max_concurrency=max_concurrency)
 
     # Print short test summary info (pytest-like)
     if test_results:
@@ -433,6 +444,9 @@ async def _run_async(
             generate_combined_html_report(combined_report, html_report, output_dir)
             console.print(f"HTML report saved to {html_report}", style="blue")
 
+    # Give subprocess transports time to close properly before exit
+    await asyncio.sleep(0.2)
+    
     # Exit with error if any tests failed
     total_failed = sum(1 for r in test_results if not r.passed) + sum(
         r.failed_cases for r in dataset_reports

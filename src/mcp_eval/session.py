@@ -3,6 +3,7 @@
 import os
 import json
 import time
+import asyncio
 import tempfile
 import shutil
 from pathlib import Path
@@ -228,18 +229,24 @@ class TestSession:
                 # Capture per-spec provider/model if present
                 spec_provider = getattr(override, "provider", None)
                 spec_model = getattr(override, "model", None)
-                self.agent = await _agent_from_spec(
-                    AgentSpec(
-                        name=override.name,
-                        instruction=override.instruction,
-                        server_names=_effective_servers(override.server_names),
-                        functions=override.functions,
-                        connection_persistence=override.connection_persistence,
-                        human_input_callback=override.human_input_callback,
-                        **({"provider": spec_provider} if spec_provider else {}),
-                        **({"model": spec_model} if spec_model else {}),
-                    )
-                )
+                # Build spec kwargs, only including attributes that exist
+                spec_kwargs = {
+                    "name": override.name,
+                    "instruction": override.instruction,
+                    "server_names": _effective_servers(override.server_names),
+                    "connection_persistence": override.connection_persistence,
+                }
+                # Add optional attributes if they exist
+                if hasattr(override, "functions"):
+                    spec_kwargs["functions"] = override.functions
+                if hasattr(override, "human_input_callback"):
+                    spec_kwargs["human_input_callback"] = override.human_input_callback
+                if spec_provider:
+                    spec_kwargs["provider"] = spec_provider
+                if spec_model:
+                    spec_kwargs["model"] = spec_model
+                    
+                self.agent = await _agent_from_spec(AgentSpec(**spec_kwargs))
             elif isinstance(override, str):
                 loaded_specs = getattr(self.app.context, "loaded_subagents", []) or []
                 matched = next(
@@ -292,8 +299,9 @@ class TestSession:
                     default_agent.context = self.app.context
                 self.agent = default_agent
             elif isinstance(default_agent, AgentSpec):
-                spec_provider = getattr(default_agent, "provider", None)
-                spec_model = getattr(default_agent, "model", None)
+                # Extract provider/model if specified in the AgentSpec
+                spec_provider = getattr(default_agent, "provider", None) or spec_provider
+                spec_model = getattr(default_agent, "model", None) or spec_model
                 self.agent = await _agent_from_spec(default_agent)
             elif isinstance(default_agent, str):
                 loaded_specs = getattr(self.app.context, "loaded_subagents", []) or []
@@ -329,6 +337,8 @@ class TestSession:
         # If an AugmentedLLM was supplied programmatically, use it
         if pre_attached_llm is not None:
             self.test_agent.set_llm(pre_attached_llm)
+            # Also attach to the underlying agent
+            await self.agent.attach_llm(llm=pre_attached_llm)
 
         # Configure LLM via provider/model, preferring AgentSpec-level if present
         provider = spec_provider or getattr(settings, "provider", None)
@@ -340,7 +350,10 @@ class TestSession:
                 provider=provider, model=model, context=self.app.context
             )
             # Build the AugmentedLLM bound to this agent
-            self.test_agent.set_llm(llm_factory(self.agent))
+            augmented_llm = llm_factory(self.agent)
+            self.test_agent.set_llm(augmented_llm)
+            # Also attach to the underlying agent
+            await self.agent.attach_llm(llm=augmented_llm)
 
         return self.test_agent
 
@@ -364,6 +377,9 @@ class TestSession:
             # handles OTEL cleanup properly without affecting other apps
             if self.app:
                 await self.app.cleanup()
+                
+            # Give subprocess transports time to close properly
+            await asyncio.sleep(0.1)
 
         except Exception as e:
             logger.warning(f"Error during session cleanup: {e}")

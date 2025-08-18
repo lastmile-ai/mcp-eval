@@ -25,6 +25,7 @@ from mcp_agent.mcp.gen_client import gen_client
 from mcp_agent.config import MCPServerSettings
 from mcp_agent.agents.agent import Agent
 from mcp_agent.workflows.factory import _llm_factory
+from mcp_agent.workflows.llm.llm_selector import ModelSelector, ModelPreferences
 
 from mcp_eval.generation import (
     generate_scenarios_with_agent,
@@ -188,15 +189,19 @@ def _load_existing_provider(project: Path) -> tuple[Optional[str], Optional[str]
 
 def _prompt_provider(
     existing_provider: Optional[str], existing_key: Optional[str]
-) -> tuple[str, Optional[str]]:
+) -> tuple[str, Optional[str], Optional[str]]:
+    """Prompt for provider, API key, and optional model."""
     if existing_provider:
         console.print(f"Using existing provider: {existing_provider}")
         if existing_key:
             console.print("API key already set in secrets; skipping prompt.")
-            return existing_provider, existing_key
+            # Optionally ask for model override
+            model = typer.prompt("Model (press Enter to auto-select)", default="").strip() or None
+            return existing_provider, existing_key, model
         # Ask only for missing key
         api_key = typer.prompt(f"Enter {existing_provider} API key", hide_input=True)
-        return existing_provider, api_key
+        model = typer.prompt("Model (press Enter to auto-select)", default="").strip() or None
+        return existing_provider, api_key, model
     # No existing provider; prompt fresh
     provider = (
         typer.prompt("LLM provider (anthropic|openai)", default="anthropic")
@@ -206,19 +211,38 @@ def _prompt_provider(
     if provider not in ("anthropic", "openai"):
         provider = "anthropic"
     api_key = typer.prompt(f"Enter {provider} API key", hide_input=True)
-    return provider, api_key
+    model = typer.prompt("Model (press Enter to auto-select)", default="").strip() or None
+    return provider, api_key, model
 
 
-def _write_mcpeval_configs(project: Path, provider: str, api_key: str) -> None:
+def _write_mcpeval_configs(project: Path, provider: str, api_key: str, model: Optional[str] = None) -> None:
     cfg_path = project / "mcpeval.yaml"
     sec_path = project / "mcpeval.secrets.yaml"
 
     cfg = _load_yaml(cfg_path)
     sec = _load_yaml(sec_path)
 
-    judge_model = (
-        "claude-3-5-haiku-20241022" if provider == "anthropic" else "gpt-4o-mini"
-    )
+    # Use ModelSelector to pick the best model for the provider if not specified
+    if not model:
+        try:
+            selector = ModelSelector()
+            # For judge, prioritize intelligence and cost-effectiveness
+            preferences = ModelPreferences(
+                costPriority=0.4,
+                speedPriority=0.2,
+                intelligencePriority=0.4
+            )
+            model_info = selector.select_best_model(
+                model_preferences=preferences,
+                provider=provider
+            )
+            judge_model = model_info.name
+        except Exception:
+            # Fallback if ModelSelector fails
+            judge_model = "claude-sonnet-4-0" if provider == "anthropic" else "gpt-4o"
+    else:
+        judge_model = model
+    
     cfg_overlay = {
         "judge": {"model": judge_model, "min_score": 0.8},
         "reporting": {"formats": ["json", "markdown"], "output_dir": "./test-reports"},
@@ -482,9 +506,12 @@ def run_generator(
 
     # Provider + API key (load existing when re-running)
     existing_provider, existing_key = _load_existing_provider(project)
-    provider, api_key = _prompt_provider(existing_provider, existing_key)
+    # Get provider, api_key, and optional model from prompt
+    provider, api_key, prompted_model = _prompt_provider(existing_provider, existing_key)
+    # Use CLI model if provided, otherwise use prompted model
+    final_model = model or prompted_model
     if api_key:
-        _write_mcpeval_configs(project, provider, api_key)
+        _write_mcpeval_configs(project, provider, api_key, final_model)
     else:
         console.print("Using existing secrets without modification.")
 
@@ -535,16 +562,16 @@ def run_generator(
 
         scenarios = asyncio.run(
             generate_scenarios_with_agent(
-                tools=tools, n_examples=n_examples, provider=provider, model=model
+                tools=tools, n_examples=n_examples, provider=provider, model=final_model
             )
         )
         scenarios = asyncio.run(
             refine_assertions_with_agent(
-                scenarios, tools, provider=provider, model=model
+                scenarios, tools, provider=provider, model=final_model
             )
         )
     except Exception as e:
         console.print(f"[red]Failed to generate scenarios:[/] {e}")
         return
 
-    _emit_tests(project, style, server_name, scenarios, provider=provider, model=model)
+    _emit_tests(project, style, server_name, scenarios, provider=provider, model=final_model)

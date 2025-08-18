@@ -40,7 +40,7 @@ def configure_from_file():
       - name: ConfiguredFetcher
         instruction: You fetch URLs and provide summaries
         server_names: ["fetch"]
-        model: claude-3-5-haiku-20241022
+        model: claude-sonnet-4-0  # Or omit to use ModelSelector
     ```
     """
     # Reference the agent by name (it will be discovered from config)
@@ -73,7 +73,7 @@ def configure_agent_spec():
         server_names=["fetch"],
         # Optional: specify provider/model at the spec level
         provider="anthropic",
-        model="claude-3-5-haiku-20241022",
+        # model not specified - will use ModelSelector
     )
     use_agent(spec)
 
@@ -137,7 +137,7 @@ def configure_augmented_llm():
         instruction="You are a helpful web content fetcher.",
         server_names=["fetch"],
         provider="anthropic",
-        model="claude-3-5-haiku-20241022",
+        # model not specified - will use ModelSelector
     )
     use_agent(llm)
 
