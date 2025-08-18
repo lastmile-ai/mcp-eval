@@ -293,15 +293,18 @@ def process_spans(spans: List[TraceSpan]) -> TestMetrics:
 
 def _is_tool_call_span(span: TraceSpan) -> bool:
     """Determine if span represents a tool call."""
-    # Check for both MCP and gen_ai tool names
-    # To avoid duplicates, only count spans that have call_tool in the name
-    has_tool_name = (
-        span.attributes.get("mcp.tool.name") is not None
-        or span.attributes.get("gen_ai.tool.name") is not None
-    )
-    # Only count actual tool call spans, not list_tools or other operations
-    is_call_tool_span = "call_tool" in span.name.lower()
-    return has_tool_name and is_call_tool_span
+    # We want to capture the MCPAggregator.call_tool spans which are the actual tool executions
+    # These have both the tool name and the actual results
+    # This avoids counting the same tool call multiple times from different layers
+    if span.name == "MCPAggregator.call_tool":
+        # Must have a tool name to be valid
+        has_tool_name = (
+            span.attributes.get("gen_ai.tool.name") is not None
+            or span.attributes.get("parsed_tool_name") is not None
+        )
+        return has_tool_name
+    
+    return False
 
 
 def _is_llm_span(span: TraceSpan) -> bool:
@@ -316,24 +319,52 @@ def _is_llm_span(span: TraceSpan) -> bool:
 def _extract_tool_call(span: TraceSpan) -> Optional[ToolCall]:
     """Extract tool call information from span."""
     try:
-        tool_name = (
-            span.attributes.get("mcp.tool.name")
-            or span.attributes.get("gen_ai.tool.name")
-            or span.attributes.get("tool.name")
-            or span.name.replace("call_tool_", "").replace("tool_", "")
-        )
+        # For MCPAggregator.call_tool spans, the parsed_tool_name contains the clean tool name
+        tool_name = span.attributes.get("parsed_tool_name")
+        
+        # Fallback to mcp.tool.name if parsed_tool_name is not available
+        if not tool_name:
+            tool_name = span.attributes.get("mcp.tool.name")
+        
+        # If still no tool name, try to extract from gen_ai.tool.name (servername_toolname format)
+        if not tool_name:
+            gen_ai_tool_name = span.attributes.get("gen_ai.tool.name")
+            if gen_ai_tool_name and "_" in gen_ai_tool_name:
+                # The gen_ai.tool.name has format servername_toolname
+                # In MCPAggregator spans, we also have parsed_server_name
+                server_name = span.attributes.get("parsed_server_name")
+                
+                if server_name and gen_ai_tool_name.startswith(server_name + "_"):
+                    # Extract tool name after the server prefix
+                    tool_name = gen_ai_tool_name[len(server_name) + 1:]
+                else:
+                    # Simple split on first underscore as fallback
+                    parts = gen_ai_tool_name.split("_", 1)
+                    tool_name = parts[1] if len(parts) > 1 else gen_ai_tool_name
+            elif gen_ai_tool_name:
+                tool_name = gen_ai_tool_name
 
-        # Extract arguments using the unflatten utility
-        # TODO: jerron - Unflattened result.content is a dict instead of list
-        arguments = unflatten_attributes(span.attributes, "mcp.request.argument.")
+        # Extract arguments from the span attributes
+        arguments = {}
+        
+        # MCPAggregator spans have arguments directly under "arguments."
+        if span.name == "MCPAggregator.call_tool":
+            arguments = unflatten_attributes(span.attributes, "arguments.")
+        else:
+            # Try other patterns for different span types
+            if span.attributes.get("mcp.request.argument.url"):
+                arguments = unflatten_attributes(span.attributes, "mcp.request.argument.")
+            elif span.attributes.get("request.params.arguments.url"):
+                arguments = unflatten_attributes(span.attributes, "request.params.arguments.")
+        
+        # Extract result
         result = unflatten_attributes(span.attributes, "result.")
 
         is_error = span.attributes.get("result.isError", False)
-
         error_message = span.attributes.get("error.message")
 
         return ToolCall(
-            name=tool_name,
+            name=tool_name or "",
             arguments=arguments,
             result=result,
             start_time=span.start_time / 1e9,
