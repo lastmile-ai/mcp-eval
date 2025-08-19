@@ -1,12 +1,57 @@
+from pathlib import Path
+from mcp_agent.agents.agent_spec import AgentSpec
+from mcp_agent.config import MCPSettings, MCPServerSettings, AnthropicSettings, OpenAISettings, GoogleSettings
+
 from mcp_eval import task, setup, Expect
 from mcp_eval.session import TestAgent, TestSession
-from mcp_agent.agents.agent_spec import AgentSpec
 import mcp_eval
+from mcp_eval.config import MCPEvalSettings
 
 
 @setup
 def configure_sample_server():
     """Configure agent for sample server tests."""
+    # Programmatic config equivalent to mcpeval.yaml using typed settings objects
+    mcp_settings = MCPSettings(
+        servers={
+            "fetch": MCPServerSettings(
+                command="uvx",
+                args=["mcp-server-fetch"],
+                env={"UV_NO_PROGRESS": "1"},
+            ),
+            "sample_server": MCPServerSettings(
+                command="uv",
+                args=["run", "sample_server.py"],
+                env={"UV_NO_PROGRESS": "1"},
+            ),
+        }
+    )
+    # Load secrets from repo (for local/demo only). Prefer real file, fallback to example.
+    # In real usage, read from env or a local secrets file NOT committed.
+    secrets_path = Path(__file__).with_name("mcpeval.secrets.yaml")
+    if not secrets_path.exists():
+        secrets_path = Path(__file__).with_name("mcpeval.secrets.yaml.example")
+    anthropic = None
+    openai = None
+    google = None
+    if secrets_path.exists():
+        import yaml
+        with open(secrets_path, "r", encoding="utf-8") as f:
+            sec = yaml.safe_load(f) or {}
+        if "anthropic" in sec and isinstance(sec["anthropic"], dict):
+            anthropic = AnthropicSettings(api_key=sec["anthropic"].get("api_key"))
+        if "openai" in sec and isinstance(sec["openai"], dict):
+            openai = OpenAISettings(api_key=sec["openai"].get("api_key"))
+        if "google" in sec and isinstance(sec["google"], dict):
+            google = GoogleSettings(api_key=sec["google"].get("api_key"))
+
+    settings_obj = MCPEvalSettings(
+        mcp=mcp_settings,
+        anthropic=anthropic or AnthropicSettings(),
+        openai=openai or OpenAISettings(),
+        google=google or GoogleSettings(),
+    )
+    mcp_eval.use_config(settings_obj)
     # Define an agent that can use our sample server tools
     spec = AgentSpec(
         name="SampleServerTester",
@@ -106,8 +151,6 @@ async def test_invalid_timezone_error_handling(agent: TestAgent, session: TestSe
     """
     objective = "What time is it in the made-up city of Atlantis?"
     response = await agent.generate_str(objective)
-
-    print(response)
 
     # The agent should respond that it can't find the timezone.
     # await session.assert_that(

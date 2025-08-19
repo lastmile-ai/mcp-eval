@@ -367,6 +367,33 @@ def set_settings(settings: Union[MCPEvalSettings, Dict[str, Any]]):
 # Deprecated helpers removed: prefer defining server_names on Agent/AgentSpec
 
 
+def use_config(config: Union[MCPEvalSettings, str]) -> MCPEvalSettings:
+    """Programmatically set MCP‑Eval configuration.
+
+    Accepts either a fully-formed MCPEvalSettings object, or a string path to a
+    single config file. When a path is provided, ONLY that file is loaded and
+    used to construct MCPEvalSettings – no default discovery/merging occurs.
+
+    Returns the active MCPEvalSettings.
+    """
+    global _current_settings
+
+    if isinstance(config, MCPEvalSettings):
+        _current_settings = config
+        return _current_settings
+
+    if isinstance(config, str):
+        p = Path(config)
+        if not p.exists():
+            raise FileNotFoundError(f"Config file not found: {config}")
+        with open(p, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        _current_settings = MCPEvalSettings(**data)
+        return _current_settings
+
+    raise TypeError("use_config expects MCPEvalSettings or a path string")
+
+
 def use_agent(
     agent_or_config: Union[Agent, AugmentedLLM, AgentSpec, str],
 ):
