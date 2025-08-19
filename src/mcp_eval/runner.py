@@ -438,7 +438,7 @@ async def _run_async(
             console.print(f"Markdown report saved to {markdown_report}", style="blue")
 
         if html_report:
-            generate_combined_html_report(combined_report, html_report, output_dir)
+            generate_combined_html_report(combined_report, html_report)
             console.print(f"HTML report saved to {html_report}", style="blue")
 
     # Exit with error if any tests failed
