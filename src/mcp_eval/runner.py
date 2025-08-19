@@ -18,7 +18,7 @@ from rich.text import Text
 from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.session import TestAgent, TestSession
 
-from mcp_eval.core import TestResult, _setup_functions, _teardown_functions
+from mcp_eval.core import TestResult, generate_test_id, _setup_functions, _teardown_functions
 from mcp_eval.datasets import Dataset
 from mcp_eval.report_generation.models import EvaluationReport
 from mcp_eval.report_generation import (
@@ -102,6 +102,8 @@ def discover_tests_and_datasets(test_spec: str) -> Dict[str, List]:
                 if target_function is None:
                     for name, obj in inspect.getmembers(module):
                         if isinstance(obj, Dataset):
+                            # Add source file info to dataset
+                            obj._source_file = py_file
                             datasets.append(obj)
 
         except Exception as e:
@@ -245,7 +247,9 @@ async def run_decorator_tests(
                         display.add_result(passed=True)
                     else:
                         display.add_result(passed=False)
-                        failure_message = generate_failure_message(result)
+                        failure_message = result.error or generate_failure_message(
+                            result.evaluation_results
+                        )
                         result.error = failure_message
                         # Capture logs if verbose
                         if verbose and log_stream:
@@ -255,7 +259,10 @@ async def run_decorator_tests(
                 except Exception as e:
                     display.add_result(passed=False, error=True)
                     console.print(f"  [red]ERROR[/] {test_name}: {e}")
+                    file_name = Path(source_file).name
+                    test_id = generate_test_id(file_name, test_name)
                     result = TestResult(
+                        id=test_id,
                         test_name=test_name,
                         description=getattr(func, "_description", ""),
                         server_name=getattr(func, "_server", "unknown"),
@@ -266,6 +273,7 @@ async def run_decorator_tests(
                         evaluation_results=[],
                         metrics=None,
                         duration_ms=0,
+                        file=file_name,
                         error=str(e),
                     )
                     # Capture logs if verbose
@@ -329,7 +337,11 @@ async def run_dataset_evaluations(datasets: List[Dataset], *, max_concurrency: i
             for result in report.results:
                 if not result.passed:
                     # Convert CaseResult to TestResult format for consistency
+                    source_file = getattr(dataset, "_source_file", None)
+                    file_name = Path(source_file).name if source_file else "unknown"
+                    test_id = generate_test_id(file_name, result.case_name)
                     test_result = TestResult(
+                        id=test_id,
                         test_name=f"{ds.name}::{result.case_name}",
                         description=f"Dataset case from {ds.name}",
                         server_name=ds.server_name or "unknown",
@@ -345,11 +357,14 @@ async def run_dataset_evaluations(datasets: List[Dataset], *, max_concurrency: i
                         evaluation_results=result.evaluation_results,
                         metrics=result.metrics,
                         duration_ms=result.duration_ms,
+                        file=file_name,
                         error=result.error,
                     )
 
                     # Generate detailed failure message
-                    failure_message = generate_failure_message(test_result)
+                    failure_message = result.error or generate_failure_message(
+                        result.evaluation_results
+                    )
                     test_result.error = failure_message
                     
                     # Store additional metadata for verbose output
@@ -548,7 +563,7 @@ async def _run_async(
             console.print(f"Markdown report saved to {markdown_report}", style="blue")
 
         if html_report:
-            generate_combined_html_report(combined_report, html_report, output_dir)
+            generate_combined_html_report(combined_report, html_report)
             console.print(f"HTML report saved to {html_report}", style="blue")
 
     # Give subprocess transports time to close properly before exit

@@ -7,13 +7,14 @@ allowing users to write mcp-eval tests that run natively in pytest.
 import asyncio
 import inspect
 from typing import AsyncGenerator
+from pathlib import Path
 import pytest
 
 from mcp_eval import TestSession, TestAgent
 from mcp_eval.config import get_current_config
-from mcp_eval.report_generation.console import generate_failure_message
-from mcp_eval.core import TestResult
+from mcp_eval.core import TestResult, generate_test_id
 from mcp_eval.core import _metrics_to_dict  # reuse consistent metrics shaping
+from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.report_generation.summary import generate_combined_summary
 from rich.console import Console
 
@@ -27,6 +28,7 @@ class MCPEvalPytestSession:
         verbose: bool = False,
         *,
         agent_override=None,
+        test_file: str = "pytest",
     ):
         self._session = TestSession(
             test_name=test_name,
@@ -34,6 +36,7 @@ class MCPEvalPytestSession:
             agent_override=agent_override,
         )
         self._agent: TestAgent | None = None
+        self._test_file = test_file
 
     async def __aenter__(self):
         self._agent = await self._session.__aenter__()
@@ -54,7 +57,9 @@ class MCPEvalPytestSession:
         except Exception:
             server_names_str = ""
 
+        test_id = generate_test_id(self._test_file, self._session.test_name)
         collected_result = TestResult(
+            id=test_id,
             test_name=self._session.test_name,
             description=f"Pytest test: {self._session.test_name}",
             server_name=server_names_str,
@@ -65,12 +70,30 @@ class MCPEvalPytestSession:
             evaluation_results=evaluation_results,
             metrics=_metrics_to_dict(self._session.get_metrics()),
             duration_ms=self._session.get_duration_ms(),
+            file=self._test_file,
         )
         _pytest_results.append(collected_result)
 
         if not self._session.all_passed():
-            # Generate a concise failure message for pytest
-            failure_message = generate_failure_message(collected_result)
+            # Create a TestResult object from session results for compatibility with generate_failure_message
+            evaluation_results = self._session.get_results()
+            test_result = TestResult(
+                id=test_id,
+                test_name=self._session.test_name,
+                description=f"Pytest test: {self._session.test_name}",
+                server_name=server_names_str,
+                servers=(self._session.agent.server_names if self._session.agent else []),
+                agent_name=(self._session.agent.name if self._session.agent else ""),
+                parameters={},
+                passed=False,
+                evaluation_results=evaluation_results,
+                metrics=None,
+                duration_ms=self._session.get_duration_ms(),
+                file=self._test_file,
+            )
+            failure_message = test_result.error or generate_failure_message(
+                test_result.evaluation_results
+            )
             pytest.fail(failure_message, pytrace=False)
 
     @property
@@ -96,6 +119,11 @@ async def mcp_session(request) -> AsyncGenerator[MCPEvalPytestSession, None]:
 
     test_name = request.node.name
 
+    # Get the test file name
+    test_file = (
+        Path(request.node.fspath).name if hasattr(request.node, "fspath") else "pytest"
+    )
+
     # Check if pytest is running in verbose mode
     verbose = request.config.getoption("verbose") > 0
 
@@ -112,6 +140,7 @@ async def mcp_session(request) -> AsyncGenerator[MCPEvalPytestSession, None]:
         test_name=test_name,
         verbose=verbose,
         agent_override=agent_override,
+        test_file=test_file
     )
     async with pytest_session_wrapper:
         yield pytest_session_wrapper

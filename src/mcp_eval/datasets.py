@@ -14,6 +14,7 @@ from mcp_eval.evaluators import (
     get_evaluator_by_name,
 )
 from mcp_eval.metrics import TestMetrics
+from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.report_generation.models import EvaluationReport, CaseResult
 from mcp_agent.agents.agent_spec import AgentSpec
 from mcp_eval.session import TestSession
@@ -155,6 +156,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
                             duration_ms=session.get_duration_ms(),
                             agent_name=session.agent.name if session.agent else None,
                             servers=session.agent.server_names if session.agent else None,
+                            error=generate_failure_message(evaluation_results),
                         )
 
                         # Call progress callback if provided

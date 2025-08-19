@@ -10,6 +10,7 @@ from rich.columns import Columns
 from rich.console import Group
 
 from mcp_eval.core import TestResult
+from mcp_eval.evaluators.shared import EvaluationRecord
 from mcp_eval.report_generation.models import EvaluationReport, CaseResult
 from mcp_eval.utils import get_test_artifact_paths
 
@@ -425,12 +426,11 @@ def _print_verbose_failure_details(console: Console, result: TestResult, log_out
     console.print("")
 
 
-def generate_failure_message(result: "TestResult") -> str:
+def generate_failure_message(eval_records: list[EvaluationRecord]) -> str | None:
     """Generate failure messages for mcp-eval evaluations"""
     failure_details = []
 
-    eval_record = result.evaluation_results
-    failed_eval_records = [r for r in eval_record if not r.passed]
+    failed_eval_records = [r for r in eval_records if not r.passed]
 
     for eval_record in failed_eval_records:
         name = eval_record.name
@@ -461,10 +461,11 @@ def generate_failure_message(result: "TestResult") -> str:
             else:
                 failure_details.append(f"  ✗ {name}: {evaluation_result.model_dump()}")
 
-    failure_message = "Evaluation failures:\n" + "\n".join(failure_details)
-
-    if result.error:
-        failure_message += f"\n\n{result.error}"
+    failure_message = (
+        "Evaluation failures:\n" + "\n".join(failure_details)
+        if len(failure_details)
+        else None
+    )
 
     return failure_message
 
