@@ -138,8 +138,14 @@ def task(description: str = ""):
                     setup_func()
 
             try:
-                # Create unified session (agent built from settings.default_agent_spec and provider/model)
-                session = TestSession(test_name=func.__name__)
+                # Check if function has been decorated with with_agent
+                agent_override = getattr(func, '_mcpeval_agent_override', None)
+                
+                # Create unified session with optional agent override
+                session = TestSession(
+                    test_name=func.__name__,
+                    agent_override=agent_override
+                )
 
                 start_time = asyncio.get_event_loop().time()
 
@@ -242,35 +248,25 @@ def task(description: str = ""):
     return decorator
 
 
-def with_agent(agent: Agent | AugmentedLLM | AgentSpec | str):
+def with_agent(agent: Agent | AugmentedLLM | AgentSpec | str | Callable[[], Agent | AugmentedLLM]):
     """Per-test override for the agent.
+
+    This decorator is a pure marker: it attaches the override to the function so
+    that the @task decorator (or the test runner) can construct the correct
+    Agent/AugmentedLLM. It deliberately does NOT create its own TestSession to
+    avoid nested sessions and lost assertions when combined with @task.
 
     Accepts:
     - Agent instance
     - AugmentedLLM instance (its agent is used)
     - AgentSpec instance
     - AgentSpec name (string)
+    - Callable that returns Agent or AugmentedLLM (factory function)
     """
 
     def decorator(func: Callable):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # Build a session using the override agent/LLM/spec
-            session = TestSession(
-                test_name=func.__name__,
-                agent_override=agent,  # type: ignore[arg-type]
-            )
-
-            async with session as test_agent:
-                sig = inspect.signature(func)
-                if "session" in sig.parameters and "agent" in sig.parameters:
-                    return await func(test_agent, session, **kwargs)
-                if "agent" in sig.parameters:
-                    return await func(test_agent, **kwargs)
-                if "session" in sig.parameters:
-                    return await func(session, **kwargs)
-                return await func(**kwargs)
-
-        return wrapper
+        # Attach override for the outer @task wrapper to consume
+        setattr(func, "_mcpeval_agent_override", agent)
+        return func
 
     return decorator

@@ -417,5 +417,93 @@ def use_llm_factory(llm_factory: type):
     )
 
 
+# Context management for programmatic agent creation
+import asyncio
+from mcp_agent.core.context import initialize_context
+
+
+async def create_test_context():
+    """
+    Create a properly configured context for programmatic agent creation in tests.
+    
+    This async function creates a context using mcp-eval settings (from mcpeval.yaml)
+    including proper logging configuration, avoiding the issue where programmatic
+    Agent creation uses default mcp-agent settings.
+    
+    Usage:
+        from mcp_eval.config import create_test_context
+        from mcp_agent.agents.agent import Agent
+        
+        # In an async function or test:
+        context = await create_test_context()
+        
+        # Now create agents with this context
+        agent = Agent(
+            name="MyAgent",
+            instruction="...",
+            server_names=["fetch"],
+            context=context  # Uses mcp-eval configured context
+        )
+    
+    Returns:
+        A Context object configured with mcp-eval settings
+    """
+    # Get the current mcp-eval settings
+    settings = get_settings()
+    
+    # Create and initialize a context with these settings
+    context = await initialize_context(config=settings)
+    return context
+
+
+def create_test_context_sync():
+    """
+    Synchronous wrapper for create_test_context().
+    
+    This is a convenience function for cases where you need to create
+    a context outside of an async function. It handles the event loop
+    management for you.
+    
+    Usage:
+        from mcp_eval.config import create_test_context_sync
+        from mcp_agent.agents.agent import Agent
+        
+        # Can be called from sync code
+        context = create_test_context_sync()
+        
+        agent = Agent(
+            name="MyAgent",
+            instruction="...",
+            server_names=["fetch"],
+            context=context
+        )
+    
+    Returns:
+        A Context object configured with mcp-eval settings
+    """
+    try:
+        # Try to get the current event loop
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Can't use run_until_complete in a running loop
+            # This typically happens when called from within an async context
+            import warnings
+            warnings.warn(
+                "create_test_context_sync() called from async context. "
+                "Consider using 'await create_test_context()' instead."
+            )
+            # Create a new event loop in a thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, create_test_context())
+                return future.result()
+        else:
+            # No running loop, we can run it directly
+            return loop.run_until_complete(create_test_context())
+    except RuntimeError:
+        # No event loop exists, create one
+        return asyncio.run(create_test_context())
+
+
 # Initialize with file config on import
 _current_settings = load_config()

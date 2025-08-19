@@ -433,9 +433,9 @@ def _extract_llm_metrics(llm_spans: List[TraceSpan]) -> LLMMetrics:
         if not metrics.model_name:
             metrics.model_name = attrs.get("gen_ai.request.model", "")
 
-        # Token usage
-        metrics.input_tokens += attrs.get("gen_ai.usage.input_tokens", 0)
-        metrics.output_tokens += attrs.get("gen_ai.usage.output_tokens", 0)
+        # Token usage - try multiple possible attribute names
+        metrics.input_tokens += attrs.get("gen_ai.usage.input_tokens", 0) or attrs.get("llm.usage.input_tokens", 0) or attrs.get("input_tokens", 0)
+        metrics.output_tokens += attrs.get("gen_ai.usage.output_tokens", 0) or attrs.get("llm.usage.output_tokens", 0) or attrs.get("output_tokens", 0)
 
         # Latency
         duration_ms = (span.end_time - span.start_time) / 1e6

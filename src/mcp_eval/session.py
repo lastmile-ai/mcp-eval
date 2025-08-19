@@ -8,8 +8,9 @@ import tempfile
 import shutil
 import re
 import logging
+import inspect
 from pathlib import Path
-from typing import Any, List, Literal, Dict, Optional, Union
+from typing import Any, Callable, List, Literal, Dict, Optional, Union
 from datetime import datetime
 from contextlib import asynccontextmanager
 
@@ -132,7 +133,7 @@ class TestSession:
         test_name: str,
         verbose: bool = False,
         *,
-        agent_override: Optional[Union[Agent, AugmentedLLM, AgentSpec, str]] = None,
+        agent_override: Optional[Union[Agent, AugmentedLLM, AgentSpec, str, Callable]] = None,
     ):
         self.test_name = test_name
         self.verbose = verbose
@@ -159,6 +160,8 @@ class TestSession:
 
     async def __aenter__(self) -> TestAgent:
         """Initialize the test session with OTEL tracing as source of truth."""
+        import warnings
+        
         # Clear any cached metrics for fresh session
         self._metrics = None
         self._span_tree = None
@@ -175,8 +178,13 @@ class TestSession:
         # No legacy server merging: servers should be defined in mcp-agent config
 
         # Initialize MCP app (sets up OTEL instrumentation automatically)
-        self.app = MCPApp(settings=settings)
-        await self.app.initialize()
+        # Suppress warnings about global context/settings that may occur when
+        # Agent instances are created at module import time
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="get_settings.*returned the global Settings singleton")
+            warnings.filterwarnings("ignore", message="get_current_context.*created a global Context")
+            self.app = MCPApp(settings=settings)
+            await self.app.initialize()
 
         # Construct agent by precedence:
         # 1) Per-call agent_override (Agent | AugmentedLLM | AgentSpec | name)
@@ -205,6 +213,16 @@ class TestSession:
         # 1) Per-call override
         if self._agent_override is not None:
             override = self._agent_override
+            
+            # If override is a callable (factory), call it now that context exists
+            if callable(override):
+                candidate = override()
+                # Support both sync and async factories
+                if inspect.isawaitable(candidate):
+                    override = await candidate
+                else:
+                    override = candidate
+            
             if isinstance(override, AugmentedLLM):
                 if override.agent is None:
                     override.agent = Agent(
@@ -221,7 +239,11 @@ class TestSession:
             elif isinstance(override, Agent):
                 if not override.server_names:
                     override.server_names = _effective_servers(None)
-                if override.context is None:
+                # Set the context from our properly configured app if:
+                # - No context was set (None)
+                # - Or the context has different settings (e.g., default mcp-agent settings)
+                # This preserves explicitly set contexts with matching settings
+                if override.context is None or getattr(override.context, 'config', None) != settings:
                     override.context = self.app.context
                 self.agent = override
             elif isinstance(override, AgentSpec):
@@ -339,8 +361,6 @@ class TestSession:
         # If an AugmentedLLM was supplied programmatically, use it
         if pre_attached_llm is not None:
             self.test_agent.set_llm(pre_attached_llm)
-            # Also attach to the underlying agent
-            await self.agent.attach_llm(llm=pre_attached_llm)
 
         # Configure LLM via provider/model, preferring AgentSpec-level if present
         provider = spec_provider or getattr(settings, "provider", None)
@@ -354,7 +374,7 @@ class TestSession:
             # Build the AugmentedLLM bound to this agent
             augmented_llm = llm_factory(self.agent)
             self.test_agent.set_llm(augmented_llm)
-            # Also attach to the underlying agent
+            # Attach to the underlying agent once
             await self.agent.attach_llm(llm=augmented_llm)
 
         return self.test_agent
