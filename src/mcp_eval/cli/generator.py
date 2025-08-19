@@ -26,6 +26,7 @@ from mcp_agent.config import MCPServerSettings
 from mcp_agent.agents.agent import Agent
 from mcp_agent.workflows.factory import _llm_factory
 from mcp_agent.workflows.llm.llm_selector import ModelSelector, ModelPreferences
+from mcp.types import Tool as MCPTool
 
 from mcp_eval.generation import (
     generate_scenarios_with_agent,
@@ -33,6 +34,7 @@ from mcp_eval.generation import (
     render_pytest_tests,
     render_decorator_tests,
     dataset_from_scenarios,
+    ToolSchema,
 )
 
 app = typer.Typer(help="Generate MCP‑Eval tests for an MCP server")
@@ -382,31 +384,49 @@ def _prompt_server_settings(
     return server_name, MCPServerSettings(**kwargs)
 
 
-async def _discover_tools(server_name: str) -> List[Dict[str, Any]]:
-    """Connect to the server and return tool specs as dicts with name/description/schema."""
-    tools: List[Dict[str, Any]] = []
+async def _discover_tools(server_name: str) -> List[ToolSchema]:
+    """Connect to the server and return typed tool specs."""
+    tools: List[ToolSchema] = []
     mcp_app = MCPApp()
     async with mcp_app.run() as running:
         async with gen_client(
             server_name, server_registry=running.context.server_registry
         ) as client:
             result = await client.list_tools()
-            try:
-                data = result.model_dump()
-            except Exception:
-                data = getattr(result, "dict", lambda: {})()
-            items = data.get("tools") or data.get("items") or []
-            for t in items:
-                tools.append(
-                    {
-                        "name": t.get("name") or t.get("tool") or t.get("id"),
-                        "description": t.get("description") or "",
-                        "input_schema": t.get("inputSchema")
-                        or t.get("input_schema")
-                        or t.get("input")
-                        or {},
-                    }
-                )
+            # Prefer typed access; fall back to dict if needed
+            items: List[MCPTool] = []
+            if hasattr(result, "tools") and isinstance(result.tools, list):
+                items = result.tools  # type: ignore[assignment]
+                for t in items:
+                    name: str = getattr(t, "name", None) or getattr(t, "tool", None) or getattr(t, "id", None) or ""
+                    if not name:
+                        continue
+                    description: Optional[str] = getattr(t, "description", None)
+                    input_schema: Optional[Dict[str, Any]] = (
+                        getattr(t, "inputSchema", None)
+                        or getattr(t, "input_schema", None)
+                        or getattr(t, "input", None)
+                    )
+                    tools.append(
+                        ToolSchema(name=name, description=description, input_schema=input_schema)
+                    )
+            else:
+                try:
+                    data = result.model_dump()
+                except Exception:
+                    data = getattr(result, "dict", lambda: {})()
+                raw_items = data.get("tools") or data.get("items") or []
+                for t in raw_items:
+                    name = t.get("name") or t.get("tool") or t.get("id")
+                    if not name:
+                        continue
+                    tools.append(
+                        ToolSchema(
+                            name=name,
+                            description=t.get("description"),
+                            input_schema=t.get("inputSchema") or t.get("input_schema") or t.get("input") or None,
+                        )
+                    )
     return tools
 
 
@@ -504,6 +524,7 @@ def run_generator(
     project = Path(out_dir)
     _ensure_dir(project)
 
+    console.print("[cyan]Checking credentials and writing mcpeval configs if needed...[/cyan]")
     # Provider + API key (load existing when re-running)
     existing_provider, existing_key = _load_existing_provider(project)
     # Get provider, api_key, and optional model from prompt
@@ -543,6 +564,7 @@ def run_generator(
         server_name, server_settings = _prompt_server_settings(imported)
     # Persist/ensure presence in mcp-agent config
     _write_server_to_agent_config_file(project, server_name, server_settings)
+    console.print(f"[cyan]Server '{server_name}' configured.[/cyan]")
 
     # Discovery
     try:
@@ -552,9 +574,14 @@ def run_generator(
     except Exception as e:
         console.print(f"[yellow]Warning:[/] Could not list tools: {e}")
         tools = []
-    console.print(
-        f"Discovered tools: {', '.join([t['name'] for t in tools]) if tools else '(none)'}"
-    )
+    if tools:
+        console.print(
+            f"Discovered tools ({len(tools)}): "
+            + ", ".join([t.name for t in tools[:10]])
+            + (" ..." if len(tools) > 10 else "")
+        )
+    else:
+        console.print("Discovered tools: (none)")
 
     # Two-stage generation (first: scenarios; second: assertions refinement per scenario)
     try:
@@ -565,13 +592,22 @@ def run_generator(
                 tools=tools, n_examples=n_examples, provider=provider, model=final_model
             )
         )
+        console.print(f"[cyan]Generated {len(scenarios)} initial scenarios[/cyan]")
         scenarios = asyncio.run(
             refine_assertions_with_agent(
                 scenarios, tools, provider=provider, model=final_model
             )
         )
+        console.print("[cyan]Refined assertions for scenarios[/cyan]")
     except Exception as e:
         console.print(f"[red]Failed to generate scenarios:[/] {e}")
         return
 
     _emit_tests(project, style, server_name, scenarios, provider=provider, model=final_model)
+    # Summary of generated scenarios
+    if scenarios:
+        console.print("\n[bold]Summary of generated scenarios:[/bold]")
+        for s in scenarios[:20]:  # cap for display
+            console.print(f" - [green]{s.name}[/green]: {s.description or ''}")
+        if len(scenarios) > 20:
+            console.print(f" ... and {len(scenarios) - 20} more")

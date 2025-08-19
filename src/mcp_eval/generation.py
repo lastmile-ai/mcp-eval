@@ -356,7 +356,7 @@ def _assertion_catalog_prompt() -> str:
 
 
 async def generate_scenarios_with_agent(
-    tools: List[Dict[str, Any]],
+    tools: List["ToolSchema"],
     *,
     n_examples: int = 8,
     provider: str = "anthropic",
@@ -375,16 +375,12 @@ async def generate_scenarios_with_agent(
         llm = _build_llm(agent, provider, model)
 
         # Build prompt with tool schemas and assertion catalog
-        tool_lines = []
+        tool_lines: List[Dict[str, Any]] = []
         for t in tools:
-            nm = t.get("name") or "unknown"
-            desc = t.get("description") or ""
-            input_schema = (
-                t.get("input_schema") or t.get("inputSchema") or t.get("input") or {}
-            )
-            tool_lines.append(
-                {"name": nm, "description": desc, "input_schema": input_schema}
-            )
+            nm = t.name or "unknown"
+            desc = t.description or ""
+            input_schema = t.input_schema or {}
+            tool_lines.append({"name": nm, "description": desc, "input_schema": input_schema})
 
         guidance = (
             "You are generating test scenarios for an MCP server. Each scenario is a user-facing prompt to the agent.\n"
@@ -410,7 +406,7 @@ async def generate_scenarios_with_agent(
 
 async def refine_assertions_with_agent(
     scenarios: List[ScenarioSpec],
-    tools: List[Dict[str, Any]],
+    tools: List["ToolSchema"],
     *,
     provider: str = "anthropic",
     model: Optional[str] = None,
@@ -428,13 +424,13 @@ async def refine_assertions_with_agent(
         )
         llm = _build_llm(agent, provider, model)
 
-        tool_lines = []
+        tool_lines: List[Dict[str, Any]] = []
         for t in tools:
             tool_lines.append(
                 {
-                    "name": t.get("name"),
-                    "description": t.get("description"),
-                    "input_schema": t.get("input_schema") or {},
+                    "name": t.name,
+                    "description": t.description or "",
+                    "input_schema": t.input_schema or {},
                 }
             )
 
