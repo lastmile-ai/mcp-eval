@@ -52,7 +52,7 @@ async def test_fetch_tool_output(agent: TestAgent, session: TestSession):
             expected_output=r"use.*examples",
             match_type="regex",
             case_sensitive=False,
-            field_path="content.0.text",
+            field_path="content[0].text",
         ),
         name="fetch_output_match",
     )

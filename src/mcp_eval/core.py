@@ -5,7 +5,7 @@ import inspect
 import traceback
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Callable
 from functools import wraps
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from mcp_eval.session import TestSession
 from mcp_agent.agents.agent import Agent
@@ -87,6 +87,39 @@ def parametrize(param_names: str, values: List[Any]):
     return decorator
 
 
+def _metrics_to_dict(metrics):
+    """Convert TestMetrics object to dict, handling nested objects."""
+    if not metrics:
+        return None
+    
+    result = metrics.__dict__.copy()
+    
+    # Convert tool_calls list - they might already be dicts or might be ToolCall objects
+    if 'tool_calls' in result:
+        tool_calls_list = []
+        for call in result['tool_calls']:
+            if isinstance(call, dict):
+                # Already a dict, just use it
+                tool_calls_list.append(call)
+            else:
+                # It's a ToolCall dataclass, convert it
+                tool_calls_list.append(asdict(call))
+        result['tool_calls'] = tool_calls_list
+    
+    # Convert tool_coverage dict of ToolCoverage objects to dict
+    if 'tool_coverage' in result:
+        coverage_dict = {}
+        for server_name, coverage in result['tool_coverage'].items():
+            coverage_dict[server_name] = asdict(coverage)
+        result['tool_coverage'] = coverage_dict
+    
+    # Convert llm_metrics if it's an object
+    if 'llm_metrics' in result and hasattr(result['llm_metrics'], '__dict__'):
+        result['llm_metrics'] = asdict(result['llm_metrics'])
+    
+    return result
+
+
 def task(description: str = ""):
     """Mark a function as an MCP evaluation task.
 
@@ -126,7 +159,7 @@ def task(description: str = ""):
                 duration_ms = (end_time - start_time) * 1000
 
                 # Create result from session
-                return TestResult(
+                result = TestResult(
                     test_name=func.__name__,
                     description=description,
                     server_name=",".join(session.agent.server_names)
@@ -141,9 +174,35 @@ def task(description: str = ""):
                     parameters=kwargs,
                     passed=session.all_passed(),
                     evaluation_results=session.get_results(),
-                    metrics=session.get_metrics().__dict__,
+                    metrics=_metrics_to_dict(session.get_metrics()),
                     duration_ms=duration_ms,
                 )
+                
+                # Add agent details for verbose mode
+                if session and session.agent:
+                    agent_details = {}
+                    # Try to get agent instruction
+                    if hasattr(session.agent, 'instruction'):
+                        agent_details['instruction'] = session.agent.instruction
+                    elif hasattr(session.agent, '_instruction'):
+                        agent_details['instruction'] = session.agent._instruction
+                    
+                    # Get provider/model from session settings
+                    if hasattr(session, 'app') and session.app:
+                        try:
+                            from mcp_eval.config import get_settings
+                            settings = get_settings()
+                            if settings.provider:
+                                agent_details['provider'] = settings.provider
+                            if settings.model:
+                                agent_details['model'] = settings.model
+                        except:
+                            pass
+                    
+                    if agent_details:
+                        result._agent_details = agent_details
+                
+                return result
 
             except Exception:
                 return TestResult(

@@ -4,10 +4,12 @@ import asyncio
 import atexit
 import importlib.util
 import inspect
+import io
+import logging
 import os
 import sys
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import typer
 from rich.console import Console
 from rich.live import Live
@@ -157,6 +159,7 @@ async def run_decorator_tests(
     """Run decorator-style tests grouped by file."""
     results: list[TestResult] = []
     failed_results = []
+    captured_logs: Dict[str, str] = {}  # Store captured logs for each test
 
     # Group tests by file
     grouped_tests = group_tests_by_file(test_cases)
@@ -181,9 +184,62 @@ async def run_decorator_tests(
                     param_str = ",".join(f"{k}={v}" for k, v in kwargs.items())
                     test_name += f"[{param_str}]"
 
+                # Set up log capture if verbose
+                log_stream = None
+                log_handler = None
+                if verbose:
+                    log_stream = io.StringIO()
+                    log_handler = logging.StreamHandler(log_stream)
+                    log_handler.setLevel(logging.INFO)
+                    # Add formatter to match pytest style
+                    formatter = logging.Formatter(
+                        '[%(levelname)s] %(asctime)s %(name)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S'
+                    )
+                    log_handler.setFormatter(formatter)
+                    # Get root logger and add handler
+                    root_logger = logging.getLogger()
+                    root_logger.addHandler(log_handler)
+                
                 try:
                     # Call task decorated function
                     result: TestResult = await func(**kwargs)
+                    
+                    # Add session information if verbose mode
+                    if verbose:
+                        # Extract actual agent and session info from the result and config
+                        session_info = {}
+                        try:
+                            from mcp_eval.config import get_settings
+                            settings = get_settings()
+                            
+                            # Get provider and model (these are global settings)
+                            if settings.provider:
+                                session_info['provider'] = settings.provider
+                            if settings.model:
+                                session_info['model'] = settings.model
+                            
+                            # The actual agent info is already in the result
+                            # No need to get it from default_agent_spec
+                            # as it may have been overridden
+                            
+                            # Get LLM Judge configuration if available
+                            if hasattr(settings, 'judge') and settings.judge:
+                                judge_config = {}
+                                if hasattr(settings.judge, 'provider'):
+                                    judge_config['provider'] = settings.judge.provider
+                                if hasattr(settings.judge, 'model'):
+                                    judge_config['model'] = settings.judge.model
+                                if hasattr(settings.judge, 'temperature'):
+                                    judge_config['temperature'] = settings.judge.temperature
+                                if judge_config:
+                                    session_info['llm_judge'] = judge_config
+                        except:
+                            pass
+                        
+                        # Attach session info to result for verbose display
+                        if session_info:
+                            result._session_info = session_info
 
                     if result.passed:
                         display.add_result(passed=True)
@@ -191,6 +247,9 @@ async def run_decorator_tests(
                         display.add_result(passed=False)
                         failure_message = generate_failure_message(result)
                         result.error = failure_message
+                        # Capture logs if verbose
+                        if verbose and log_stream:
+                            captured_logs[test_name] = log_stream.getvalue()
                         failed_results.append(result)
 
                 except Exception as e:
@@ -209,21 +268,32 @@ async def run_decorator_tests(
                         duration_ms=0,
                         error=str(e),
                     )
+                    # Capture logs if verbose
+                    if verbose and log_stream:
+                        captured_logs[test_name] = log_stream.getvalue()
                     failed_results.append(result)
+                
+                finally:
+                    # Clean up log handler
+                    if log_handler:
+                        root_logger = logging.getLogger()
+                        root_logger.removeHandler(log_handler)
+                        log_handler.close()
 
                 results.append(result)
                 live.update(display.create_display(type="test"))
 
     # Print detailed failures section if there are any failures
-    print_failure_details(console, failed_results)
+    print_failure_details(console, failed_results, verbose=verbose, captured_logs=captured_logs if verbose else None)
 
     return results
 
 
-async def run_dataset_evaluations(datasets: List[Dataset], *, max_concurrency: int | None = None) -> List[EvaluationReport]:
+async def run_dataset_evaluations(datasets: List[Dataset], *, max_concurrency: int | None = None, verbose: bool = False) -> List[EvaluationReport]:
     """Run dataset-style evaluations with live progress display."""
     reports: list[EvaluationReport] = []
     failed_results: list[TestResult] = []
+    captured_logs: Dict[str, str] = {}  # Store captured logs for each test
 
     # Create progress display for all datasets
     dataset_counts = {dataset.name: len(dataset.cases) for dataset in datasets}
@@ -260,14 +330,17 @@ async def run_dataset_evaluations(datasets: List[Dataset], *, max_concurrency: i
                 if not result.passed:
                     # Convert CaseResult to TestResult format for consistency
                     test_result = TestResult(
-                        test_name=result.case_name,
+                        test_name=f"{ds.name}::{result.case_name}",
                         description=f"Dataset case from {ds.name}",
                         server_name=ds.server_name or "unknown",
                         servers=[ds.server_name]
                         if getattr(ds, "server_name", None)
                         else [],
                         agent_name="",
-                        parameters={},
+                        parameters={
+                            "inputs": result.inputs if hasattr(result, 'inputs') else {},
+                            "expected_output": result.expected_output if hasattr(result, 'expected_output') else None,
+                        },
                         passed=result.passed,
                         evaluation_results=result.evaluation_results,
                         metrics=result.metrics,
@@ -278,10 +351,44 @@ async def run_dataset_evaluations(datasets: List[Dataset], *, max_concurrency: i
                     # Generate detailed failure message
                     failure_message = generate_failure_message(test_result)
                     test_result.error = failure_message
+                    
+                    # Store additional metadata for verbose output
+                    if verbose:
+                        # Store the actual output for verbose display
+                        if hasattr(result, 'output'):
+                            test_result.actual_output = result.output
+                        
+                        # Add session information for dataset tests
+                        session_info = {}
+                        try:
+                            from mcp_eval.config import get_settings
+                            settings = get_settings()
+                            if settings.provider:
+                                session_info['provider'] = settings.provider
+                            if settings.model:
+                                session_info['model'] = settings.model
+                            
+                            # Get LLM Judge configuration if available
+                            if hasattr(settings, 'judge') and settings.judge:
+                                judge_config = {}
+                                if hasattr(settings.judge, 'provider'):
+                                    judge_config['provider'] = settings.judge.provider
+                                if hasattr(settings.judge, 'model'):
+                                    judge_config['model'] = settings.judge.model
+                                if hasattr(settings.judge, 'temperature'):
+                                    judge_config['temperature'] = settings.judge.temperature
+                                if judge_config:
+                                    session_info['llm_judge'] = judge_config
+                        except:
+                            pass
+                        
+                        if session_info:
+                            test_result._session_info = session_info
+                    
                     failed_results.append(test_result)
 
     # Print detailed failures section if there are any failures
-    print_failure_details(console, failed_results)
+    print_failure_details(console, failed_results, verbose=verbose, captured_logs=captured_logs if verbose else None)
 
     return reports
 
@@ -386,7 +493,7 @@ async def _run_async(
 
     if datasets and format in ["auto", "dataset"]:
         console.print(f"\n[blue]Running {len(datasets)} dataset evaluations...[/blue]")
-        dataset_reports = await run_dataset_evaluations(datasets, max_concurrency=max_concurrency)
+        dataset_reports = await run_dataset_evaluations(datasets, max_concurrency=max_concurrency, verbose=verbose)
 
     # Print short test summary info (pytest-like)
     if test_results:
@@ -403,10 +510,10 @@ async def _run_async(
 
         print_dataset_final_summary(console, dataset_reports)
 
-    # Generate combined summary for other reports
-    if dataset_reports:
+    # Generate combined summary for all test results
+    if test_results or dataset_reports:
         console.print(Text(console.width * "="))
-        generate_combined_summary(test_results, dataset_reports, console)
+        generate_combined_summary(test_results, dataset_reports, console, verbose=verbose)
 
     # Generate reports
     if json_report or markdown_report or html_report:

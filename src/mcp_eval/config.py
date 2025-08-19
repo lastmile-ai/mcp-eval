@@ -100,8 +100,6 @@ class MCPEvalSettings(AgentSettings):
     provider: Optional[str] = "anthropic"
     model: Optional[str] = "claude-sonnet-4-0"
 
-    # Test-time default agent (not persisted)
-    # Keep schema-serializable: AgentSpec or name only
     default_agent: AgentSpec | str | None = None
 
 

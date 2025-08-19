@@ -15,27 +15,25 @@ mcp:
 provider: "anthropic"
 model: "claude-sonnet-4-0"  # Will use ModelSelector if not specified
 
+# Default agent for tests that don't specify one
+default_agent: "default"  # Use the "default" agent spec by default
+
 # Named AgentSpecs used by tests
 agents:
-  default:
-    name: "fetch_tester"
-    instruction: |
-      You are a web content fetching agent. You can fetch URLs and extract their content.
-      Be thorough in your responses and handle errors gracefully.
-    server_names: ["fetch"]
-    provider: "anthropic"
-    # model not specified - will inherit from global or use ModelSelector
-    max_iterations: 5
-
-  advanced:
-    name: "advanced_fetch_tester"
-    instruction: |
-      You are an expert web scraping agent. You can fetch content from multiple URLs,
-      handle various content types, and process large documents efficiently using chunking.
-    server_names: ["fetch"]
-    provider: "anthropic"
-    model: "claude-sonnet-4-20250514"
-    max_iterations: 10
+  definitions:
+    - name: "default"
+      instruction: |
+        You are a web content fetching agent. You can fetch URLs and extract their content.
+        Be thorough in your responses and handle errors gracefully.
+      server_names: ["fetch"]
+      max_iterations: 5
+    
+    - name: "advanced"
+      instruction: |
+        You are an expert web scraping agent. You can fetch content from multiple URLs,
+        handle various content types, and process large documents efficiently using chunking.
+      server_names: ["fetch"]
+      max_iterations: 10
 
 # Enhanced Judge Configuration
 judge:

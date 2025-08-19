@@ -77,7 +77,7 @@ async def test_content_format_assertions(agent, session):
 
 
 @task("Test tool output return text content")
-async def test_tool_output_assetion(agent, session):
+async def test_tool_output_assertion(agent, session):
     """Test tool output"""
     await agent.generate_str(
         "Print the first line of the paragraph in https://example.com"
@@ -85,7 +85,7 @@ async def test_tool_output_assetion(agent, session):
     await session.assert_that(
         Expect.tools.output_matches(
             tool_name="fetch",
-            expected_output={"content": {"0": {"type": "text"}}},
+            expected_output={"isError": False, "content": [{"type": "text"}]},
             match_type="partial",
         )
     )

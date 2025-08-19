@@ -93,8 +93,9 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         async def evaluate_case(case: Case) -> CaseResult:
             async def _eval():
                 # Use the same unified TestSession as @task decorators
+                # Format test name consistently with how runner.py displays it
                 session = TestSession(
-                    test_name=case.name,
+                    test_name=f"{self.name}::{case.name}",
                     agent_override=self.agent_spec,
                 )
 
@@ -152,6 +153,8 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
                             metrics=session.get_metrics(),
                             passed=all(r.passed for r in evaluation_results),
                             duration_ms=session.get_duration_ms(),
+                            agent_name=session.agent.name if session.agent else None,
+                            servers=session.agent.server_names if session.agent else None,
                         )
 
                         # Call progress callback if provided
@@ -172,6 +175,8 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
                         passed=False,
                         error=str(e),
                         duration_ms=0.0,
+                        agent_name=session.agent.name if session and session.agent else None,
+                        servers=session.agent.server_names if session and session.agent else None,
                     )
 
                     # Call progress callback if provided
@@ -192,11 +197,17 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         tasks = [evaluate_case(case) for case in self.cases]
         results = await asyncio.gather(*tasks)
 
+        # Extract agent name from first result if available
+        agent_name = None
+        if results and results[0].agent_name:
+            agent_name = results[0].agent_name
+        
         return EvaluationReport(
             dataset_name=self.name,
             task_name=task_func.__name__,
             results=results,
             metadata=self.metadata,
+            agent_name=agent_name,
         )
 
     def evaluate_sync(

@@ -6,6 +6,8 @@ import time
 import asyncio
 import tempfile
 import shutil
+import re
+import logging
 from pathlib import Path
 from typing import Any, List, Literal, Dict, Optional, Union
 from datetime import datetime
@@ -15,14 +17,14 @@ from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
 from mcp_agent.agents.agent_spec import AgentSpec
 from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM, MessageTypes
+from mcp_agent.workflows.factory import agent_from_spec as _agent_from_spec_factory
 
-from mcp_eval.config import get_settings, ProgrammaticDefaults, MCPEvalSettings
-from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan
+from mcp_eval.config import get_settings, ProgrammaticDefaults, MCPEvalSettings, get_current_config
+from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan, ToolCoverage
 from mcp_eval.otel.span_tree import SpanTree, SpanNode
 from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
 from mcp_eval.evaluators import EvaluatorResult, EvaluationRecord
-
-import logging
+from mcp_eval.utils import get_test_artifact_paths
 
 
 logger = logging.getLogger(__name__)
@@ -153,6 +155,7 @@ class TestSession:
         self._metrics: Optional[TestMetrics] = None
         self._span_tree: Optional[SpanTree] = None
         self._results: List[EvaluationRecord] = []
+        self._available_tools_by_server: Dict[str, List[str]] = {}
 
     async def __aenter__(self) -> TestAgent:
         """Initialize the test session with OTEL tracing as source of truth."""
@@ -186,10 +189,6 @@ class TestSession:
         pre_attached_llm: Optional[AugmentedLLM] = None
 
         async def _agent_from_spec(spec: AgentSpec) -> Agent:
-            from mcp_agent.workflows.factory import (
-                agent_from_spec as _agent_from_spec_factory,
-            )
-
             return _agent_from_spec_factory(spec, context=self.app.context)
 
         # Global programmatic agent or LLM
@@ -330,6 +329,9 @@ class TestSession:
                 self.agent = await _agent_from_spec(spec)
 
         await self.agent.initialize()
+        
+        # Fetch available tools from configured servers for coverage tracking
+        await self._fetch_available_tools()
 
         # Create clean test agent wrapper
         self.test_agent = TestAgent(self.agent, self)
@@ -384,6 +386,58 @@ class TestSession:
         except Exception as e:
             logger.warning(f"Error during session cleanup: {e}")
             # Continue with cleanup even if there's an error
+    
+    async def _fetch_available_tools(self):
+        """Fetch list of available tools from configured servers."""
+        if not self.agent:
+            return
+            
+        try:
+            # Get list of configured servers
+            servers = self.agent.server_names if hasattr(self.agent, 'server_names') else []
+            
+            for server_name in servers:
+                try:
+                    # Use the agent's list_tools method to get tools for this specific server
+                    tools_result = await self.agent.list_tools(server_name=server_name)
+                    if tools_result and hasattr(tools_result, 'tools'):
+                        # Extract tool names (remove server prefix if present)
+                        tool_names = []
+                        for tool in tools_result.tools:
+                            tool_name = tool.name
+                            # Remove server prefix if it exists (format: server_toolname)
+                            if tool_name.startswith(f"{server_name}_"):
+                                tool_name = tool_name[len(server_name) + 1:]
+                            tool_names.append(tool_name)
+                        self._available_tools_by_server[server_name] = tool_names
+                        logger.info(f"Found {len(tool_names)} tools for server {server_name}")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch tools for server {server_name}: {e}")
+                    self._available_tools_by_server[server_name] = []
+        except Exception as e:
+            logger.warning(f"Failed to fetch available tools: {e}")
+    
+    def _calculate_tool_coverage(self, metrics: TestMetrics):
+        """Calculate tool coverage metrics per server."""
+        # Group used tools by server
+        tools_used_by_server: Dict[str, set] = {}
+        
+        for tool_call in metrics.tool_calls:
+            if tool_call.server_name:
+                server = tool_call.server_name
+                if server not in tools_used_by_server:
+                    tools_used_by_server[server] = set()
+                tools_used_by_server[server].add(tool_call.name)
+        
+        # Create coverage metrics for each server
+        for server_name, available_tools in self._available_tools_by_server.items():
+            used_tools = list(tools_used_by_server.get(server_name, set()))
+            coverage = ToolCoverage(
+                server_name=server_name,
+                available_tools=available_tools,
+                used_tools=used_tools
+            )
+            metrics.tool_coverage[server_name] = coverage
 
     def add_deferred_evaluator(self, evaluator: Evaluator, name: str):
         """Add evaluator to run at session end with full metrics context."""
@@ -652,6 +706,10 @@ class TestSession:
 
         # Process spans into metrics (OTEL is the source of truth)
         metrics = process_spans(spans)
+        
+        # Calculate tool coverage per server
+        self._calculate_tool_coverage(metrics)
+        
         self._metrics = metrics
 
         # Build span tree for advanced analysis
@@ -696,9 +754,6 @@ class TestSession:
 
     async def _save_test_artifacts(self):
         """Save test artifacts (traces, reports) based on configuration."""
-        from mcp_eval.config import get_current_config
-        import re
-
         config = get_current_config()
         reporting_config = config.get("reporting", {})
 
@@ -712,9 +767,9 @@ class TestSession:
         logger.info(f"Current working directory: {os.getcwd()}")
         logger.info(f"Absolute output path: {output_dir.resolve()}")
 
-        # Sanitize test name for filesystem
-        safe_test_name = re.sub(r'[<>:"/\\|?*\[\]]', "_", self.test_name)
-        logger.info(f"Sanitized test name: {safe_test_name}")
+        # Get standardized artifact paths
+        trace_dest, results_dest = get_test_artifact_paths(self.test_name, output_dir)
+        logger.info(f"Artifact paths: trace={trace_dest}, results={results_dest}")
 
         try:
             # Create output directory if it doesn't exist
@@ -722,7 +777,6 @@ class TestSession:
 
             # Save trace file if it exists
             if os.path.exists(self.trace_file):
-                trace_dest = output_dir / f"{safe_test_name}_trace.jsonl"
                 shutil.copy2(self.trace_file, trace_dest)
                 logger.info(f"Saved trace file to {trace_dest}")
             else:
@@ -730,8 +784,7 @@ class TestSession:
                     f"Trace file not found at {self.trace_file} for test {self.test_name}"
                 )
 
-            # Also save test results/metrics as JSON
-            results_dest = output_dir / f"{safe_test_name}.json"
+            # Save test results/metrics as JSON
             test_data = {
                 "test_name": self.test_name,
                 "server_name": ",".join(self.agent.server_names)

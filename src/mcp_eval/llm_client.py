@@ -18,6 +18,8 @@ class JudgeLLMClient:
         self.model = model
         self.provider = provider
         self._llm = None
+        self._actual_model = None
+        self._actual_provider = None
 
     async def _get_llm(self):
         """Lazy initialization of the AugmentedLLM instance."""
@@ -55,7 +57,19 @@ class JudgeLLMClient:
                 provider=provider,
                 model=model,
             )
+            
+            # Store the actual configuration used
+            self._actual_provider = provider
+            self._actual_model = model if isinstance(model, str) else 'model-selector'
+            
         return self._llm
+    
+    def get_config(self) -> dict:
+        """Get the actual configuration used by this judge."""
+        return {
+            'provider': self._actual_provider,
+            'model': self._actual_model,
+        }
 
     async def generate_str(self, prompt: str) -> str:
         """Generate a string response."""
