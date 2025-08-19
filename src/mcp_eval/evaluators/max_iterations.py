@@ -9,9 +9,13 @@ from mcp_eval.evaluators.shared import EvaluatorResult
 
 @dataclass
 class MaxIterations(SyncEvaluator):
-    """Evaluator that checks if task completed within max iterations."""
+    """Evaluator that checks if task completed within max iterations.
+
+    Requires final metrics: True (runs after full OTEL trace is processed).
+    """
 
     max_iterations: int
+    requires_final_metrics: bool = True
 
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         actual = ctx.metrics.iteration_count

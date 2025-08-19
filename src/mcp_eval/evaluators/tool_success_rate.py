@@ -9,10 +9,14 @@ from mcp_eval.evaluators.shared import EvaluatorResult
 
 @dataclass
 class ToolSuccessRate(SyncEvaluator):
-    """Evaluator that checks tool success rate."""
+    """Evaluator that checks tool success rate.
+
+    Requires final metrics: True (runs after full OTEL trace is processed).
+    """
 
     min_rate: float = 0.9
     tool_name: Optional[str] = None  # If None, checks all tools
+    requires_final_metrics: bool = True
 
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         if self.tool_name:

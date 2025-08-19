@@ -75,6 +75,7 @@ class ToolOutputMatches(SyncEvaluator):
     """
 
     call_index: int = -1
+    requires_final_metrics: bool = True
     """Which tool call to validate when multiple calls exist:
     
     - -1: Last call (most recent, default)
@@ -267,6 +268,18 @@ class ToolOutputMatches(SyncEvaluator):
                         )
                         if not nested_validator._validate_match(actual_value[key]):
                             return False
+                    elif isinstance(expected_val, list) and isinstance(
+                        actual_value[key], list
+                    ):
+                        # Recursive partial matching for lists
+                        nested_validator = ToolOutputMatches(
+                            tool_name=self.tool_name,
+                            expected_output=expected_val,
+                            match_type="partial",
+                            case_sensitive=self.case_sensitive,
+                        )
+                        if not nested_validator._validate_match(actual_value[key]):
+                            return False
                     else:
                         if actual_value[key] != expected_val:
                             return False
@@ -276,7 +289,24 @@ class ToolOutputMatches(SyncEvaluator):
             ):
                 # Check if all expected items are present
                 for expected_item in self.expected_output:
-                    if expected_item not in actual_value:
+                    found = False
+                    for actual_item in actual_value:
+                        # If both items are dicts, use partial matching
+                        if isinstance(expected_item, dict) and isinstance(actual_item, dict):
+                            nested_validator = ToolOutputMatches(
+                                tool_name=self.tool_name,
+                                expected_output=expected_item,
+                                match_type="partial",
+                                case_sensitive=self.case_sensitive,
+                            )
+                            if nested_validator._validate_match(actual_item):
+                                found = True
+                                break
+                        # Otherwise check for exact equality
+                        elif expected_item == actual_item:
+                            found = True
+                            break
+                    if not found:
                         return False
                 return True
             else:

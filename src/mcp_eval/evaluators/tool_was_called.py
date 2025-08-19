@@ -9,10 +9,15 @@ from mcp_eval.evaluators.shared import EvaluatorResult
 
 @dataclass
 class ToolWasCalled(SyncEvaluator):
-    """Evaluator that checks if a specific tool was called."""
+    """Evaluator that checks if a specific tool was called.
+
+    Requires final metrics: True (runs after full OTEL trace is processed).
+    """
 
     tool_name: str
     min_times: int = 1
+    # Must run after full trace to see all tool calls
+    requires_final_metrics: bool = True
 
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         tool_calls = [call for call in ctx.tool_calls if call.name == self.tool_name]

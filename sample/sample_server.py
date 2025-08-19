@@ -5,8 +5,8 @@ from mcp.server.fastmcp import FastMCP
 
 # Create an MCP server instance using FastMCP
 server = FastMCP(
-    title="Sample Demo Server",
-    description="A simple MCP server with time and summarization tools.",
+    name="Sample Demo Server",
+    instructions="A simple MCP server with time and summarization tools.",
 )
 
 

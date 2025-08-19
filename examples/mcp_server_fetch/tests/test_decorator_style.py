@@ -1,23 +1,13 @@
 """Decorator-style tests using modern evaluators."""
 
-import mcp_eval
+from mcp_eval import Expect
 from mcp_eval import task, setup, teardown, parametrize
-from mcp_eval.evaluators import (
-    ToolWasCalled,
-    ResponseContains,
-    LLMJudge,
-    ToolSuccessRate,
-    MaxIterations,
-    ToolOutputMatches,
-    PathEfficiency,
-)
 from mcp_eval.session import TestAgent, TestSession
 
 
 @setup
 def configure_decorator_tests():
-    """Configure mcp-eval for decorator-style tests."""
-    mcp_eval.use_server("fetch")
+    """Servers should be declared on Agent/AgentSpec; no per-test server selection."""
 
 
 @teardown
@@ -31,16 +21,21 @@ async def test_basic_fetch_decorator(agent: TestAgent, session: TestSession):
     """Test basic fetch functionality with modern evaluators."""
     response = await agent.generate_str("Fetch the content from https://example.com")
 
-    # Modern evaluator approach - immediate evaluation
-    session.evaluate_now(ToolWasCalled("fetch"), response, "fetch_tool_called")
+    # Modern evaluator approach - unified assertion API
+    await session.assert_that(
+        Expect.tools.was_called("fetch"), name="fetch_tool_called", response=response
+    )
 
-    session.evaluate_now(
-        ResponseContains("Example Domain"), response, "contains_domain_text"
+    await session.assert_that(
+        Expect.content.contains("Example Domain"),
+        name="contains_domain_text",
+        response=response,
     )
 
     # Deferred evaluation for tool success
-    session.add_deferred_evaluator(
-        ToolSuccessRate(min_rate=1.0, tool_name="fetch"), "fetch_success_rate"
+    await session.assert_that(
+        Expect.tools.success_rate(min_rate=1.0, tool_name="fetch"),
+        name="fetch_success_rate",
     )
 
 
@@ -51,15 +46,15 @@ async def test_fetch_tool_output(agent: TestAgent, session: TestSession):
         "Print the first line of the paragraph from https://example.com"
     )
 
-    session.add_deferred_evaluator(
-        ToolOutputMatches(
+    await session.assert_that(
+        Expect.tools.output_matches(
             tool_name="fetch",
             expected_output=r"use.*examples",
             match_type="regex",
             case_sensitive=False,
-            field_path="content.0.text",
+            field_path="content[0].text",
         ),
-        "fetch_output_match",
+        name="fetch_output_match",
     )
 
 
@@ -71,20 +66,20 @@ async def test_content_extraction_decorator(agent: TestAgent, session: TestSessi
     )
 
     # Tool usage check
-    session.add_deferred_evaluator(
-        ToolWasCalled("fetch"), "fetch_called_for_extraction"
+    await session.assert_that(
+        Expect.tools.was_called("fetch"), name="fetch_called_for_extraction"
     )
 
     # LLM judge for extraction quality
-    extraction_judge = LLMJudge(
+    extraction_judge = Expect.judge.llm(
         rubric="Response should demonstrate successful content extraction and provide a meaningful summary",
         min_score=0.8,
         include_input=True,
         require_reasoning=True,
     )
 
-    await session.evaluate_now_async(
-        extraction_judge, response, "extraction_quality_assessment"
+    await session.assert_that(
+        extraction_judge, name="extraction_quality_assessment", response=response
     )
 
 
@@ -96,9 +91,11 @@ async def test_efficiency_decorator(agent: TestAgent, session: TestSession):
     )
 
     # Should complete efficiently
-    session.add_deferred_evaluator(MaxIterations(max_iterations=3), "efficiency_check")
+    await session.assert_that(
+        Expect.performance.max_iterations(max_iterations=3), name="efficiency_check"
+    )
 
-    session.add_deferred_evaluator(ToolWasCalled("fetch"), "fetch_completed")
+    await session.assert_that(Expect.tools.was_called("fetch"), name="fetch_completed")
 
 
 @task("Test handling different content types")
@@ -122,14 +119,15 @@ async def test_content_types_decorator(
         f"Fetch {url} and identify what type of content it contains",
     )
 
-    session.add_deferred_evaluator(
-        ToolWasCalled("fetch"), f"fetch_called_for_{content_type.lower()}"
+    await session.assert_that(
+        Expect.tools.was_called("fetch"),
+        name=f"fetch_called_for_{content_type.lower()}",
     )
 
-    session.evaluate_now(
-        ResponseContains(expected_indicator, case_sensitive=False),
-        response,
-        f"identifies_{content_type.lower()}_content",
+    await session.assert_that(
+        Expect.content.contains(expected_indicator, case_sensitive=False),
+        name=f"identifies_{content_type.lower()}_content",
+        response=response,
     )
 
 
@@ -142,19 +140,19 @@ async def test_error_recovery_decorator(agent: TestAgent, session: TestSession):
     )
 
     # Should attempt multiple fetches
-    session.add_deferred_evaluator(
-        ToolWasCalled("fetch", min_times=1),  # At least one fetch attempt
-        "fetch_attempts_made",
+    await session.assert_that(
+        Expect.tools.was_called("fetch", min_times=1),  # At least one fetch attempt
+        name="fetch_attempts_made",
     )
 
     # Should demonstrate recovery
-    recovery_judge = LLMJudge(
+    recovery_judge = Expect.judge.llm(
         rubric="Response should show attempt to fetch the invalid URL, recognize the error, and successfully fetch the fallback URL",
         min_score=0.8,
     )
 
-    await session.evaluate_now_async(
-        recovery_judge, response, "error_recovery_demonstration"
+    await session.assert_that(
+        recovery_judge, name="error_recovery_demonstration", response=response
     )
 
 
@@ -164,11 +162,11 @@ async def test_path_efficiency_decorator(agent: TestAgent, session: TestSession)
     await agent.generate_str("Fetch https://example.com and summarize the content")
 
     # Test basic efficiency - should complete in optimal steps
-    session.add_deferred_evaluator(
-        PathEfficiency(
+    await session.assert_that(
+        Expect.path.efficiency(
             expected_tool_sequence=["fetch"],
             allow_extra_steps=1,  # TODO: jerron - fix iteration count logic
             tool_usage_limits={"fetch": 1},
         ),
-        "fetch_path_efficiency",
+        name="fetch_path_efficiency",
     )

@@ -1,10 +1,9 @@
 """Test MultiCriteriaJudge with enhanced evaluation capabilities."""
 
-import mcp_eval
+from mcp_eval import Expect
 from mcp_eval import task, setup
 from mcp_eval.evaluators import (
     STANDARD_CRITERIA,
-    MultiCriteriaJudge,
     EvaluationCriterion,
 )
 from mcp_eval.session import TestAgent, TestSession
@@ -12,8 +11,7 @@ from mcp_eval.session import TestAgent, TestSession
 
 @setup
 def configure_multi_criteria_tests():
-    """Configure for multi-criteria judge testing."""
-    mcp_eval.use_server("fetch")
+    """Servers defined on Agent/AgentSpec; no per-test server selection."""
 
 
 @task("Test MultiCriteriaJudge with standard criteria")
@@ -44,19 +42,19 @@ async def test_standard_criteria_evaluation(agent: TestAgent, session: TestSessi
         ),
     ]
 
-    # # Use MultiCriteriaJudge with weighted aggregation
-    judge = MultiCriteriaJudge(
+    # Use MultiCriteriaJudge with weighted aggregation
+    judge = Expect.judge.multi_criteria(
         criteria=web_content_criteria,
         aggregate_method="weighted",
         use_cot=True,
-        model="claude-3-5-haiku-20241022",
+        # model not specified - will use judge config or ModelSelector
     )
 
-    await session.evaluate_now_async(
+    await session.assert_that(
         judge,
-        input=input,
-        response=response,
         name="extraction_quality_assessment",
+        response=response,
+        inputs=input,
     )
 
 
@@ -89,16 +87,16 @@ async def test_require_all_pass_mode(agent: TestAgent, session: TestSession):
     ]
 
     # Use require_all_pass mode with minimum aggregation
-    judge = MultiCriteriaJudge(
+    judge = Expect.judge.multi_criteria(
         criteria=strict_criteria,
         require_all_pass=True,
         aggregate_method="min",
         use_cot=False,
-        model="claude-3-5-haiku-20241022",
+        # model not specified - will use judge config or ModelSelector
     )
 
-    await session.evaluate_now_async(
-        judge, input=input, response=response, name="strict_all_pass_evaluation"
+    await session.assert_that(
+        judge, name="strict_all_pass_evaluation", response=response, inputs=input
     )
 
 
@@ -109,15 +107,15 @@ async def test_predefined_criteria_sets(agent: TestAgent, session: TestSession):
     response = await agent.generate_str(input)
 
     # Test with standard criteria using harmonic mean (penalizes low scores)
-    judge = MultiCriteriaJudge(
+    judge = Expect.judge.multi_criteria(
         criteria=STANDARD_CRITERIA,
         aggregate_method="harmonic_mean",
         include_confidence=True,
-        model="claude-3-5-haiku-20241022",
+        # model not specified - will use judge config or ModelSelector
     )
 
-    await session.evaluate_now_async(
-        judge, input=input, response=response, name="standard_criteria_harmonic"
+    await session.assert_that(
+        judge, name="standard_criteria_harmonic", response=response, inputs=input
     )
 
 
@@ -155,24 +153,24 @@ async def test_error_handling(agent: TestAgent, session: TestSession):
     ]
 
     # Test with different aggregation methods for comparison
-    judge_weighted = MultiCriteriaJudge(
+    judge_weighted = Expect.judge.multi_criteria(
         criteria=error_handling_criteria,
         aggregate_method="weighted",
         use_cot=True,
-        model="claude-3-5-haiku-20241022",
+        # model not specified - will use judge config or ModelSelector
     )
 
-    await session.evaluate_now_async(
-        judge_weighted, input=input, response=response, name="error_handling_weighted"
+    await session.assert_that(
+        judge_weighted, name="error_handling_weighted", response=response, inputs=input
     )
 
-    judge_min = MultiCriteriaJudge(
+    judge_min = Expect.judge.multi_criteria(
         criteria=error_handling_criteria,
         aggregate_method="min",
         use_cot=True,
-        model="claude-3-5-haiku-20241022",
+        # model not specified - will use judge config or ModelSelector
     )
 
-    await session.evaluate_now_async(
-        judge_min, input=input, response=response, name="error_handling_min"
+    await session.assert_that(
+        judge_min, name="error_handling_min", response=response, inputs=input
     )

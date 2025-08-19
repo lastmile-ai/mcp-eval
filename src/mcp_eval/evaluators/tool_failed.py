@@ -10,7 +10,9 @@ from mcp_eval.evaluators.tool_success_rate import ToolSuccessRate
 @dataclass
 class ToolFailed(ToolSuccessRate):
     """Evaluator that checks if a tool failed (0% success rate)."""
-    
+
+    requires_final_metrics: bool = True
+
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         result = super().evaluate_sync(ctx)
         failed = result.details["rate"] == 0.0  # Invert success rate
