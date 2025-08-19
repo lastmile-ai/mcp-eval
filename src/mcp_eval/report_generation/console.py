@@ -199,7 +199,7 @@ class TestProgressDisplay:
                 dots.append("F", style="red")
 
 
-def generate_failure_message(eval_records: list[EvaluationRecord]) -> str:
+def generate_failure_message(eval_records: list[EvaluationRecord]) -> str | None:
     """Generate failure messages for mcp-eval evaluations"""
     failure_details = []
 
@@ -234,6 +234,10 @@ def generate_failure_message(eval_records: list[EvaluationRecord]) -> str:
             else:
                 failure_details.append(f"  ✗ {name}: {evaluation_result.model_dump()}")
 
-    failure_message = "Evaluation failures:\n" + "\n".join(failure_details)
+    failure_message = (
+        "Evaluation failures:\n" + "\n".join(failure_details)
+        if len(failure_details)
+        else None
+    )
 
     return failure_message
