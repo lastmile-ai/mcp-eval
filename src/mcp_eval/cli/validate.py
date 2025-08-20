@@ -14,7 +14,9 @@ from mcp_agent.mcp.gen_client import gen_client
 from mcp_agent.agents.agent import Agent
 from mcp_agent.workflows.factory import _llm_factory, agent_from_spec as _agent_from_spec_factory
 from mcp_agent.agents.agent_spec import AgentSpec
+from mcp_agent.config import Settings, MCPSettings, MCPServerSettings
 
+from mcp_eval.config import load_config
 from mcp_eval.cli.utils import (
     load_all_servers,
     load_all_agents,
@@ -36,11 +38,45 @@ class ValidationResult:
         self.details = details or {}
 
 
-async def validate_server(server: MCPServerConfig) -> ValidationResult:
+async def validate_server(server: MCPServerConfig, project: Path) -> ValidationResult:
     """Validate a single server by connecting and listing tools."""
     try:
-        # Create MCP app with minimal config
-        mcp_app = MCPApp()
+        # Load the full configuration from mcp-eval (includes all servers and secrets)
+        config_path = project / "mcpeval.yaml"
+        settings = load_config(config_path if config_path.exists() else None)
+        
+        # Filter to only the server we're testing to avoid starting unnecessary servers
+        if settings.mcp and settings.mcp.servers:
+            # Keep only the server we're validating
+            settings.mcp.servers = {
+                server.name: settings.mcp.servers.get(server.name, MCPServerSettings(
+                    name=server.name,
+                    transport=server.transport,
+                    command=server.command,
+                    args=server.args,
+                    url=server.url,
+                    headers=server.headers,
+                    env=server.env,
+                ))
+            }
+        else:
+            # If no mcp settings, create them with just this server
+            settings.mcp = MCPSettings(
+                servers={
+                    server.name: MCPServerSettings(
+                        name=server.name,
+                        transport=server.transport,
+                        command=server.command,
+                        args=server.args,
+                        url=server.url,
+                        headers=server.headers,
+                        env=server.env,
+                    )
+                }
+            )
+        
+        # Create MCP app with the settings
+        mcp_app = MCPApp(settings=settings)
         async with mcp_app.run() as running:
             # Try to connect to the server
             async with gen_client(
@@ -78,20 +114,39 @@ async def validate_agent(agent: AgentConfig, project: Path) -> ValidationResult:
     if missing_servers:
         issues.append(f"Missing servers: {', '.join(missing_servers)}")
     
+    # Load configuration using mcp-eval's config loading (handles all providers automatically)
+    config_path = project / "mcpeval.yaml"
+    settings = load_config(config_path if config_path.exists() else None)
+    
     # Check if provider/model or defaults are configured
-    if not agent.provider:
-        # Check if defaults are set
-        cfg = load_yaml(project / "mcpeval.yaml")
-        if not cfg.get("provider"):
-            # Check secrets for provider
-            secrets = load_yaml(project / "mcpeval.secrets.yaml")
-            if not secrets.get("anthropic") and not secrets.get("openai"):
-                issues.append("No LLM provider configured (neither in agent nor defaults)")
+    # We'll validate this by actually trying to create an LLM factory later
+    # rather than trying to guess what credentials are needed for each provider
     
     # Try to create the agent to verify configuration
     if not issues:
         try:
-            mcp_app = MCPApp()
+            # Filter servers to only those referenced by the agent
+            if settings.mcp and settings.mcp.servers:
+                agent_servers = {}
+                for server_name in agent.server_names:
+                    if server_name in settings.mcp.servers:
+                        agent_servers[server_name] = settings.mcp.servers[server_name]
+                    elif server_name in all_servers:
+                        # Fallback: create from all_servers if not in settings
+                        server = all_servers[server_name]
+                        agent_servers[server_name] = MCPServerSettings(
+                            name=server.name,
+                            transport=server.transport,
+                            command=server.command,
+                            args=server.args,
+                            url=server.url,
+                            headers=server.headers,
+                            env=server.env,
+                        )
+                settings.mcp.servers = agent_servers
+            
+            # Create MCP app with the settings
+            mcp_app = MCPApp(settings=settings)
             async with mcp_app.run() as running:
                 # Create AgentSpec
                 spec = AgentSpec(
@@ -100,15 +155,15 @@ async def validate_agent(agent: AgentConfig, project: Path) -> ValidationResult:
                     server_names=agent.server_names,
                 )
                 
-                # Try to create agent
-                test_agent = await _agent_from_spec_factory(spec, context=running.context)
+                # Try to create agent (agent_from_spec is not async)
+                test_agent = _agent_from_spec_factory(spec, context=running.context)
                 await test_agent.initialize()
                 
-                # If we have provider config, try to attach LLM
-                if agent.provider or cfg.get("provider"):
-                    provider = agent.provider or cfg.get("provider")
-                    model = agent.model or cfg.get("model")
-                    
+                # Try to attach and test LLM if provider is configured
+                provider = agent.provider or settings.provider
+                model = agent.model or settings.model
+                
+                if provider:
                     try:
                         llm_factory = _llm_factory(
                             provider=provider,
@@ -119,23 +174,33 @@ async def validate_agent(agent: AgentConfig, project: Path) -> ValidationResult:
                         
                         # Try a simple generation to verify it works
                         response = await llm.generate_str("Say 'validation successful' and nothing else.")
-                        if "validation" in response.lower():
+                        if not response or not response.strip():
+                            issues.append(f"LLM returned empty response - check API key for {provider}")
+                        elif "validation" in response.lower():
                             return ValidationResult(
                                 name=agent.name,
                                 success=True,
                                 message="Agent configured correctly and LLM responds",
-                                details={"servers": agent.server_names}
+                                details={"servers": agent.server_names, "provider": provider}
                             )
+                        else:
+                            issues.append(f"LLM responded unexpectedly: {response[:50]}")
                     except Exception as e:
-                        issues.append(f"LLM test failed: {str(e)[:50]}")
-                
-                # If no LLM test, just report agent creation success
-                if not issues:
+                        # Extract meaningful error message
+                        error_msg = str(e)
+                        if "api" in error_msg.lower() and "key" in error_msg.lower():
+                            issues.append(f"Missing or invalid API key for {provider}")
+                        elif "credential" in error_msg.lower():
+                            issues.append(f"Missing credentials for {provider}")
+                        else:
+                            issues.append(f"LLM test failed: {error_msg[:100]}")
+                else:
+                    # No provider configured - this is only an issue if the test expects to use an LLM
                     return ValidationResult(
                         name=agent.name,
                         success=True,
-                        message="Agent configuration valid (no LLM test performed)",
-                        details={"servers": agent.server_names}
+                        message="Agent configuration valid (no provider configured)",
+                        details={"servers": agent.server_names, "note": "No LLM provider configured"}
                     )
                     
         except Exception as e:
@@ -305,7 +370,7 @@ def validate(
                 ) as progress:
                     for name, server in all_servers.items():
                         task = progress.add_task(f"Testing {name}...", total=None)
-                        result = asyncio.run(validate_server(server))
+                        result = asyncio.run(validate_server(server, project))
                         results.append(result)
                         progress.update(task, description=f"Tested {name}")
                         _print_result(result)
