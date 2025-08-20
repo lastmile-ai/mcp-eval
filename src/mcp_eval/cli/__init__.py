@@ -2,16 +2,23 @@
 
 import typer
 from pathlib import Path
+from typing import Optional
 from rich.console import Console
 
 from mcp_eval.runner import app as runner_app
-from mcp_eval.cli.generator import run_generator
+from mcp_eval.cli.generator import app as generator_app, add_app
+from mcp_eval.cli.list_command import app as list_app
+from mcp_eval.cli.validate import validate
+from mcp_eval.cli.doctor import doctor
+from mcp_eval.cli.issue import issue
 
 app = typer.Typer(help="MCP-Eval: Comprehensive testing framework for MCP servers")
 console = Console()
 
 # Subcommands
 app.add_typer(runner_app, name="run", help="Run tests")
+app.add_typer(list_app, name="list", help="List configured resources")
+app.add_typer(add_app, name="add", help="Add servers or agents")
 
 
 @app.command()
@@ -26,49 +33,24 @@ def version():
     console.print(f"MCP-Eval {version}")
 
 
-@app.command()
-def init(
-    directory: str = typer.Argument(".", help="Directory to initialize"),
-    template: str = typer.Option("basic", help="Template to use (basic, advanced)"),
-):
-    """Initialize a new MCP-Eval project."""
-    project_path = Path(directory)
-    project_path.mkdir(exist_ok=True)
+# Add init, generate and update commands from generator to top level
+# These need to be imported directly to work properly
+from mcp_eval.cli.generator import init_project, run_generator, update_tests
 
-    # Create basic structure
-    (project_path / "tests").mkdir(exist_ok=True)
-    (project_path / "datasets").mkdir(exist_ok=True)
-
-    # Create example files
-    if template == "basic":
-        _create_basic_template(project_path)
-    elif template == "advanced":
-        _create_advanced_template(project_path)
-
-    console.print(f"[green]Initialized MCP-Eval project in {project_path}[/green]")
+app.command("init")(init_project)
+app.command("generate")(run_generator)
+app.command("update")(update_tests)
+app.command("validate")(validate)
+app.command("doctor")(doctor)
+app.command("issue")(issue)
 
 
-@app.command("generate")
-def generate(
-    out_dir: str = typer.Option(".", help="Project directory to write configs/tests"),
-    style: str = typer.Option("pytest", help="Test style: pytest|decorators|dataset"),
-    n_examples: int = typer.Option(6, help="Number of scenarios to generate"),
-    provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
-    model: str = typer.Option(None, help="Model hint for generation (optional)"),
-):
-    """Interactive generator to create configs and tests for an MCP server."""
-    run_generator(
-        out_dir=out_dir,
-        style=style,
-        n_examples=n_examples,
-        provider=provider,
-        model=model,
-    )
+# The generate command is now properly registered above
 
 
+# Template functions removed - handled by new generator flow
 def _create_basic_template(project_path: Path):
-    """Create basic template files."""
-
+    """[Deprecated] Create basic template files."""
     # mcpeval.yaml
     config_content = """
 name: "My MCP Server Tests"
