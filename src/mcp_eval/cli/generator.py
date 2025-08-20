@@ -78,6 +78,59 @@ def _look_for_mcp_json() -> Optional[Path]:
     return None
 
 
+def _ensure_mcpeval_yaml(project: Path) -> Path:
+    """Ensure mcpeval.yaml exists; create minimal defaults if missing."""
+    cfg_path = project / "mcpeval.yaml"
+    if not cfg_path.exists():
+        console.print(f"[yellow]mcpeval.yaml not found in {project}. Creating minimal config...[/yellow]")
+        minimal = {
+            "reporting": {"formats": ["json", "markdown"], "output_dir": "./test-reports"},
+            "judge": {"min_score": 0.8},
+        }
+        _save_yaml(cfg_path, minimal)
+        console.print(f"[green]✓[/] Created {cfg_path}")
+    return cfg_path
+
+
+def _write_agent_definition(
+    project: Path,
+    *,
+    name: str,
+    instruction: str,
+    server_names: List[str],
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+) -> None:
+    """Append/merge an AgentSpec under agents.definitions in mcpeval.yaml."""
+    cfg_path = _ensure_mcpeval_yaml(project)
+    cfg = _load_yaml(cfg_path)
+    cfg.setdefault("agents", {}).setdefault("definitions", [])
+    # Remove duplicates by name
+    existing: List[dict] = [d for d in cfg["agents"]["definitions"] if isinstance(d, dict)]
+    existing = [d for d in existing if d.get("name") != name]
+    spec: Dict[str, Any] = {
+        "name": name,
+        "instruction": instruction,
+        "server_names": server_names,
+    }
+    if provider:
+        spec["provider"] = provider
+    if model:
+        spec["model"] = model
+    existing.append(spec)
+    cfg["agents"]["definitions"] = existing
+    _save_yaml(cfg_path, cfg)
+    console.print(f"[green]✓[/] Wrote AgentSpec '{name}' to {cfg_path}")
+
+
+def _set_default_agent(project: Path, agent_name: str) -> None:
+    cfg_path = _ensure_mcpeval_yaml(project)
+    cfg = _load_yaml(cfg_path)
+    cfg["default_agent"] = agent_name
+    _save_yaml(cfg_path, cfg)
+    console.print(f"[green]✓[/] Set default_agent='{agent_name}' in {cfg_path}")
+
+
 def _sanitize_filename_component(value: str) -> str:
     s = re.sub(r"[^0-9a-zA-Z._-]+", "_", value.strip())
     if not s:
@@ -170,6 +223,39 @@ def _import_servers_from_mcp_json(mcp_json_path: Path) -> Dict[str, MCPServerSet
         return result
     except Exception:
         return {}
+
+
+def _import_servers_from_dxt(path: Path) -> Dict[str, MCPServerSettings]:
+    """Best-effort import of servers from a DXT file.
+
+    Heuristics:
+    - If file contains an mcpServers object (emergent MCP JSON standard), parse it just like mcp.json
+      (See `mcpServers` format widely used by Cursor/VS Code/Claude Desktop per docs: https://gofastmcp.com/integrations/mcp-json-configuration)
+    - Otherwise, return empty and let the caller fall back to interactive add.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+        try:
+            data = json.loads(text)
+        except Exception:
+            data = yaml.safe_load(text)
+        if not isinstance(data, dict):
+            return {}
+        if "mcpServers" in data and isinstance(data["mcpServers"], dict):
+            # Reuse mcpServers mapping
+            servers: Dict[str, MCPServerSettings] = {}
+            for name, cfg in data["mcpServers"].items():
+                servers[name] = MCPServerSettings(
+                    name=name,
+                    transport="stdio",  # most mcp-json clients rely on command/args
+                    command=cfg.get("command"),
+                    args=cfg.get("args") or [],
+                    env=cfg.get("env"),
+                )
+            return servers
+    except Exception:
+        return {}
+    return {}
 
 
 def _load_existing_provider(project: Path) -> tuple[Optional[str], Optional[str]]:
@@ -441,6 +527,26 @@ def _write_server_to_agent_config_file(
     console.print(f"[green]✓[/] Updated {cfg_path} with server '{name}'")
 
 
+def _write_server_to_mcpeval_file(
+    project: Path, name: str, settings: MCPServerSettings
+) -> None:
+    """Persist server in mcpeval.yaml under mcp.servers."""
+    cfg_path = _ensure_mcpeval_yaml(project)
+    cfg = _load_yaml(cfg_path)
+    cfg.setdefault("mcp", {}).setdefault("servers", {})
+
+    # Normalize fields we allow in mcpeval.yaml
+    src = settings.model_dump(exclude_none=True)
+    server_obj: Dict[str, Any] = {}
+    for k in ("transport", "command", "args", "url", "headers", "env"):
+        if k in src:
+            server_obj[k] = src[k]
+
+    cfg["mcp"]["servers"][name] = server_obj
+    _save_yaml(cfg_path, cfg)
+    console.print(f"[green]✓[/] Updated {cfg_path} with server '{name}'")
+
+
 def _emit_tests(
     project: Path,
     style: str,
@@ -513,14 +619,98 @@ def _emit_tests(
 # --------------- main command -----------------
 
 
+@app.command("init")
+def init_project(
+    out_dir: str = typer.Option(".", help="Project directory for configs"),
+    import_mcp_json: bool = typer.Option(True, help="Import servers from .cursor/.vscode mcp.json if found"),
+):
+    """Initialize an mcp-eval project.
+
+    - Ensure mcpeval.yaml and mcpeval.secrets.yaml exist (write minimal defaults)
+    - Configure provider + API key
+    - Import servers from mcp-agent.config.yaml and optionally mcp.json (cursor/vscode)
+    - Define/select a default AgentSpec and set default_agent
+
+    Examples:
+      - Create a project with auto-import from mcp.json:
+        mcp-eval init --import-mcp-json
+
+      - Create without importing from mcp.json:
+        mcp-eval init --no-import-mcp-json
+    """
+    project = Path(out_dir)
+    _ensure_dir(project)
+    _ensure_mcpeval_yaml(project)
+
+    # Provider + API key
+    console.print("[cyan]Configuring LLM provider and secrets...[/cyan]")
+    existing_provider, existing_key = _load_existing_provider(project)
+    provider, api_key, model = _prompt_provider(existing_provider, existing_key)
+    if api_key:
+        _write_mcpeval_configs(project, provider, api_key, model)
+    else:
+        console.print("Using existing secrets without modification.")
+
+    # Servers
+    console.print("[cyan]Discovering servers from mcp-agent.config.yaml...[/cyan]")
+    existing_servers = _load_existing_servers(project)
+    imported: Dict[str, MCPServerSettings] = {}
+    if import_mcp_json:
+        mcp_json = _look_for_mcp_json()
+        if mcp_json:
+            console.print(f"[cyan]Importing servers from {mcp_json}...[/cyan]")
+            imported = _import_servers_from_mcp_json(mcp_json)
+    merged: Dict[str, MCPServerSettings] = {**existing_servers, **imported}
+    if merged:
+        console.print("Available servers:")
+        for n in sorted(merged.keys()):
+            console.print(f" - {n}")
+    else:
+        console.print("[yellow]No servers found; let's add one[/yellow]")
+    server_name, server_settings = _prompt_server_settings(merged)
+    _write_server_to_mcpeval_file(project, server_name, server_settings)
+
+    # Default AgentSpec
+    console.print("[cyan]Define default agent (will be stored in mcpeval.yaml)[/cyan]")
+    agent_name = typer.prompt("Agent name", default="default")
+    instruction = typer.prompt(
+        "Agent instruction",
+        default="You are a helpful assistant that can use MCP servers effectively.",
+    )
+    # Allow multiple servers
+    server_list_str = typer.prompt(
+        "Server names for this agent (comma-separated)", default=server_name
+    )
+    server_list = [s.strip() for s in server_list_str.split(",") if s.strip()]
+    _write_agent_definition(
+        project,
+        name=agent_name,
+        instruction=instruction,
+        server_names=server_list,
+        provider=provider,
+        model=model,
+    )
+    _set_default_agent(project, agent_name)
+    console.print("[bold green]✓ Project initialized[/bold green]")
+
+
 @app.command("run")
 def run_generator(
     out_dir: str = typer.Option(".", help="Project directory to write configs/tests"),
-    style: str = typer.Option("pytest", help="Test style: pytest|decorators|dataset"),
+    style: Optional[str] = typer.Option(None, help="Test style: pytest|decorators|dataset"),
     n_examples: int = typer.Option(6, help="Number of scenarios to generate"),
     provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
     model: Optional[str] = typer.Option(None, help="Model id (optional)"),
 ):
+    """Generate scenarios and write a single test file.
+
+    Examples:
+      - Quick start (prompt for style):
+        mcp-eval run
+
+      - Explicit pytest style and 10 scenarios:
+        mcp-eval run --style pytest --n-examples 10
+    """
     project = Path(out_dir)
     _ensure_dir(project)
 
@@ -536,14 +726,9 @@ def run_generator(
     else:
         console.print("Using existing secrets without modification.")
 
-    # Server capture (reuse existing servers and optionally import from mcp.json)
+    # Server capture (only from configs; mcp.json import happens in init)
     existing_servers = _load_existing_servers(project)
-    imported = {}
-    mcp_json = _look_for_mcp_json()
-    if mcp_json:
-        imported = _import_servers_from_mcp_json(mcp_json)
-    # Merge existing + imported for user selection
-    merged: Dict[str, MCPServerSettings] = {**existing_servers, **imported}
+    merged: Dict[str, MCPServerSettings] = {**existing_servers}
     if merged:
         console.print("Available servers:")
         for n in sorted(merged.keys()):
@@ -557,14 +742,29 @@ def run_generator(
             server_settings = merged[chosen]
         else:
             # Add new server via prompt; prefill imported if present under that name
-            pre = {chosen: imported[chosen]} if chosen in imported else {}
-            server_name, server_settings = _prompt_server_settings(pre)
+            server_name, server_settings = _prompt_server_settings({})
     else:
         # No servers known yet; prompt fresh
-        server_name, server_settings = _prompt_server_settings(imported)
+        server_name, server_settings = _prompt_server_settings({})
     # Persist/ensure presence in mcp-agent config
-    _write_server_to_agent_config_file(project, server_name, server_settings)
+    # Persist to mcpeval.yaml (source of truth for this tool)
+    _write_server_to_mcpeval_file(project, server_name, server_settings)
     console.print(f"[cyan]Server '{server_name}' configured.[/cyan]")
+
+    # Agent selection by name from mcpeval.yaml agents.definitions
+    cfg_path = _ensure_mcpeval_yaml(project)
+    cfg = _load_yaml(cfg_path)
+    agent_defs = [d for d in (cfg.get("agents", {}).get("definitions", []) or []) if isinstance(d, dict)]
+    agent_names = [d.get("name") for d in agent_defs if d.get("name")]
+    default_agent = cfg.get("default_agent") or (agent_names[0] if agent_names else None)
+    if agent_names:
+        console.print("Available agents:")
+        for n in agent_names:
+            console.print(f" - {n}")
+        chosen_agent = typer.prompt("Agent to use (by name)", default=default_agent or agent_names[0])
+        _set_default_agent(project, chosen_agent)
+    else:
+        console.print("[yellow]No agents defined. Consider running 'mcp-eval init' first to define a default agent.[/yellow]")
 
     # Discovery
     try:
@@ -603,6 +803,10 @@ def run_generator(
         console.print(f"[red]Failed to generate scenarios:[/] {e}")
         return
 
+    # Prompt for style if not provided
+    if not style:
+        style = typer.prompt("Test style (pytest|decorators|dataset)", default="pytest").strip().lower()
+
     _emit_tests(project, style, server_name, scenarios, provider=provider, model=final_model)
     # Summary of generated scenarios
     if scenarios:
@@ -611,3 +815,171 @@ def run_generator(
             console.print(f" - [green]{s.name}[/green]: {s.description or ''}")
         if len(scenarios) > 20:
             console.print(f" ... and {len(scenarios) - 20} more")
+
+
+@app.command("update")
+def update_tests(
+    out_dir: str = typer.Option(".", help="Project directory"),
+    target_file: str = typer.Option(..., help="Path to an existing test file to append to"),
+    server_name: str = typer.Option(None, help="Server to generate against (prompted if omitted)"),
+    style: str = typer.Option("pytest", help="Test style for new tests: pytest|decorators|dataset"),
+    n_examples: int = typer.Option(4, help="Number of new scenarios to generate"),
+    provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
+    model: Optional[str] = typer.Option(None, help="Model id (optional)"),
+):
+    """Append newly generated tests to an existing test file (non-interactive).
+
+    Examples:
+      - Append 4 pytest-style tests to a file:
+        mcp-eval update --target-file tests/test_fetch_generated.py --style pytest --n-examples 4
+    """
+    project = Path(out_dir)
+    file_path = Path(target_file)
+    if not file_path.exists():
+        console.print(f"[red]Target file not found:[/] {file_path}")
+        raise typer.Exit(1)
+
+    console.print("[cyan]Preparing to append tests...[/cyan]")
+    existing_servers = _load_existing_servers(project)
+    if not server_name:
+        if not existing_servers:
+            console.print("[yellow]No servers configured. Run 'mcp-eval init' first.[/yellow]")
+            raise typer.Exit(1)
+        console.print("Available servers:")
+        for n in sorted(existing_servers.keys()):
+            console.print(f" - {n}")
+        server_name = typer.prompt("Server name", default=next(iter(sorted(existing_servers.keys()))))
+
+    # Provider + key (reuse flow)
+    existing_provider, existing_key = _load_existing_provider(project)
+    provider, api_key, prompted_model = _prompt_provider(existing_provider, existing_key)
+    final_model = model or prompted_model
+    if api_key:
+        _write_mcpeval_configs(project, provider, api_key, final_model)
+
+    console.print(f"[cyan]Listing tools for '{server_name}'...[/cyan]")
+    try:
+        import asyncio
+
+        tools = asyncio.run(_discover_tools(server_name))
+    except Exception as e:
+        console.print(f"[red]Failed to list tools:[/] {e}")
+        raise typer.Exit(1)
+    console.print(f"Discovered {len(tools)} tools")
+
+    # Generate and refine new scenarios
+    try:
+        scenarios = asyncio.run(
+            generate_scenarios_with_agent(
+                tools=tools, n_examples=n_examples, provider=provider, model=final_model
+            )
+        )
+        scenarios = asyncio.run(
+            refine_assertions_with_agent(
+                scenarios, tools, provider=provider, model=final_model
+            )
+        )
+    except Exception as e:
+        console.print(f"[red]Failed to generate scenarios:[/] {e}")
+        raise typer.Exit(1)
+
+    # Render content and append
+    if style.strip().lower() == "decorators":
+        content = render_decorator_tests(scenarios, server_name)
+    elif style.strip().lower() == "dataset":
+        content = render_pytest_tests(scenarios, server_name)  # dataset append not ideal
+    else:
+        content = render_pytest_tests(scenarios, server_name)
+
+    sep = "\n\n# ---- mcp-eval: additional generated tests ----\n\n"
+    appended = sep + content
+    file_path.write_text(file_path.read_text(encoding="utf-8") + appended, encoding="utf-8")
+    console.print(f"[green]✓[/] Appended {len(scenarios)} tests to {file_path}")
+
+
+add_app = typer.Typer(help="Add resources to mcpeval.yaml (servers, agents).\n\nExamples:\n  - Add a server interactively:\n    mcp-eval add server\n\n  - Import servers from mcp.json:\n    mcp-eval add server --from-mcp-json .cursor/mcp.json\n\n  - Add an agent:\n    mcp-eval add agent")
+app.add_typer(add_app, name="add")
+
+
+@add_app.command("server")
+def add_server(
+    out_dir: str = typer.Option(".", help="Project directory"),
+    from_mcp_json: Optional[str] = typer.Option(None, help="Path to mcp.json to import servers from"),
+    from_dxt: Optional[str] = typer.Option(None, help="Path to DXT file to import servers from"),
+):
+    """Add a server to mcpeval.yaml, either interactively or from mcp.json/DXT file.
+
+    Examples:
+      - Interactive add:
+        mcp-eval add server
+
+      - From mcp.json:
+        mcp-eval add server --from-mcp-json .cursor/mcp.json
+    """
+    project = Path(out_dir)
+    _ensure_dir(project)
+
+    imported: Dict[str, MCPServerSettings] = {}
+    if from_mcp_json:
+        imported = _import_servers_from_mcp_json(Path(from_mcp_json))
+        if not imported:
+            console.print("[yellow]No servers found in mcp.json[/yellow]")
+    elif from_dxt:
+        imported = _import_servers_from_dxt(Path(from_dxt))
+        if not imported:
+            console.print("[yellow]No servers found in DXT file[/yellow]")
+
+    if imported:
+        console.print("Imported servers:")
+        for n in imported.keys():
+            console.print(f" - {n}")
+        chosen = typer.prompt("Server to add", default=next(iter(imported.keys())))
+        if chosen in imported:
+            _write_server_to_mcpeval_file(project, chosen, imported[chosen])
+            console.print(f"[green]✓[/] Added server '{chosen}'")
+            return
+
+    # Interactive add
+    server_name, server_settings = _prompt_server_settings({})
+    _write_server_to_mcpeval_file(project, server_name, server_settings)
+    console.print(f"[green]✓[/] Added server '{server_name}'")
+
+
+@add_app.command("agent")
+def add_agent(
+    out_dir: str = typer.Option(".", help="Project directory"),
+):
+    """Add an AgentSpec to mcpeval.yaml (validates referenced servers exist).
+
+    Examples:
+      - Add an agent and set as default:
+        mcp-eval add agent
+    """
+    project = Path(out_dir)
+    _ensure_dir(project)
+    _ensure_mcpeval_yaml(project)
+
+    # Gather AgentSpec fields
+    name = typer.prompt("Agent name")
+    instruction = typer.prompt("Instruction", default="You are a helpful assistant that can use MCP servers effectively.")
+    server_list_str = typer.prompt("Server names (comma-separated)")
+    server_names = [s.strip() for s in server_list_str.split(",") if s.strip()]
+
+    # Validate servers exist
+    existing_servers = _load_existing_servers(project)
+    missing = [s for s in server_names if s not in existing_servers]
+    if missing:
+        console.print(f"[yellow]Warning:[/] Referenced servers not found: {', '.join(missing)}")
+        if typer.confirm("Would you like to add them now?", default=True):
+            for s in missing:
+                console.print(f"Adding server '{s}'...")
+                n, settings = _prompt_server_settings({})
+                # Ensure the name matches intent
+                if n != s:
+                    console.print(f"[yellow]Note:[/] Entered name '{n}' differs from '{s}'. Using '{n}'.")
+                _write_server_to_mcpeval_file(project, n, settings)
+
+    _write_agent_definition(project, name=name, instruction=instruction, server_names=server_names)
+    if typer.confirm("Set this as default_agent?", default=False):
+        _set_default_agent(project, name)
+    console.print(f"[green]✓[/] Added agent '{name}'")
