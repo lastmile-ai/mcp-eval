@@ -3,7 +3,7 @@ Core utilities for trace evaluation.
 
 This module provides foundational functions for loading and working with trace files.
 """
-import os
+
 import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime
@@ -21,10 +21,10 @@ import asyncio
 def read_trace_file(trace_file_path: str) -> List[Dict[str, Any]]:
     """
     Read a trace file and return a list of span dictionaries.
-    
+
     Args:
         trace_file_path: Path to the trace file (JSONL format)
-        
+
     Returns:
         List of span dictionaries from the trace file
     """
@@ -158,10 +158,10 @@ def separate_traces_by_server(trace_files: List[str]) -> Dict[str, List[str]]:
 def get_tools_info(trace_file_path: str) -> List[Dict[str, Any]]:
     """
     Extract tool information from trace file.
-    
+
     Args:
         trace_file_path: Path to the trace file containing tool spans
-        
+
     Returns:
         List of dictionaries containing tool information including:
         - name: Tool name
@@ -170,106 +170,124 @@ def get_tools_info(trace_file_path: str) -> List[Dict[str, Any]]:
     """
     traces = read_trace_file(trace_file_path)
     tools_info = []
-    
+
     # Method 1: Look for "tools/list" spans with complete tool definitions
-    tools_list_spans = [span for span in traces if span.get("name", "") == "MCPAgentClientSession.send_request" and 
-                       span.get("attributes", {}).get("mcp.method.name") == "tools/list"]
-    
+    tools_list_spans = [
+        span
+        for span in traces
+        if span.get("name", "") == "MCPAgentClientSession.send_request"
+        and span.get("attributes", {}).get("mcp.method.name") == "tools/list"
+    ]
+
     for span in tools_list_spans:
-        attributes = span.get('attributes', {})
-        
+        attributes = span.get("attributes", {})
+
         # Extract tools from result.tools.X.* attributes
         tool_indices = set()
         for key in attributes.keys():
-            if key.startswith('result.tools.') and '.' in key[13:]:
+            if key.startswith("result.tools.") and "." in key[13:]:
                 # Extract tool index (e.g., "result.tools.0.name" -> "0")
-                parts = key.split('.')
+                parts = key.split(".")
                 if len(parts) >= 3:
                     tool_indices.add(parts[2])
-        
+
         for tool_idx in tool_indices:
-            tool_name = attributes.get(f'result.tools.{tool_idx}.name')
-            tool_description = attributes.get(f'result.tools.{tool_idx}.description')
-            
+            tool_name = attributes.get(f"result.tools.{tool_idx}.name")
+            tool_description = attributes.get(f"result.tools.{tool_idx}.description")
+
             if tool_name and tool_description:
                 # Build input schema from individual properties
                 input_schema = {}
-                schema_base = f'result.tools.{tool_idx}.inputSchema'
-                
+                schema_base = f"result.tools.{tool_idx}.inputSchema"
+
                 # Look for schema properties
                 for key, value in attributes.items():
-                    if key.startswith(schema_base + '.'):
-                        schema_path = key[len(schema_base) + 1:]
-                        
+                    if key.startswith(schema_base + "."):
+                        schema_path = key[len(schema_base) + 1 :]
+
                         # Parse nested schema structure
                         current = input_schema
-                        path_parts = schema_path.split('.')
-                        
+                        path_parts = schema_path.split(".")
+
                         for i, part in enumerate(path_parts[:-1]):
                             if part not in current:
                                 current[part] = {}
                             current = current[part]
-                        
+
                         # Set the final value
                         final_key = path_parts[-1]
                         current[final_key] = value
-                
+
                 tool_info = {
-                    'name': tool_name,
-                    'description': tool_description,
-                    'input_schema': input_schema if input_schema else None
+                    "name": tool_name,
+                    "description": tool_description,
+                    "input_schema": input_schema if input_schema else None,
                 }
                 tools_info.append(tool_info)
-    
+
     # Method 2: Look for Agent.*.list_tools spans with JSON schema
     if not tools_info:
-        list_tools_spans = [span for span in traces if ".list_tools" in span.get("name", "")]
-        
+        list_tools_spans = [
+            span for span in traces if ".list_tools" in span.get("name", "")
+        ]
+
         for span in list_tools_spans:
-            attributes = span.get('attributes', {})
-            
+            attributes = span.get("attributes", {})
+
             # Extract tool information from attributes
             for key, value in attributes.items():
-                if key.startswith('tool.') and key.endswith('.description'):
+                if key.startswith("tool.") and key.endswith(".description"):
                     # Extract tool name from key (e.g., "tool.fetch_fetch.description" -> "fetch_fetch")
-                    tool_name = key[5:-12]  # Remove "tool." prefix and ".description" suffix
-                    
+                    tool_name = key[
+                        5:-12
+                    ]  # Remove "tool." prefix and ".description" suffix
+
                     # Look for corresponding input schema
                     schema_key = f"tool.{tool_name}.inputSchema"
                     input_schema = attributes.get(schema_key, None)
-                    
+
                     # Parse input schema JSON if it exists
                     parsed_schema = None
                     if input_schema:
                         try:
                             parsed_schema = json.loads(input_schema)
                         except json.JSONDecodeError:
-                            parsed_schema = input_schema  # Keep as string if not valid JSON
-                    
+                            parsed_schema = (
+                                input_schema  # Keep as string if not valid JSON
+                            )
+
                     tool_info = {
-                        'name': tool_name,
-                        'description': value,
-                        'input_schema': parsed_schema
+                        "name": tool_name,
+                        "description": value,
+                        "input_schema": parsed_schema,
                     }
                     tools_info.append(tool_info)
-    
+
     # Method 3: Look for MCPAggregator.load_server spans with basic tool info
     if not tools_info:
-        load_server_spans = [span for span in traces if span.get("name", "") == "MCPAggregator.load_server"]
-        
+        load_server_spans = [
+            span
+            for span in traces
+            if span.get("name", "") == "MCPAggregator.load_server"
+        ]
+
         for span in load_server_spans:
-            attributes = span.get('attributes', {})
-            
+            attributes = span.get("attributes", {})
+
             # Extract tool information from attributes
             for key, value in attributes.items():
-                if key.startswith('tool.') and not key.endswith('.description') and not key.endswith('.inputSchema'):
+                if (
+                    key.startswith("tool.")
+                    and not key.endswith(".description")
+                    and not key.endswith(".inputSchema")
+                ):
                     # Extract tool name from key (e.g., "tool.fetch" -> "fetch")
                     tool_name = key[5:]  # Remove "tool." prefix
-                    
+
                     tool_info = {
-                        'name': tool_name,
-                        'description': value,
-                        'input_schema': None  # No schema available in this format
+                        "name": tool_name,
+                        "description": value,
+                        "input_schema": None,  # No schema available in this format
                     }
                     tools_info.append(tool_info)
     

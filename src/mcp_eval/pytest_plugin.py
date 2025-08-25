@@ -7,12 +7,16 @@ allowing users to write mcp-eval tests that run natively in pytest.
 import asyncio
 import inspect
 from typing import AsyncGenerator
+from pathlib import Path
 import pytest
 
 from mcp_eval import TestSession, TestAgent
 from mcp_eval.config import get_current_config
+from mcp_eval.core import TestResult, generate_test_id
+from mcp_eval.core import _metrics_to_dict  # reuse consistent metrics shaping
 from mcp_eval.report_generation.console import generate_failure_message
-from mcp_eval.core import TestResult
+from mcp_eval.report_generation.summary import generate_combined_summary
+from rich.console import Console
 
 
 class MCPEvalPytestSession:
@@ -20,13 +24,19 @@ class MCPEvalPytestSession:
 
     def __init__(
         self,
-        server_name: str,
         test_name: str,
-        agent_config: dict | None = None,
         verbose: bool = False,
+        *,
+        agent_override=None,
+        test_file: str = "pytest",
     ):
-        self._session = TestSession(server_name, test_name, agent_config, verbose)
+        self._session = TestSession(
+            test_name=test_name,
+            verbose=verbose,
+            agent_override=agent_override,
+        )
         self._agent: TestAgent | None = None
+        self._test_file = test_file
 
     async def __aenter__(self):
         self._agent = await self._session.__aenter__()
@@ -36,20 +46,56 @@ class MCPEvalPytestSession:
         await self._session.__aexit__(exc_type, exc_val, exc_tb)
 
         # Check if all evaluations passed - if not, fail the test
+        # Always collect a structured result for terminal summary
+        evaluation_results = self._session.get_results()
+        server_names_str = ""
+        try:
+            if self._session.agent and getattr(
+                self._session.agent, "server_names", None
+            ):
+                server_names_str = ",".join(self._session.agent.server_names)
+        except Exception:
+            server_names_str = ""
+
+        test_id = generate_test_id(self._test_file, self._session.test_name)
+        collected_result = TestResult(
+            id=test_id,
+            test_name=self._session.test_name,
+            description=f"Pytest test: {self._session.test_name}",
+            server_name=server_names_str,
+            servers=(self._session.agent.server_names if self._session.agent else []),
+            agent_name=(self._session.agent.name if self._session.agent else ""),
+            parameters={},
+            passed=self._session.all_passed(),
+            evaluation_results=evaluation_results,
+            metrics=_metrics_to_dict(self._session.get_metrics()),
+            duration_ms=self._session.get_duration_ms(),
+            file=self._test_file,
+        )
+        _pytest_results.append(collected_result)
+
         if not self._session.all_passed():
             # Create a TestResult object from session results for compatibility with generate_failure_message
             evaluation_results = self._session.get_results()
             test_result = TestResult(
+                id=test_id,
                 test_name=self._session.test_name,
                 description=f"Pytest test: {self._session.test_name}",
-                server_name=self._session.server_name,
+                server_name=server_names_str,
+                servers=(
+                    self._session.agent.server_names if self._session.agent else []
+                ),
+                agent_name=(self._session.agent.name if self._session.agent else ""),
                 parameters={},
                 passed=False,
                 evaluation_results=evaluation_results,
                 metrics=None,
                 duration_ms=self._session.get_duration_ms(),
+                file=self._test_file,
             )
-            failure_message = generate_failure_message(test_result)
+            failure_message = test_result.error or generate_failure_message(
+                test_result.evaluation_results
+            )
             pytest.fail(failure_message, pytrace=False)
 
     @property
@@ -70,19 +116,33 @@ async def mcp_session(request) -> AsyncGenerator[MCPEvalPytestSession, None]:
             response = await mcp_session.agent.generate_str("Hello")
             mcp_session.session.evaluate_now(ResponseContains("hello"), response, "greeting")
     """
-    # Get test configuration
-    config = get_current_config()
-    server_name = config.get("default_server", "default")
-    agent_config = config.get("agent_config", {})
+    # Touch configuration (ensures settings are loaded)
+    _ = get_current_config()
 
     test_name = request.node.name
+
+    # Get the test file name
+    test_file = (
+        Path(request.node.fspath).name if hasattr(request.node, "fspath") else "pytest"
+    )
 
     # Check if pytest is running in verbose mode
     verbose = request.config.getoption("verbose") > 0
 
     # Create and yield session
+    # Allow per-test markers for agents and servers
+    agent_marker = request.node.get_closest_marker("mcp_agent")
+    _servers_marker = request.node.get_closest_marker("mcp_servers")
+
+    # Build session – allow agent override from marker
+    agent_override = (
+        agent_marker.args[0] if agent_marker and agent_marker.args else None
+    )
     pytest_session_wrapper = MCPEvalPytestSession(
-        server_name, test_name, agent_config, verbose
+        test_name=test_name,
+        verbose=verbose,
+        agent_override=agent_override,
+        test_file=test_file,
     )
     async with pytest_session_wrapper:
         yield pytest_session_wrapper
@@ -105,6 +165,10 @@ async def mcp_agent(mcp_session: MCPEvalPytestSession) -> TestAgent | None:
 def pytest_configure(config):
     """Configure pytest to work with mcp-eval."""
     config.addinivalue_line("markers", "mcp-eval: mark test as an mcp-eval test")
+    config.addinivalue_line(
+        "markers", "mcp_agent(name_or_object): override agent for this test"
+    )
+    # No per-test servers override; define servers on the agent instead
 
     # Suppress Pydantic serialization warnings from MCP library
     # These warnings are due to MCP's internal union type handling and are not user-actionable
@@ -119,6 +183,15 @@ def pytest_configure(config):
 
     # Track if we need to cleanup OTEL at the end
     config._mcp_eval_needs_otel_cleanup = False
+
+    # Optionally suppress pytest's short test summary if requested
+    # Users can enable via: pytest --mcp-eval-summary-only
+    if getattr(config.option, "mcp_eval_summary_only", False):
+        # Disable extra summary sections (equivalent to -r with no chars)
+        try:
+            config.option.reportchars = ""
+        except Exception:
+            pass
 
 
 def pytest_collection_modifyitems(config, items):
@@ -170,3 +243,36 @@ def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
+
+
+# Accumulate results for a richer terminal summary
+_pytest_results: list[TestResult] = []
+
+
+def pytest_terminal_summary(terminalreporter):
+    """Render a combined MCP‑Eval summary at the end of the pytest run."""
+    if not _pytest_results:
+        return
+    try:
+        console = Console(force_terminal=True)
+        # Verbose if -v was used
+        verbose = terminalreporter.config.getoption("verbose") > 0
+        generate_combined_summary(
+            test_results=_pytest_results,
+            dataset_reports=[],
+            console=console,
+            verbose=verbose,
+        )
+    except Exception:
+        # Best-effort; don't break pytest summary
+        pass
+
+
+def pytest_addoption(parser):
+    """Add CLI options for mcp-eval pytest integration."""
+    group = parser.getgroup("mcp-eval")
+    group.addoption(
+        "--mcp-eval-summary-only",
+        action="store_true",
+        help="Show only the MCP-Eval combined summary and suppress pytest's short test summary info.",
+    )

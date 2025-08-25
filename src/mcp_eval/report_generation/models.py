@@ -3,8 +3,8 @@
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
-from ..metrics import TestMetrics
-from ..evaluators import EvaluationRecord
+from mcp_eval.metrics import TestMetrics
+from mcp_eval.evaluators import EvaluationRecord
 
 
 @dataclass
@@ -21,6 +21,8 @@ class CaseResult:
     passed: bool
     duration_ms: float
     error: Optional[str] = None
+    agent_name: Optional[str] = None
+    servers: Optional[List[str]] = None
 
 
 @dataclass
@@ -31,6 +33,7 @@ class EvaluationReport:
     task_name: str
     results: List[CaseResult]
     metadata: Optional[Dict[str, Any]] = None
+    agent_name: Optional[str] = None
 
     @property
     def total_cases(self) -> int:

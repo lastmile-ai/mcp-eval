@@ -3,55 +3,39 @@
 import os
 import json
 import time
+import asyncio
 import tempfile
 import shutil
+import logging
+import inspect
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Union
+from typing import Any, Callable, List, Literal, Dict, Optional, Union
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
-from mcp_agent.config import (
+from mcp_agent.agents.agent_spec import AgentSpec
+from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM, MessageTypes
+from mcp_agent.workflows.factory import agent_from_spec as _agent_from_spec_factory
+
+from mcp_eval.config import (
     get_settings,
-    MCPServerSettings,
-    MCPSettings,
+    ProgrammaticDefaults,
+    MCPEvalSettings,
+    get_current_config,
 )
-from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM
-from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
-from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
+from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan, ToolCoverage
+from mcp_eval.otel.span_tree import SpanTree, SpanNode
+from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
+from mcp_eval.evaluators import EvaluatorResult, EvaluationRecord
+from mcp_eval.utils import get_test_artifact_paths
 
-from .metrics import TestMetrics, process_spans, TraceSpan
-from .otel.span_tree import SpanTree, SpanNode
-from .evaluators.base import Evaluator, EvaluatorContext
-from .evaluators import EvaluatorResult, EvaluationRecord
-
-import logging
-from dotenv import load_dotenv
-
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 
-# LLM Factory Registry
-LLM_FACTORIES = {
-    "AnthropicAugmentedLLM": AnthropicAugmentedLLM,
-    "OpenAIAugmentedLLM": OpenAIAugmentedLLM,
-}
-
-
-def resolve_llm_factory(factory_name: Union[str, type]) -> type:
-    """Resolve LLM factory name to actual class."""
-    if isinstance(factory_name, str):
-        if factory_name not in LLM_FACTORIES:
-            raise ValueError(
-                f"Unknown LLM factory: {factory_name}. "
-                f"Available: {list(LLM_FACTORIES.keys())}"
-            )
-        return LLM_FACTORIES[factory_name]
-    return factory_name
+# Legacy LLM factory resolution removed. Use provider/model via mcp-agent factory.
 
 
 class TestAgent:
@@ -67,11 +51,11 @@ class TestAgent:
         self._session = session
         self._llm: Optional[AugmentedLLM] = None
 
-    async def attach_llm(self, llm_factory: Union[str, type]) -> AugmentedLLM:
-        """Attach LLM to the underlying agent."""
-        llm_factory_class = resolve_llm_factory(llm_factory)
-        self._llm = await self._agent.attach_llm(llm_factory_class)
-        return self._llm
+    # Explicit attach_llm by factory/class is removed. LLMs are attached by session configuration.
+    async def attach_llm(self, *args, **kwargs) -> AugmentedLLM:  # type: ignore[override]
+        raise NotImplementedError(
+            "attach_llm is no longer supported on TestAgent. Configure settings.provider/model instead."
+        )
 
     async def generate_str(self, prompt: str, **kwargs) -> str:
         """Generate string response - delegates to underlying agent LLM."""
@@ -92,6 +76,11 @@ class TestAgent:
         await self._session._ensure_traces_flushed()
         return response
 
+    def set_llm(self, llm: AugmentedLLM) -> AugmentedLLM:
+        """Set an already-constructed AugmentedLLM on this agent."""
+        self._llm = llm
+        return llm
+
     # Evaluation methods that use session context
     def evaluate_now(self, evaluator: Evaluator, response: str, name: str):
         """Immediately evaluate with current session context."""
@@ -104,6 +93,21 @@ class TestAgent:
     def add_deferred_evaluator(self, evaluator: Evaluator, name: str):
         """Add evaluator to run at session end."""
         self._session.add_deferred_evaluator(evaluator, name)
+
+    async def assert_that(
+        self,
+        evaluator: Evaluator,
+        name: Optional[str] = None,
+        response: Optional[str] = None,
+        **kwargs,
+    ) -> None:
+        """Unified async assertion API delegated to the session."""
+        await self._session.assert_that(
+            evaluator,
+            name=name,
+            response=response,
+            **kwargs,
+        )
 
     # Convenience properties
     @property
@@ -130,15 +134,16 @@ class TestSession:
 
     def __init__(
         self,
-        server_name: str,
         test_name: str,
-        agent_config: Optional[Dict[str, Any]] = None,
         verbose: bool = False,
+        *,
+        agent_override: Optional[
+            Union[Agent, AugmentedLLM, AgentSpec, str, Callable]
+        ] = None,
     ):
-        self.server_name = server_name
         self.test_name = test_name
-        self.agent_config = agent_config or {}
         self.verbose = verbose
+        self._agent_override = agent_override
 
         # Core objects
         self.app: Optional[MCPApp] = None
@@ -157,79 +162,235 @@ class TestSession:
         self._metrics: Optional[TestMetrics] = None
         self._span_tree: Optional[SpanTree] = None
         self._results: List[EvaluationRecord] = []
+        self._available_tools_by_server: Dict[str, List[str]] = {}
 
     async def __aenter__(self) -> TestAgent:
         """Initialize the test session with OTEL tracing as source of truth."""
+        import warnings
+
         # Clear any cached metrics for fresh session
         self._metrics = None
         self._span_tree = None
 
         # Configure OpenTelemetry tracing (single source of truth)
-        settings = get_settings()
+        # IMPORTANT: clone settings to avoid cross-test mutation when running in parallel
+        _global_settings = get_settings()
+        settings = MCPEvalSettings(**_global_settings.model_dump())
         settings.otel.enabled = True
         settings.otel.exporters = ["file"]
         settings.otel.path = self.trace_file
         settings.logger.transports = ["console"] if self.verbose else ["none"]
 
-        # Ensure LLM provider settings exist based on the llm_factory
-        llm_factory = self.agent_config.get("llm_factory")
-        if llm_factory:
-            if llm_factory == "AnthropicAugmentedLLM" and settings.anthropic is None:
-                from mcp_agent.config import AnthropicSettings
-
-                settings.anthropic = AnthropicSettings()
-                # API key will be picked up from environment variable ANTHROPIC_API_KEY
-            elif llm_factory == "OpenAIAugmentedLLM" and settings.openai is None:
-                from mcp_agent.config import OpenAISettings
-
-                settings.openai = OpenAISettings()
-                # API key will be picked up from environment variable OPENAI_API_KEY
-
-        # Load mcp-eval config to get server definitions
-        from .config import get_current_config
-
-        mcp_eval_config = get_current_config()
-
-        # Configure servers from mcp-eval config
-        if "servers" in mcp_eval_config and mcp_eval_config["servers"]:
-            # Ensure mcp settings exist
-            if settings.mcp is None:
-                settings.mcp = MCPSettings(servers={})
-
-            # Register each server from mcp-eval config
-            for server_name, server_config in mcp_eval_config["servers"].items():
-                # Convert mcp-eval server config to MCPServerSettings
-                mcp_server_settings = MCPServerSettings(
-                    name=server_name,
-                    command=server_config.get("command"),
-                    args=server_config.get("args", []),
-                    env=server_config.get("env", {}),
-                    transport=server_config.get("transport", "stdio"),
-                )
-                settings.mcp.servers[server_name] = mcp_server_settings
+        # No legacy server merging: servers should be defined in mcp-agent config
 
         # Initialize MCP app (sets up OTEL instrumentation automatically)
-        self.app = MCPApp(settings=settings)
-        await self.app.initialize()
+        # Suppress warnings about global context/settings that may occur when
+        # Agent instances are created at module import time
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="get_settings.*returned the global Settings singleton"
+            )
+            warnings.filterwarnings(
+                "ignore", message="get_current_context.*created a global Context"
+            )
+            self.app = MCPApp(settings=settings)
+            await self.app.initialize()
 
-        # Create agent with configuration
-        self.agent = Agent(
-            name=self.agent_config.get("name", f"test_agent_{self.test_name}"),
-            instruction=self.agent_config.get(
-                "instruction", "Complete the task as requested."
-            ),
-            server_names=[self.server_name],
-            context=self.app.context,
-        )
+        # Construct agent by precedence:
+        # 1) Per-call agent_override (Agent | AugmentedLLM | AgentSpec | name)
+        # 2) Global default_agent_spec or default_agent_spec_name
+        # 3) Minimal default AgentSpec with default_servers
+        eval_settings = get_settings()
+        # Prefer provider/model from AgentSpec if present; fallback to settings
+        spec_provider: Optional[str] = None
+        spec_model: Optional[str] = None
+        pre_attached_llm: Optional[AugmentedLLM] = None
+
+        async def _agent_from_spec(spec: AgentSpec) -> Agent:
+            return _agent_from_spec_factory(spec, context=self.app.context)
+
+        # Global programmatic agent or LLM
+        def _effective_servers(existing: List[str] | None) -> List[str]:
+            if existing:
+                return existing
+            # Defaults from config
+            default_servers = getattr(eval_settings, "default_servers", None)
+            if default_servers:
+                return list(default_servers)
+            # No defaults
+            return []
+
+        # 1) Per-call override
+        if self._agent_override is not None:
+            override = self._agent_override
+
+            # If override is a callable (factory), call it now that context exists
+            if callable(override):
+                candidate = override()
+                # Support both sync and async factories
+                if inspect.isawaitable(candidate):
+                    override = await candidate
+                else:
+                    override = candidate
+
+            if isinstance(override, AugmentedLLM):
+                if override.agent is None:
+                    override.agent = Agent(
+                        name=f"test_agent_{self.test_name}",
+                        instruction="Complete the task as requested.",
+                        server_names=_effective_servers(None),
+                        context=self.app.context,
+                    )
+                self.agent = override.agent
+                if getattr(override, "context", None) is None:
+                    override.context = self.app.context
+                await self.agent.attach_llm(llm=override)
+                pre_attached_llm = override
+            elif isinstance(override, Agent):
+                if not override.server_names:
+                    override.server_names = _effective_servers(None)
+                # Set the context from our properly configured app if:
+                # - No context was set (None)
+                # - Or the context has different settings (e.g., default mcp-agent settings)
+                # This preserves explicitly set contexts with matching settings
+                if (
+                    override.context is None
+                    or getattr(override.context, "config", None) != settings
+                ):
+                    override.context = self.app.context
+                self.agent = override
+            elif isinstance(override, AgentSpec):
+                # Capture per-spec provider/model if present
+                spec_provider = getattr(override, "provider", None)
+                spec_model = getattr(override, "model", None)
+                # Build spec kwargs, only including attributes that exist
+                spec_kwargs = {
+                    "name": override.name,
+                    "instruction": override.instruction,
+                    "server_names": _effective_servers(override.server_names),
+                    "connection_persistence": override.connection_persistence,
+                }
+                # Add optional attributes if they exist
+                if hasattr(override, "functions"):
+                    spec_kwargs["functions"] = override.functions
+                if hasattr(override, "human_input_callback"):
+                    spec_kwargs["human_input_callback"] = override.human_input_callback
+                if spec_provider:
+                    spec_kwargs["provider"] = spec_provider
+                if spec_model:
+                    spec_kwargs["model"] = spec_model
+
+                self.agent = await _agent_from_spec(AgentSpec(**spec_kwargs))
+            elif isinstance(override, str):
+                loaded_specs = getattr(self.app.context, "loaded_subagents", []) or []
+                matched = next(
+                    (s for s in loaded_specs if getattr(s, "name", None) == override),
+                    None,
+                )
+                if matched is None:
+                    raise ValueError(
+                        f"AgentSpec named '{override}' not found in loaded subagents."
+                    )
+                # Normalize servers
+                matched.server_names = _effective_servers(matched.server_names)
+                # Capture provider/model extras if provided in spec
+                spec_provider = getattr(matched, "provider", None)
+                spec_model = getattr(matched, "model", None)
+                self.agent = await _agent_from_spec(matched)
+            elif isinstance(override, dict):
+                raise TypeError("Dict overrides removed. Pass AgentSpec or name.")
+            else:
+                raise TypeError("Unsupported agent_override type")
+        else:
+            # 2) Global default Programmatic (Agent | AugmentedLLM) or schema default (AgentSpec | name)
+            # Context-local programmatic default allows parallel tests in separate tasks
+            factory = ProgrammaticDefaults.get_default_agent_factory()
+            programmatic_default = (
+                factory()
+                if factory is not None
+                else ProgrammaticDefaults.get_default_agent()
+            )
+            default_agent = programmatic_default or getattr(
+                eval_settings, "default_agent", None
+            )
+            if isinstance(default_agent, AugmentedLLM):
+                if default_agent.agent is None:
+                    default_agent.agent = Agent(
+                        name=f"test_agent_{self.test_name}",
+                        instruction="Complete the task as requested.",
+                        server_names=_effective_servers(None),
+                        context=self.app.context,
+                    )
+                self.agent = default_agent.agent
+                if getattr(default_agent, "context", None) is None:
+                    default_agent.context = self.app.context
+                await self.agent.attach_llm(llm=default_agent)
+                pre_attached_llm = default_agent
+            elif isinstance(default_agent, Agent):
+                if not default_agent.server_names:
+                    default_agent.server_names = _effective_servers(None)
+                if default_agent.context is None:
+                    default_agent.context = self.app.context
+                self.agent = default_agent
+            elif isinstance(default_agent, AgentSpec):
+                # Extract provider/model if specified in the AgentSpec
+                spec_provider = (
+                    getattr(default_agent, "provider", None) or spec_provider
+                )
+                spec_model = getattr(default_agent, "model", None) or spec_model
+                self.agent = await _agent_from_spec(default_agent)
+            elif isinstance(default_agent, str):
+                loaded_specs = getattr(self.app.context, "loaded_subagents", []) or []
+                matched = next(
+                    (
+                        s
+                        for s in loaded_specs
+                        if getattr(s, "name", None) == default_agent
+                    ),
+                    None,
+                )
+                if matched is None:
+                    raise ValueError(
+                        f"AgentSpec named '{default_agent}' not found in loaded subagents."
+                    )
+                self.agent = await _agent_from_spec(matched)
+            else:
+                # 3) Minimal fallback
+                from mcp_agent.agents.agent_spec import AgentSpec as AS
+
+                spec = AS(
+                    name=f"test_agent_{self.test_name}",
+                    instruction="Complete the task as requested.",
+                    server_names=_effective_servers(None),
+                )
+                self.agent = await _agent_from_spec(spec)
+
         await self.agent.initialize()
+
+        # Fetch available tools from configured servers for coverage tracking
+        await self._fetch_available_tools()
 
         # Create clean test agent wrapper
         self.test_agent = TestAgent(self.agent, self)
 
-        # Configure LLM if specified (do this after creating TestAgent)
-        llm_factory = self.agent_config.get("llm_factory")
-        if llm_factory:
-            await self.test_agent.attach_llm(llm_factory)
+        # If an AugmentedLLM was supplied programmatically, use it
+        if pre_attached_llm is not None:
+            self.test_agent.set_llm(pre_attached_llm)
+
+        # Configure LLM via provider/model, preferring AgentSpec-level if present
+        provider = spec_provider or getattr(settings, "provider", None)
+        model = spec_model or getattr(settings, "model", None)
+        if provider and pre_attached_llm is None:
+            from mcp_agent.workflows.factory import _llm_factory
+
+            llm_factory = _llm_factory(
+                provider=provider, model=model, context=self.app.context
+            )
+            # Build the AugmentedLLM bound to this agent
+            augmented_llm = llm_factory(self.agent)
+            self.test_agent.set_llm(augmented_llm)
+            # Attach to the underlying agent once
+            await self.agent.attach_llm(llm=augmented_llm)
 
         return self.test_agent
 
@@ -254,9 +415,70 @@ class TestSession:
             if self.app:
                 await self.app.cleanup()
 
+            # Give subprocess transports time to close properly
+            await asyncio.sleep(0.1)
+
         except Exception as e:
             logger.warning(f"Error during session cleanup: {e}")
             # Continue with cleanup even if there's an error
+
+    async def _fetch_available_tools(self):
+        """Fetch list of available tools from configured servers."""
+        if not self.agent:
+            return
+
+        try:
+            # Get list of configured servers
+            servers = (
+                self.agent.server_names if hasattr(self.agent, "server_names") else []
+            )
+
+            for server_name in servers:
+                try:
+                    # Use the agent's list_tools method to get tools for this specific server
+                    tools_result = await self.agent.list_tools(server_name=server_name)
+                    if tools_result and hasattr(tools_result, "tools"):
+                        # Extract tool names (remove server prefix if present)
+                        tool_names = []
+                        for tool in tools_result.tools:
+                            tool_name = tool.name
+                            # Remove server prefix if it exists (format: server_toolname)
+                            if tool_name.startswith(f"{server_name}_"):
+                                tool_name = tool_name[len(server_name) + 1 :]
+                            tool_names.append(tool_name)
+                        self._available_tools_by_server[server_name] = tool_names
+                        logger.info(
+                            f"Found {len(tool_names)} tools for server {server_name}"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to fetch tools for server {server_name}: {e}"
+                    )
+                    self._available_tools_by_server[server_name] = []
+        except Exception as e:
+            logger.warning(f"Failed to fetch available tools: {e}")
+
+    def _calculate_tool_coverage(self, metrics: TestMetrics):
+        """Calculate tool coverage metrics per server."""
+        # Group used tools by server
+        tools_used_by_server: Dict[str, set] = {}
+
+        for tool_call in metrics.tool_calls:
+            if tool_call.server_name:
+                server = tool_call.server_name
+                if server not in tools_used_by_server:
+                    tools_used_by_server[server] = set()
+                tools_used_by_server[server].add(tool_call.name)
+
+        # Create coverage metrics for each server
+        for server_name, available_tools in self._available_tools_by_server.items():
+            used_tools = list(tools_used_by_server.get(server_name, set()))
+            coverage = ToolCoverage(
+                server_name=server_name,
+                available_tools=available_tools,
+                used_tools=used_tools,
+            )
+            metrics.tool_coverage[server_name] = coverage
 
     def add_deferred_evaluator(self, evaluator: Evaluator, name: str):
         """Add evaluator to run at session end with full metrics context."""
@@ -296,7 +518,11 @@ class TestSession:
             raise
 
     async def evaluate_now_async(
-        self, evaluator: Evaluator, response: str, name: str, input: str | None = None
+        self,
+        evaluator: Evaluator,
+        response: str,
+        name: str,
+        inputs: MessageTypes | None = None,
     ):
         """Evaluate immediately with async evaluator.
 
@@ -304,11 +530,11 @@ class TestSession:
             evaluator (Evaluator): The evaluator to use for assessment.
             response (str): The response generated by the agent.
             name (str): Name identifier for this evaluation.
-            input (str | None, optional): input prompt that was given to the agent. Defaults to None.
+            inputs (MessageTypes | None): the original prompt/messages given to the agent.
         """
         try:
             ctx = EvaluatorContext(
-                inputs=input if input is not None else "",
+                inputs=inputs if inputs is not None else "",
                 output=response,
                 expected_output=None,
                 metadata={},
@@ -330,6 +556,67 @@ class TestSession:
             self._record_evaluation_result(name, error_result, str(e))
             raise
 
+    async def assert_that(
+        self,
+        evaluator: Evaluator,
+        name: Optional[str] = None,
+        response: Optional[str] = None,
+        *,
+        inputs: MessageTypes | None = None,
+        when: Literal["auto", "now", "end"] = "auto",
+    ) -> None:
+        """Unified API to record an assertion without worrying about timing.
+
+        Behavior:
+        - If response is provided:
+            - Sync evaluators run immediately and record results.
+            - Async evaluators are scheduled immediately and recorded automatically
+              without requiring explicit await; completion is awaited at session end.
+        - If response is not provided:
+            - The evaluator is deferred and will run at session end with full metrics.
+
+        Args:
+            evaluator: Evaluator instance
+            name: Optional name for the evaluation (defaults to class name)
+            response: Optional response/output to evaluate against
+            input: Optional input/prompt that produced the response
+            when: "auto" (default), "now", or "end" to override scheduling
+        """
+        eval_name = name or evaluator.__class__.__name__
+
+        # Simplified logic: defer if any of these conditions are true
+        should_defer = (
+            when == "end"  # Explicitly requested deferral
+            or (
+                when != "now"
+                and (
+                    response is None  # No response provided, need full trace
+                    or bool(evaluator.requires_final_metrics)  # Needs final metrics
+                )
+            )
+        )
+
+        if should_defer:
+            # Defer evaluation to session end
+            context = (
+                {"inputs": inputs, "output": response}
+                if (inputs is not None or response is not None)
+                else None
+            )
+            self._evaluators.append((evaluator, context, eval_name))
+            return
+
+        # At this point we should evaluate "now" (immediate)
+        if hasattr(evaluator, "evaluate_sync"):
+            # Synchronous immediate evaluation
+            self.evaluate_now(evaluator, response or "", eval_name)
+            return
+
+        # Async evaluator: run immediately and await
+        await self.evaluate_now_async(
+            evaluator, response or "", eval_name, inputs=inputs
+        )
+
     async def _process_deferred_evaluators(self):
         """Process all deferred evaluators using final OTEL metrics."""
         metrics = self.get_metrics()  # Final metrics from OTEL traces
@@ -342,6 +629,15 @@ class TestSession:
                     ctx = EvaluatorContext(
                         inputs="",
                         output=context_or_response,
+                        expected_output=None,
+                        metadata={},
+                        metrics=metrics,
+                        span_tree=span_tree,
+                    )
+                elif isinstance(context_or_response, dict):
+                    ctx = EvaluatorContext(
+                        inputs=context_or_response.get("inputs", ""),
+                        output=context_or_response.get("output", ""),
                         expected_output=None,
                         metadata={},
                         metrics=metrics,
@@ -451,6 +747,10 @@ class TestSession:
 
         # Process spans into metrics (OTEL is the source of truth)
         metrics = process_spans(spans)
+
+        # Calculate tool coverage per server
+        self._calculate_tool_coverage(metrics)
+
         self._metrics = metrics
 
         # Build span tree for advanced analysis
@@ -495,9 +795,6 @@ class TestSession:
 
     async def _save_test_artifacts(self):
         """Save test artifacts (traces, reports) based on configuration."""
-        from .config import get_current_config
-        import re
-
         config = get_current_config()
         reporting_config = config.get("reporting", {})
 
@@ -511,9 +808,9 @@ class TestSession:
         logger.info(f"Current working directory: {os.getcwd()}")
         logger.info(f"Absolute output path: {output_dir.resolve()}")
 
-        # Sanitize test name for filesystem
-        safe_test_name = re.sub(r'[<>:"/\\|?*\[\]]', "_", self.test_name)
-        logger.info(f"Sanitized test name: {safe_test_name}")
+        # Get standardized artifact paths
+        trace_dest, results_dest = get_test_artifact_paths(self.test_name, output_dir)
+        logger.info(f"Artifact paths: trace={trace_dest}, results={results_dest}")
 
         try:
             # Create output directory if it doesn't exist
@@ -521,7 +818,6 @@ class TestSession:
 
             # Save trace file if it exists
             if os.path.exists(self.trace_file):
-                trace_dest = output_dir / f"{safe_test_name}_trace.jsonl"
                 shutil.copy2(self.trace_file, trace_dest)
                 logger.info(f"Saved trace file to {trace_dest}")
             else:
@@ -529,11 +825,12 @@ class TestSession:
                     f"Trace file not found at {self.trace_file} for test {self.test_name}"
                 )
 
-            # Also save test results/metrics as JSON
-            results_dest = output_dir / f"{safe_test_name}.json"
+            # Save test results/metrics as JSON
             test_data = {
                 "test_name": self.test_name,
-                "server_name": self.server_name,
+                "server_name": ",".join(self.agent.server_names)
+                if self.agent and getattr(self.agent, "server_names", None)
+                else "",
                 "timestamp": self._start_time,
                 "duration_ms": self.get_duration_ms(),
                 "results": self.get_results(),
@@ -556,7 +853,7 @@ class TestSession:
                         for tc in test_data["metrics"]["tool_calls"]
                     ]
 
-            with open(results_dest, "w") as f:
+            with open(results_dest, "w", encoding="utf-8") as f:
                 json.dump(test_data, f, indent=2, default=str)
             logger.info(f"Saved test results to {results_dest}")
 
@@ -566,10 +863,19 @@ class TestSession:
 
 @asynccontextmanager
 async def test_session(
-    server_name: str, test_name: str, agent_config: Optional[Dict[str, Any]] = None
+    test_name: str,
+    agent: Optional[Union[Agent, AugmentedLLM, AgentSpec, str]] = None,
 ):
-    """Context manager for creating test sessions."""
-    session = TestSession(server_name, test_name, agent_config)
+    """Context manager for creating test sessions.
+
+    Supports programmatic initialization of `Agent` and `AugmentedLLM`, as well as
+    declarative initialization from `AgentSpec` or a named AgentSpec discovered by
+    the mcp-agent app from configured search paths.
+    """
+    session = TestSession(
+        test_name=test_name,
+        agent_override=agent,
+    )
     try:
         agent = await session.__aenter__()
         yield agent

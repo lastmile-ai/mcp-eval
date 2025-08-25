@@ -1,17 +1,18 @@
-name: "MCP Fetch Server Test Suite"
-description: "Comprehensive evaluation of the MCP fetch server capabilities"
+$schema: ../schema/mcpeval.config.schema.json
+eval_name: "MCP Fetch Server Test Suite"
+eval_description: "Comprehensive evaluation of the MCP fetch server capabilities"
 
-# MCP Fetch Server Configuration
-servers:
-  fetch:
-    command: "uvx"
-    args: ["mcp-server-fetch"]
-    env: {
-      "UV_NO_PROGRESS": "1"
-    }
-  sample_server:
-    command: "uv"
-    args: ["run", "sample_server.py"]
-    env: {
-      "UV_NO_PROGRESS": "1"
-    }
+mcp:
+  servers:
+    fetch:
+      command: "uvx"
+      args: ["mcp-server-fetch"]
+      env: {
+        "UV_NO_PROGRESS": "1"
+      }
+    sample_server:
+      command: "uv"
+      args: ["run", "sample_server.py"]
+      env: {
+        "UV_NO_PROGRESS": "1"
+      }

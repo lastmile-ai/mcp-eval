@@ -3,25 +3,25 @@
 from typing import Any, Dict, Optional
 
 # Import shared components
-from .shared import EvaluatorResult, EvaluationRecord
+from mcp_eval.evaluators.shared import EvaluatorResult, EvaluationRecord
 
 # Import all evaluators from separate files
-from .tool_was_called import ToolWasCalled
-from .tool_sequence import ToolSequence
-from .response_contains import ResponseContains
-from .max_iterations import MaxIterations
-from .tool_success_rate import ToolSuccessRate
-from .llm_judge import LLMJudge, JudgeResult
-from .is_instance import IsInstance
-from .equals_expected import EqualsExpected
-from .response_time_check import ResponseTimeCheck
-from .exact_tool_count import ExactToolCount
-from .tool_failed import ToolFailed
-from .tool_called_with import ToolCalledWith
-from .not_contains import NotContains
-from .tool_output_matches import ToolOutputMatches
-from .path_efficiency import PathEfficiency
-from .multi_criteria_judge import (
+from mcp_eval.evaluators.tool_was_called import ToolWasCalled
+from mcp_eval.evaluators.tool_sequence import ToolSequence
+from mcp_eval.evaluators.response_contains import ResponseContains
+from mcp_eval.evaluators.max_iterations import MaxIterations
+from mcp_eval.evaluators.tool_success_rate import ToolSuccessRate
+from mcp_eval.evaluators.llm_judge import LLMJudge, JudgeResult
+from mcp_eval.evaluators.is_instance import IsInstance
+from mcp_eval.evaluators.equals_expected import EqualsExpected
+from mcp_eval.evaluators.response_time_check import ResponseTimeCheck
+from mcp_eval.evaluators.exact_tool_count import ExactToolCount
+from mcp_eval.evaluators.tool_failed import ToolFailed
+from mcp_eval.evaluators.tool_called_with import ToolCalledWith
+from mcp_eval.evaluators.not_contains import NotContains
+from mcp_eval.evaluators.tool_output_matches import ToolOutputMatches
+from mcp_eval.evaluators.path_efficiency import PathEfficiency
+from mcp_eval.evaluators.multi_criteria_judge import (
     MultiCriteriaJudge,
     CriterionResult,
     EvaluationCriterion,
@@ -30,7 +30,7 @@ from .multi_criteria_judge import (
     SQL_QUERY_CRITERIA,
 )
 
-from .base import Evaluator
+from mcp_eval.evaluators.base import Evaluator
 
 # Registry for dynamic loading
 _EVALUATOR_REGISTRY = {

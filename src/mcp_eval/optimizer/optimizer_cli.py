@@ -7,9 +7,16 @@ from mcp_eval.optimizer.core_trace_process import create_trace_dataset, get_tool
 from mcp_eval.optimizer.predictors import ToolPredictor
 from mcp_eval.metrics import process_spans
 
-def optimize_with_dspy(predictor: ToolPredictor, list_of_available_tools: list, train_examples: list, test_examples: list, optimizer_type: str, optimizer_kwargs: dict) -> dict:
+def optimize_with_dspy(
+    predictor: ToolPredictor,
+    list_of_available_tools: list,
+    train_examples: list,
+    test_examples: list,
+    optimizer_type: str,
+    optimizer_kwargs: dict,
+) -> dict:
     """Use DSPy optimizers to improve tool selection"""
-    
+
     # Baseline evaluation
     print("\n=== Baseline Evaluation ===")
     print(f"Training examples: {len(train_examples)}")
@@ -21,22 +28,22 @@ def optimize_with_dspy(predictor: ToolPredictor, list_of_available_tools: list, 
         examples=train_examples,
         tools_list=list_of_available_tools
     )
-    
+
     # Final evaluation
     print("\n=== Final Evaluation ===")
     return {
-        "optimizer": optimizer_type, 
-        "train_count": len(train_examples), 
+        "optimizer": optimizer_type,
+        "train_count": len(train_examples),
         "val_count": len(test_examples),
-        "optimization_report": optimization_report
+        "optimization_report": optimization_report,
     }
 
 
 def save_results(results: dict, output_path: str) -> None:
     """Save optimization results to a file"""
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         json.dump(results, f, indent=2)
-    
+
     print(f"Results saved to {output_path}")
 
 async def process_server_optimization(server_name: str, trace_files: List[str], processed_files: List[str], args) -> dict:
@@ -82,28 +89,28 @@ async def process_server_optimization(server_name: str, trace_files: List[str], 
 async def main(args) -> None:
     """Main function to run the tool selection optimization with DSPy"""
     print(f"Loading trace dataset from {args.trace_directory}")
-    
+
     # Read directory content and find trace file pairs
     if not os.path.exists(args.trace_directory):
         raise ValueError(f"Directory {args.trace_directory} does not exist")
-    
+
     trace_files = []
     processed_files = []
-    
+
     for filename in os.listdir(args.trace_directory):
-        if filename.endswith('_trace.jsonl'):
+        if filename.endswith("_trace.jsonl"):
             # Extract base name without '_trace.jsonl'
             base_name = filename[:-12]  # Remove '_trace.jsonl'
-            
+
             trace_path = os.path.join(args.trace_directory, filename)
             processed_path = os.path.join(args.trace_directory, f"{base_name}.json")
-            
+
             if os.path.exists(processed_path):
                 trace_files.append(trace_path)
                 processed_files.append(processed_path)
             else:
                 print(f"Warning: No matching processed file found for {filename}")
-    
+
     print(f"Found {len(trace_files)} trace file pairs in {args.trace_directory}")
     
     # Handle server-specific processing
@@ -187,6 +194,7 @@ async def main(args) -> None:
             save_results(all_results, combined_path)
             print(f"Combined results saved to {combined_path}")
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tool Selection Optimizer with DSPy")
     parser.add_argument("--trace-directory", type=str,
@@ -208,21 +216,32 @@ if __name__ == "__main__":
                       help="Specific server name to optimize docstrings for")
     
     # FewShot parameters
-    parser.add_argument("--k", type=int, default=5,
-                      help="Number of examples for few-shot learning")
-    
+    parser.add_argument(
+        "--k", type=int, default=5, help="Number of examples for few-shot learning"
+    )
+
     # Bootstrap parameters
-    parser.add_argument("--num-bootstrapped", type=int, default=5,
-                      help="Number of bootstrapped example sets")
-    parser.add_argument("--max-demos", type=int, default=3,
-                      help="Maximum demonstrations per bootstrapped set")
-    
+    parser.add_argument(
+        "--num-bootstrapped",
+        type=int,
+        default=5,
+        help="Number of bootstrapped example sets",
+    )
+    parser.add_argument(
+        "--max-demos",
+        type=int,
+        default=3,
+        help="Maximum demonstrations per bootstrapped set",
+    )
+
     # MIPRO parameters
-    parser.add_argument("--num-epochs", type=int, default=3,
-                      help="Number of epochs for MIPRO")
-    parser.add_argument("--batch-size", type=int, default=8,
-                      help="Batch size for MIPRO")
-    
+    parser.add_argument(
+        "--num-epochs", type=int, default=3, help="Number of epochs for MIPRO"
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=8, help="Batch size for MIPRO"
+    )
+
     args = parser.parse_args()
     import asyncio
     asyncio.run(main(args))

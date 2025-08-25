@@ -2,10 +2,10 @@ name: "Basic Fetch Dataset"
 description: "Fundamental fetch server functionality tests"
 server_name: "fetch"
 
-agent_config:
+agent_spec:
   name: "yaml_dataset_tester"
   instruction: "You are a web content fetching agent. Handle all requests professionally."
-  llm_factory: "AnthropicAugmentedLLM"
+  # LLM provider/model are global (mcpeval.yaml); keep only agent spec fields here
   max_iterations: 5
 
 cases:

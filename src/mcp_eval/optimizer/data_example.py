@@ -6,11 +6,11 @@ from typing import Dict, Any, Optional
 
 class DataExample(dspy.Example):
     """DSPy Example class for trace dataset."""
-    
+
     def __init__(self, user_query: str, metrics: Dict[str, Any]) -> None:
         """
         Initialize a DataExample instance.
-        
+
         Args:
             user_query: The user's query/prompt
             metrics: Dictionary containing performance metrics and tool usage data
@@ -29,4 +29,3 @@ class DataExample(dspy.Example):
             score=metrics.get('score', 0.0),
             task_success_evaluation=metrics.get('task_success_evaluation', 'No evaluation performed')
         )
-

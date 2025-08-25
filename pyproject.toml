@@ -13,7 +13,7 @@ dependencies = [
     "anthropic>=0.34.0",
     "dspy>=2.6.27",
     "jinja2>=3.1.6",
-    "mcp-agent>=0.1.10",
+    "mcp-agent>=0.1.13",
     "opentelemetry-api>=1.34.1",
     "opentelemetry-exporter-otlp>=1.34.1",
     "opentelemetry-sdk>=1.34.1",
@@ -83,3 +83,6 @@ where = ["src"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true

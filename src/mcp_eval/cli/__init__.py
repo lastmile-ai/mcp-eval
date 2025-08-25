@@ -5,11 +5,12 @@ from pathlib import Path
 from rich.console import Console
 
 from mcp_eval.runner import app as runner_app
+from mcp_eval.cli.generator import run_generator
 
 app = typer.Typer(help="MCP-Eval: Comprehensive testing framework for MCP servers")
 console = Console()
 
-# Add the runner commands
+# Subcommands
 app.add_typer(runner_app, name="run", help="Run tests")
 
 
@@ -47,33 +48,22 @@ def init(
     console.print(f"[green]Initialized MCP-Eval project in {project_path}[/green]")
 
 
-@app.command()
+@app.command("generate")
 def generate(
-    server_name: str = typer.Argument(..., help="Name of MCP server"),
-    output: str = typer.Option("generated_tests.yaml", help="Output file"),
-    n_examples: int = typer.Option(10, help="Number of test cases to generate"),
+    out_dir: str = typer.Option(".", help="Project directory to write configs/tests"),
+    style: str = typer.Option("pytest", help="Test style: pytest|decorators|dataset"),
+    n_examples: int = typer.Option(6, help="Number of scenarios to generate"),
+    provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
+    model: str = typer.Option(None, help="Model hint for generation (optional)"),
 ):
-    """Generate test cases for an MCP server."""
-    import asyncio
-    from mcp_eval.generation import generate_dataset
-
-    async def _generate():
-        # Would introspect server to get available tools
-        available_tools = ["example_tool"]  # Placeholder
-
-        dataset = await generate_dataset(
-            dataset_type=None,  # Would be determined from server
-            server_name=server_name,
-            available_tools=available_tools,
-            n_examples=n_examples,
-        )
-
-        dataset.to_file(output)
-        console.print(
-            f"[green]Generated {len(dataset.cases)} test cases in {output}[/green]"
-        )
-
-    asyncio.run(_generate())
+    """Interactive generator to create configs and tests for an MCP server."""
+    run_generator(
+        out_dir=out_dir,
+        style=style,
+        n_examples=n_examples,
+        provider=provider,
+        model=model,
+    )
 
 
 def _create_basic_template(project_path: Path):
@@ -96,11 +86,11 @@ agents:
     name: "test_agent"
     instruction: "You are a test agent. Complete tasks as requested."
     server_names: ["my_server"]
-    llm_factory: "AnthropicAugmentedLLM"
+    provider: "anthropic"
 
 # Judge configuration
 judge:
-  model: "claude-3-5-haiku-20241022"
+  model: "claude-sonnet-4-0"
   min_score: 0.8
 
 # Reporting configuration
@@ -113,27 +103,24 @@ reporting:
 
     # Example test file
     test_content = """
-import mcp_eval
-from mcp_eval import task, setup, ToolWasCalled, ResponseContains
+from mcp_eval import task, Expect, setup, ToolWasCalled, ResponseContains
 
 @setup
 def configure_tests():
-    mcp_eval.use_server("my_server")
+    pass
 
 @task("Basic functionality test")
-async def test_basic_functionality(agent):
+async def test_basic_functionality(agent, session):
     \"\"\"Test basic server functionality.\"\"\"
     response = await agent.generate_str("Perform a basic operation")
-    
-    agent.evaluate_now(ResponseContains("result"), response, "has_result")
-    agent.add_deferred_evaluator(ToolWasCalled("basic_tool"), "tool_called")
+    await session.assert_that(Expect.content.contains("result"), response=response)
+    await session.assert_that(Expect.tools.was_called("basic_tool"))
 
 @task("Error handling test")
-async def test_error_handling(agent):
+async def test_error_handling(agent, session):
     \"\"\"Test server error handling.\"\"\"
     response = await agent.generate_str("Perform an invalid operation")
-    
-    agent.evaluate_now(ResponseContains("error"), response, "has_error")
+    await session.assert_that(Expect.content.contains("error"), response=response)
 """
 
     (project_path / "tests" / "test_my_server.py").write_text(test_content.strip())
@@ -147,7 +134,7 @@ def _create_advanced_template(project_path: Path):
     dataset_content = """
 import asyncio
 from mcp_eval import Case, Dataset, ToolWasCalled, ResponseContains, LLMJudge, test_session
-from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
+# Deprecated imports removed; use provider/model in configs
 
 # Define test cases
 cases = [
@@ -178,16 +165,12 @@ dataset = Dataset(
     name='My Server Advanced Tests',
     cases=cases,
     server_name='my_server',
-    agent_config={
-        'name': 'advanced_tester',
-        'instruction': 'You are an advanced test agent with access to multiple tools.',
-        'llm_factory': AnthropicAugmentedLLM,
-    }
+    
 )
 
 async def my_server_task(inputs: str) -> str:
     \"\"\"System under test.\"\"\"
-    async with test_session('my_server', 'dataset_task') as agent:
+    async with test_session('dataset_task') as agent:
         return await agent.generate_str(inputs)
 
 async def main():

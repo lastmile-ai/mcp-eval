@@ -10,6 +10,7 @@ from mcp_eval import (
     ToolSequence,
     MaxIterations,
 )
+from mcp_agent.agents.agent_spec import AgentSpec
 
 # Advanced test cases
 advanced_fetch_cases = [
@@ -98,15 +99,18 @@ advanced_fetch_dataset = Dataset(
     name="MCP Fetch Server Advanced Tests",
     cases=advanced_fetch_cases,
     server_name="fetch",
-    agent_config={
-        "name": "advanced_dataset_tester",
-        "instruction": """You are an expert web content agent. 
-        You excel at handling multiple URLs, error recovery, and content analysis.
-        Always be thorough and provide detailed information about what you fetch.""",
-        "llm_factory": "AnthropicAugmentedLLM",
-        "model": "claude-sonnet-4-20250514",
-        "max_iterations": 10,
-    },
+    # Inline AgentSpec (can alternatively use the named spec in mcpeval.yaml)
+    agent_spec=AgentSpec(
+        name="advanced_dataset_tester",
+        instruction=(
+            "You are an expert web content agent. You excel at handling multiple URLs, "
+            "error recovery, and content analysis. Always be thorough and provide "
+            "detailed information about what you fetch."
+        ),
+        server_names=["fetch"],
+        provider="anthropic",
+        model="claude-sonnet-4-20250514",
+    ),
     evaluators=[
         # Global evaluators for all advanced cases
         ToolSuccessRate(min_rate=0.7, tool_name="fetch"),

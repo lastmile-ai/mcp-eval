@@ -10,7 +10,7 @@ from mcp_eval.evaluators.response_contains import ResponseContains
 @dataclass
 class NotContains(ResponseContains):
     """Evaluator that checks if response does NOT contain specific text."""
-    
+
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         result = super().evaluate_sync(ctx)
         inverted_passed = not result.passed

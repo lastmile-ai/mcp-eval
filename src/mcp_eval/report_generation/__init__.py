@@ -4,11 +4,11 @@ This module provides functionality for generating various types of reports
 from test results and evaluation data.
 """
 
-from .models import EvaluationReport, CaseResult
-from .console import generate_failure_message
-from .summary import generate_combined_summary
-from .markdown import generate_combined_markdown_report
-from .html import generate_combined_html_report, format_config_for_html
+from mcp_eval.report_generation.models import EvaluationReport, CaseResult
+from mcp_eval.report_generation.console import generate_failure_message
+from mcp_eval.report_generation.summary import generate_combined_summary
+from mcp_eval.report_generation.markdown import generate_combined_markdown_report
+from mcp_eval.report_generation.html import generate_combined_html_report
 
 __all__ = [
     # Data models
@@ -18,7 +18,6 @@ __all__ = [
     "generate_failure_message",
     # Report generators
     "generate_combined_summary",
-    "generate_combined_markdown_report", 
+    "generate_combined_markdown_report",
     "generate_combined_html_report",
-    "format_config_for_html",
 ]
