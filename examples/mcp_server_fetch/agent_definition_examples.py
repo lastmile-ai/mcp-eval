@@ -31,13 +31,13 @@ from mcp_eval.session import TestAgent, TestSession
 async def test_config_agent(agent: TestAgent, session: TestSession):
     """
     Uses an agent defined in configuration files.
-    
+
     Agents can be defined in:
     - mcpeval.yaml (under 'agents.definitions' section)
     - mcp-agent.config.yaml (under 'agents' section)
     - .claude/agents/*.yaml (discovered subagents)
     - .mcp-agent/agents/*.yaml
-    
+
     Example mcpeval.yaml:
     ```yaml
     agents:
@@ -47,11 +47,13 @@ async def test_config_agent(agent: TestAgent, session: TestSession):
           server_names: ["fetch"]
           model: claude-sonnet-4-0  # Or omit to use ModelSelector
     ```
-    
+
     The @with_agent("default") decorator references the agent by name.
     """
     response = await agent.generate_str("Fetch https://example.com")
-    await session.assert_that(Expect.tools.was_called("fetchCallIJustMadeUp"), name="fetch_called")
+    await session.assert_that(
+        Expect.tools.was_called("fetchCallIJustMadeUp"), name="fetch_called"
+    )
     await session.assert_that(
         Expect.content.contains("Example Domain"),
         response=response,
@@ -78,14 +80,14 @@ async def test_config_agent(agent: TestAgent, session: TestSession):
 async def test_agent_spec(agent: TestAgent, session: TestSession):
     """
     Define an AgentSpec programmatically for this specific test.
-    
+
     AgentSpec is a declarative configuration that includes:
     - name: Identifier for the agent
     - instruction: System prompt for the agent
     - server_names: MCP servers to connect to
     - provider: Optional LLM provider (defaults to settings)
     - model: Optional model override (uses ModelSelector if not set)
-    
+
     The @with_agent decorator creates the agent from this spec
     for this test only, not affecting other tests.
     """
@@ -117,15 +119,15 @@ async def test_agent_spec(agent: TestAgent, session: TestSession):
 async def test_agent_instance(agent: TestAgent, session: TestSession):
     """
     Create an Agent instance directly for this test.
-    
+
     The Agent class is the core runtime object that:
     - Manages connections to MCP servers
     - Handles tool execution
     - Maintains conversation context
-    
+
     Note: Agent doesn't take provider/model directly.
     Those are configured via settings or when attaching an LLM.
-    
+
     The @with_agent decorator ensures this agent is used
     only for this specific test.
     """
@@ -178,16 +180,16 @@ async def test_augmented_llm(agent: TestAgent, session: TestSession):
 def create_test_agent():
     """
     Factory function to create a fresh agent for each test session.
-    
+
     This pattern is crucial for parallel test execution:
     - Each test gets its own agent instance
     - No shared state between parallel tests
     - Thread-safe test execution
-    
+
     Two ways to use factories:
     1. Global default: use_agent_factory(create_test_agent)
     2. Per-test: @with_agent(create_test_agent())
-    
+
     Note: The TestSession will set the proper context when the agent is used.
     """
     return Agent(
@@ -204,13 +206,15 @@ def create_test_agent():
 async def test_agent_factory(agent: TestAgent, session: TestSession):
     """
     This test gets a fresh agent instance from the factory.
-    
+
     The factory is called when the test starts, ensuring
     a clean agent instance even in parallel execution.
     """
     await agent.generate_str("Summarize https://example.com in one sentence")
 
-    await session.assert_that(Expect.tools.was_called("fetchIMadeUpTheToolName"), name="fetch_called")
+    await session.assert_that(
+        Expect.tools.was_called("fetchIMadeUpTheToolName"), name="fetch_called"
+    )
     await session.assert_that(
         Expect.performance.max_iterations(2), name="efficient_execution"
     )
@@ -220,17 +224,17 @@ async def test_agent_factory(agent: TestAgent, session: TestSession):
 def setup_global_factory():
     """
     Set up a global factory for all tests that don't specify an agent.
-    
+
     This would typically be called once at the start of your test suite:
     ```python
     from mcp_eval.config import use_agent_factory
-    
+
     def my_agent_factory():
         return Agent(name="GlobalFactory", ...)
-    
+
     use_agent_factory(my_agent_factory)
     ```
-    
+
     Then all tests without @with_agent would use this factory.
     """
     # Note: We're not actually calling this in the example

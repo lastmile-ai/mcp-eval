@@ -37,7 +37,7 @@ class MCPCaseGenerator:
 
     def __init__(self, model: Optional[str] = None):
         """Initialize generator with optional model override.
-        
+
         If no model is provided, will use settings configuration.
         """
         self.model = model

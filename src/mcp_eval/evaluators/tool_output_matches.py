@@ -292,7 +292,9 @@ class ToolOutputMatches(SyncEvaluator):
                     found = False
                     for actual_item in actual_value:
                         # If both items are dicts, use partial matching
-                        if isinstance(expected_item, dict) and isinstance(actual_item, dict):
+                        if isinstance(expected_item, dict) and isinstance(
+                            actual_item, dict
+                        ):
                             nested_validator = ToolOutputMatches(
                                 tool_name=self.tool_name,
                                 expected_output=expected_item,

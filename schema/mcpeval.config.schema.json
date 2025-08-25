@@ -1,329 +1,125 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/lastmile-ai/mcp-eval/main/schema/mcpeval.config.schema.json",
   "title": "MCP-Eval Configuration",
-  "description": "Configuration schema for MCP-Eval test suites",
-  "type": "object",
-  "additionalProperties": true,
-  "properties": {
-    "$schema": {
-      "type": "string",
-      "description": "Reference to this JSON schema for validation and autocomplete"
+  "description": "Configuration schema for MCP-Eval",
+  "allOf": [
+    {
+      "$ref": "https://raw.githubusercontent.com/lastmile-ai/mcp-agent/main/schema/mcp-agent.config.schema.json"
     },
-    "name": {
-      "type": "string",
-      "description": "Name of the test suite",
-      "default": "MCP-Eval Test Suite"
-    },
-    "description": {
-      "type": "string",
-      "description": "Description of what this test suite evaluates",
-      "default": "Comprehensive evaluation of MCP servers"
-    },
-    "servers": {
+    {
       "type": "object",
-      "description": "MCP server configurations",
-      "additionalProperties": {
-        "$ref": "#/definitions/MCPServerSettings"
-      },
-      "default": {
-        "default": {
-          "command": "uvx",
-          "args": [],
-          "env": {}
-        }
-      }
-    },
-    "agents": {
-      "type": "object",
-      "description": "Agent configurations for test execution",
-      "additionalProperties": {
-        "$ref": "#/definitions/AgentConfig"
-      },
-      "default": {
-        "default": {
-          "name": "default_agent",
-          "instruction": "You are a helpful test agent.",
-          "llm_factory": "AnthropicAugmentedLLM",
-          "model": "claude-3-5-haiku-20241022",
-          "max_iterations": 5
-        }
-      }
-    },
-    "judge": {
-      "$ref": "#/definitions/JudgeConfig",
-      "default": {
-        "model": "claude-3-5-haiku-20241022",
-        "min_score": 0.8,
-        "max_tokens": 1000,
-        "system_prompt": "You are an expert evaluator of AI assistant responses."
-      }
-    },
-    "metrics": {
-      "$ref": "#/definitions/MetricsConfig",
-      "default": {
-        "collect": [
-          "response_time",
-          "tool_coverage",
-          "iteration_count",
-          "token_usage",
-          "cost_estimate"
-        ],
-        "token_prices": {
-          "claude-3-5-haiku-20241022": {
-            "input": 0.00000025,
-            "output": 0.00000125
-          },
-          "claude-sonnet-4-20250514": {
-            "input": 0.000003,
-            "output": 0.000015
-          },
-          "gpt-4-turbo": {
-            "input": 0.00001,
-            "output": 0.00003
-          }
-        }
-      }
-    },
-    "reporting": {
-      "$ref": "#/definitions/ReportingConfig",
-      "default": {
-        "formats": [
-          "json",
-          "markdown"
-        ],
-        "output_dir": "./test-reports",
-        "include_traces": true
-      }
-    },
-    "otel": {
-      "$ref": "#/definitions/OTelConfig",
-      "default": {
-        "enabled": true,
-        "exporter_type": "file",
-        "exporter_config": {},
-        "service_name": "mcp-eval"
-      }
-    },
-    "execution": {
-      "$ref": "#/definitions/ExecutionConfig",
-      "default": {
-        "max_concurrency": 5,
-        "timeout_seconds": 300,
-        "retry_failed": false
-      }
-    },
-    "default_server": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Name of the default server to use"
-    },
-    "agent_config": {
-      "type": [
-        "object",
-        "null"
-      ],
-      "description": "Runtime agent configuration overrides"
-    }
-  },
-  "definitions": {
-    "MCPServerSettings": {
-      "type": "object",
-      "description": "Configuration for an individual MCP server",
       "properties": {
-        "name": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Name of the server"
-        },
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Description of the server's purpose"
-        },
-        "transport": {
+        "$schema": {
           "type": "string",
-          "enum": [
-            "stdio",
-            "sse",
-            "streamable_http",
-            "websocket"
-          ],
-          "default": "stdio",
-          "description": "Transport mechanism for server communication"
+          "description": "Reference to this JSON schema for validation and autocomplete"
         },
-        "command": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Command to execute the server (e.g., 'uvx', 'npx', 'python')"
+        "eval_name": {
+          "type": "string",
+          "description": "Name of the evaluation test suite",
+          "default": "MCP-Eval Test Suite"
         },
-        "args": {
+        "eval_description": {
+          "type": "string",
+          "description": "Description of what this test suite evaluates",
+          "default": "Comprehensive evaluation of MCP servers"
+        },
+        "judge": {
+          "$ref": "#/definitions/JudgeConfig",
+          "description": "Configuration for the LLM judge that evaluates test results"
+        },
+        "metrics": {
+          "$ref": "#/definitions/MetricsConfig",
+          "description": "Configuration for metrics collection during test execution"
+        },
+        "reporting": {
+          "$ref": "#/definitions/ReportingConfig",
+          "description": "Configuration for test result reporting"
+        },
+        "execution": {
+          "$ref": "#/definitions/ExecutionConfig",
+          "description": "Configuration for test execution behavior"
+        },
+        "default_servers": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "Arguments for the server command",
+          "description": "List of default server names to use for tests",
           "default": []
         },
-        "url": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "URL for SSE, Streamable HTTP, or WebSocket transport"
-        },
-        "headers": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "HTTP headers for SSE or Streamable HTTP requests"
-        },
-        "http_timeout_seconds": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "description": "HTTP request timeout in seconds"
-        },
-        "read_timeout_seconds": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "description": "Timeout for waiting for new events from server"
-        },
-        "terminate_on_close": {
-          "type": "boolean",
-          "default": true,
-          "description": "Whether to terminate session on connection close (Streamable HTTP)"
-        },
-        "auth": {
-          "$ref": "#/definitions/MCPServerAuthSettings"
-        },
-        "roots": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/MCPRootSettings"
-          },
-          "description": "Root directories this server has access to"
-        },
-        "env": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "Environment variables to pass to the server process"
-        }
-      }
-    },
-    "MCPServerAuthSettings": {
-      "type": "object",
-      "description": "Authentication configuration for a server",
-      "properties": {
-        "api_key": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "API key for server authentication"
-        }
-      }
-    },
-    "MCPRootSettings": {
-      "type": "object",
-      "description": "Root directory configuration for an MCP server",
-      "required": [
-        "uri"
-      ],
-      "properties": {
-        "uri": {
+        "provider": {
           "type": "string",
-          "pattern": "^file://",
-          "description": "URI identifying the root (must start with file://)"
-        },
-        "name": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Optional name for the root"
-        },
-        "server_uri_alias": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "pattern": "^file://",
-          "description": "Optional URI alias for presentation to the server"
-        }
-      }
-    },
-    "AgentConfig": {
-      "type": "object",
-      "description": "Configuration for a test agent",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "Name of the agent",
-          "default": "default_agent"
-        },
-        "instruction": {
-          "type": "string",
-          "description": "System instruction/prompt for the agent",
-          "default": "You are a helpful test agent."
-        },
-        "llm_factory": {
-          "type": "string",
-          "description": "LLM factory class to use",
-          "default": "AnthropicAugmentedLLM",
-          "enum": [
-            "AnthropicAugmentedLLM",
-            "AnthropicLLM",
-            "OpenAILLM",
-            "BedrockLLM"
+          "description": "Default LLM provider for test execution",
+          "default": "anthropic",
+          "examples": [
+            "anthropic",
+            "openai",
+            "bedrock",
+            "azure",
+            "google"
           ]
         },
         "model": {
           "type": "string",
-          "description": "Model identifier to use",
-          "default": "claude-3-5-haiku-20241022",
+          "description": "Default model to use for test execution",
+          "default": "claude-sonnet-4-0",
           "examples": [
             "claude-3-5-haiku-20241022",
-            "claude-sonnet-4-20250514",
+            "claude-sonnet-4-0",
             "gpt-4-turbo",
             "gpt-4o"
           ]
         },
-        "max_iterations": {
-          "type": "integer",
-          "description": "Maximum iterations for agent execution",
-          "default": 5,
-          "minimum": 1
+        "default_agent": {
+          "oneOf": [
+            {
+              "$ref": "https://raw.githubusercontent.com/lastmile-ai/mcp-agent/main/schema/mcp-agent.config.schema.json#/$defs/AgentSpec"
+            },
+            {
+              "type": "string",
+              "description": "Name of an AgentSpec defined in subagents"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Default agent configuration for tests"
         }
       }
-    },
+    }
+  ],
+  "definitions": {
     "JudgeConfig": {
       "type": "object",
       "description": "Configuration for the LLM judge that evaluates test results",
       "properties": {
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Judge-specific LLM provider (falls back to global provider)",
+          "examples": [
+            "anthropic",
+            "openai",
+            "bedrock",
+            "azure",
+            "google"
+          ]
+        },
         "model": {
-          "type": "string",
-          "description": "Model to use for judging",
-          "default": "claude-3-5-haiku-20241022"
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Model to use for judging (falls back to global model)",
+          "default": null,
+          "examples": [
+            "claude-3-5-haiku-20241022",
+            "claude-sonnet-4-0",
+            "gpt-4-turbo"
+          ]
         },
         "min_score": {
           "type": "number",
@@ -343,11 +139,12 @@
           "description": "System prompt for the judge",
           "default": "You are an expert evaluator of AI assistant responses."
         }
-      }
+      },
+      "additionalProperties": false
     },
     "MetricsConfig": {
       "type": "object",
-      "description": "Configuration for metrics collection",
+      "description": "Configuration for metrics collection during test execution",
       "properties": {
         "collect": {
           "type": "array",
@@ -373,47 +170,13 @@
             "token_usage",
             "cost_estimate"
           ]
-        },
-        "token_prices": {
-          "type": "object",
-          "description": "Token pricing for cost estimation (per token)",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "input": {
-                "type": "number",
-                "description": "Price per input token"
-              },
-              "output": {
-                "type": "number",
-                "description": "Price per output token"
-              }
-            },
-            "required": [
-              "input",
-              "output"
-            ]
-          },
-          "default": {
-            "claude-3-5-haiku-20241022": {
-              "input": 0.00000025,
-              "output": 0.00000125
-            },
-            "claude-sonnet-4-20250514": {
-              "input": 0.000003,
-              "output": 0.000015
-            },
-            "gpt-4-turbo": {
-              "input": 0.00001,
-              "output": 0.00003
-            }
-          }
         }
-      }
+      },
+      "additionalProperties": false
     },
     "ReportingConfig": {
       "type": "object",
-      "description": "Configuration for test reporting",
+      "description": "Configuration for test result reporting",
       "properties": {
         "formats": {
           "type": "array",
@@ -442,40 +205,8 @@
           "description": "Include detailed execution traces in reports",
           "default": true
         }
-      }
-    },
-    "OTelConfig": {
-      "type": "object",
-      "description": "OpenTelemetry configuration for observability",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Enable OpenTelemetry tracing",
-          "default": true
-        },
-        "exporter_type": {
-          "type": "string",
-          "description": "Type of exporter to use",
-          "default": "file",
-          "enum": [
-            "file",
-            "console",
-            "otlp",
-            "jaeger",
-            "zipkin"
-          ]
-        },
-        "exporter_config": {
-          "type": "object",
-          "description": "Configuration for the selected exporter",
-          "additionalProperties": true
-        },
-        "service_name": {
-          "type": "string",
-          "description": "Service name for tracing",
-          "default": "mcp-eval"
-        }
-      }
+      },
+      "additionalProperties": false
     },
     "ExecutionConfig": {
       "type": "object",
@@ -498,7 +229,8 @@
           "description": "Whether to retry failed tests",
           "default": false
         }
-      }
+      },
+      "additionalProperties": false
     }
   }
 }

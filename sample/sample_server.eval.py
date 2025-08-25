@@ -1,6 +1,12 @@
 from pathlib import Path
 from mcp_agent.agents.agent_spec import AgentSpec
-from mcp_agent.config import MCPSettings, MCPServerSettings, AnthropicSettings, OpenAISettings, GoogleSettings
+from mcp_agent.config import (
+    MCPSettings,
+    MCPServerSettings,
+    AnthropicSettings,
+    OpenAISettings,
+    GoogleSettings,
+)
 
 from mcp_eval import task, setup, Expect
 from mcp_eval.session import TestAgent, TestSession
@@ -36,6 +42,7 @@ def configure_sample_server():
     google = None
     if secrets_path.exists():
         import yaml
+
         with open(secrets_path, "r", encoding="utf-8") as f:
             sec = yaml.safe_load(f) or {}
         if "anthropic" in sec and isinstance(sec["anthropic"], dict):

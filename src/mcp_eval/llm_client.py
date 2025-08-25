@@ -25,31 +25,30 @@ class JudgeLLMClient:
         """Lazy initialization of the AugmentedLLM instance."""
         if not self._llm:
             settings = get_settings()
-            
+
             # Determine provider: explicit > judge config > global config > infer from model
             provider = self.provider
             if not provider:
                 provider = settings.judge.provider
             if not provider:
                 provider = settings.provider
-            
+
             # Determine model: explicit > judge config > global config > ModelSelector
             model = self.model
             if not model:
                 model = settings.judge.model
             if not model:
                 model = settings.model
-            
+
             # If still no model, let mcp-agent's ModelSelector pick one
             if not model:
                 from mcp.types import ModelPreferences
+
                 # For judging, prioritize intelligence and cost-effectiveness
                 model = ModelPreferences(
-                    costPriority=0.4,
-                    speedPriority=0.2,
-                    intelligencePriority=0.4
+                    costPriority=0.4, speedPriority=0.2, intelligencePriority=0.4
                 )
-            
+
             # Create an AugmentedLLM with minimal agent for judging
             self._llm = create_llm(
                 agent_name="judge",
@@ -57,18 +56,18 @@ class JudgeLLMClient:
                 provider=provider,
                 model=model,
             )
-            
+
             # Store the actual configuration used
             self._actual_provider = provider
-            self._actual_model = model if isinstance(model, str) else 'model-selector'
-            
+            self._actual_model = model if isinstance(model, str) else "model-selector"
+
         return self._llm
-    
+
     def get_config(self) -> dict:
         """Get the actual configuration used by this judge."""
         return {
-            'provider': self._actual_provider,
-            'model': self._actual_model,
+            "provider": self._actual_provider,
+            "model": self._actual_model,
         }
 
     async def generate_str(self, prompt: str) -> str:
@@ -92,9 +91,11 @@ class JudgeLLMClient:
         return "The response meets the specified criteria."
 
 
-def get_judge_client(model: Optional[str] = None, provider: Optional[str] = None) -> JudgeLLMClient:
+def get_judge_client(
+    model: Optional[str] = None, provider: Optional[str] = None
+) -> JudgeLLMClient:
     """Get a judge LLM client.
-    
+
     Uses the provided model/provider or falls back to config settings.
     If no model is configured, mcp-agent will use its model selection.
     """

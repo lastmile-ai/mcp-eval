@@ -212,13 +212,10 @@ def _write_mcpeval_configs(project: Path, provider: str, api_key: str, model: Op
             selector = ModelSelector()
             # For judge, prioritize intelligence and cost-effectiveness
             preferences = ModelPreferences(
-                costPriority=0.4,
-                speedPriority=0.2,
-                intelligencePriority=0.4
+                costPriority=0.4, speedPriority=0.2, intelligencePriority=0.4
             )
             model_info = selector.select_best_model(
-                model_preferences=preferences,
-                provider=provider
+                model_preferences=preferences, provider=provider
             )
             judge_model = model_info.name
         except Exception as e:
@@ -227,7 +224,7 @@ def _write_mcpeval_configs(project: Path, provider: str, api_key: str, model: Op
             judge_model = "claude-sonnet-4-0" if provider == "anthropic" else "gpt-4o"
     else:
         judge_model = model
-    
+
     cfg_overlay = {
         "judge": {"model": judge_model, "min_score": 0.8},
         "reporting": {"formats": ["json", "markdown"], "output_dir": "./test-reports"},
@@ -395,7 +392,7 @@ def _emit_tests(
                     for c in ds.cases
                 ],
             }
-            _save_yaml(out_file, raw)
+            save_yaml(out_file, raw)
         console.print(f"[green]✓[/] Wrote dataset {out_file}")
         return
 
@@ -525,13 +522,15 @@ def run_generator(
         mcp-eval generate --style pytest --n-examples 10
     """
     project = Path(out_dir)
-    _ensure_dir(project)
+    project.mkdir(parents=True, exist_ok=True)
 
     console.print("[cyan]Checking credentials and writing mcpeval configs if needed...[/cyan]")
     # Provider + API key (load existing when re-running)
     existing_provider, existing_key = _load_existing_provider(project)
     # Get provider, api_key, and optional model from prompt
-    provider, api_key, prompted_model = _prompt_provider(existing_provider, existing_key)
+    provider, api_key, prompted_model = _prompt_provider(
+        existing_provider, existing_key
+    )
     # Use CLI model if provided, otherwise use prompted model
     final_model = model or prompted_model
     if api_key:

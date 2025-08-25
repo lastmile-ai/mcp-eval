@@ -80,11 +80,11 @@ class LLMJudge(Evaluator):
 
         try:
             client = get_judge_client(self.model)
-            
+
             # Ensure LLM is initialized to get actual config
             await client._get_llm()
             judge_config = client.get_config()
-            
+
             response = await client.generate_str(prompt)
 
             # Extract and parse JSON response
@@ -145,7 +145,9 @@ class LLMJudge(Evaluator):
                         "confidence": 0.0,
                         "rubric": self.rubric,
                         "judge_response": response,
-                        "judge_config": judge_config if 'judge_config' in locals() else None,
+                        "judge_config": judge_config
+                        if "judge_config" in locals()
+                        else None,
                     },
                 )
 

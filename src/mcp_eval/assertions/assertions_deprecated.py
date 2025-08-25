@@ -58,9 +58,9 @@ def tool_was_called(
     def check(metrics: TestMetrics):
         tool_metric = metrics.tool_metrics.get(tool_name)
         assert tool_metric is not None, f"Tool '{tool_name}' was not called."
-        assert tool_metric["call_count"] >= min_times, (
-            f"Tool '{tool_name}' was called {tool_metric['call_count']} times, expected at least {min_times}."
-        )
+        assert (
+            tool_metric["call_count"] >= min_times
+        ), f"Tool '{tool_name}' was called {tool_metric['call_count']} times, expected at least {min_times}."
 
     check.__name__ = f"tool_was_called('{tool_name}', min_times={min_times})"
     session.add_deferred_assertion(check)
@@ -71,20 +71,20 @@ def tool_success_rate_is_above(tool_name: str, min_rate: float, session: TestSes
 
     def check(metrics: TestMetrics):
         tool_metric = metrics.tool_metrics.get(tool_name)
-        assert tool_metric is not None, (
-            f"Tool '{tool_name}' was not called, so success rate cannot be calculated."
-        )
+        assert (
+            tool_metric is not None
+        ), f"Tool '{tool_name}' was not called, so success rate cannot be calculated."
 
         call_count = tool_metric.get("call_count", 0)
-        assert call_count > 0, (
-            f"Tool '{tool_name}' was called 0 times, so success rate cannot be calculated."
-        )
+        assert (
+            call_count > 0
+        ), f"Tool '{tool_name}' was called 0 times, so success rate cannot be calculated."
 
         success_count = tool_metric.get("success_count", 0)
         success_rate = success_count / call_count
-        assert success_rate >= min_rate, (
-            f"Tool '{tool_name}' success rate {success_rate:.2f} is below the minimum of {min_rate:.2f}."
-        )
+        assert (
+            success_rate >= min_rate
+        ), f"Tool '{tool_name}' success rate {success_rate:.2f} is below the minimum of {min_rate:.2f}."
 
     check.__name__ = f"tool_success_rate_is_above('{tool_name}', {min_rate:.2f})"
     session.add_deferred_assertion(check)
@@ -100,13 +100,13 @@ def tool_arguments_match(tool_name: str, expected_args: dict, session: TestSessi
         assert tool_call is not None, f"Tool '{tool_name}' was not called."
 
         for key, expected_value in expected_args.items():
-            assert key in tool_call.arguments, (
-                f"Tool '{tool_name}' was called without argument '{key}'."
-            )
+            assert (
+                key in tool_call.arguments
+            ), f"Tool '{tool_name}' was called without argument '{key}'."
             actual_value = tool_call.arguments[key]
-            assert actual_value == expected_value, (
-                f"Argument '{key}' for tool '{tool_name}' did not match. Expected '{expected_value}', got '{actual_value}'."
-            )
+            assert (
+                actual_value == expected_value
+            ), f"Argument '{key}' for tool '{tool_name}' did not match. Expected '{expected_value}', got '{actual_value}'."
 
     check.__name__ = f"tool_arguments_match('{tool_name}', {json.dumps(expected_args)})"
     session.add_deferred_assertion(check)
@@ -116,9 +116,9 @@ def number_of_steps_under(max_steps: int, session: TestSession):
     """Asserts that the number of agent turns (LLM calls) is under a specified limit."""
 
     def check(metrics: TestMetrics):
-        assert metrics.turns <= max_steps, (
-            f"Agent took {metrics.turns} steps, which exceeds the limit of {max_steps}."
-        )
+        assert (
+            metrics.turns <= max_steps
+        ), f"Agent took {metrics.turns} steps, which exceeds the limit of {max_steps}."
 
     check.__name__ = f"number_of_steps_under({max_steps})"
     session.add_deferred_assertion(check)
@@ -129,9 +129,9 @@ def cost_under(max_cost: float, session: TestSession):
 
     def check(metrics: TestMetrics):
         total_cost = sum(llm.cost for llm in metrics.llm_metrics.values())
-        assert total_cost < max_cost, (
-            f"Total cost ${total_cost:.6f} exceeded the limit of ${max_cost:.6f}"
-        )
+        assert (
+            total_cost < max_cost
+        ), f"Total cost ${total_cost:.6f} exceeded the limit of ${max_cost:.6f}"
 
     check.__name__ = f"cost_under(${max_cost:.6f})"
     session.add_deferred_assertion(check)
@@ -160,9 +160,9 @@ def llm_judge(
         judge_result = await session.agent.llm.generate_structured(
             prompt, response_model=JudgeResult
         )
-        assert judge_result.score >= min_score, (
-            f"Judge score {judge_result.score} is below the minimum of {min_score}. Reasoning: {judge_result.reasoning}"
-        )
+        assert (
+            judge_result.score >= min_score
+        ), f"Judge score {judge_result.score} is below the minimum of {min_score}. Reasoning: {judge_result.reasoning}"
 
     check.__name__ = f"llm_judge('{rubric[:30]}...', min_score={min_score})"
     session.add_async_deferred_assertion(check)
@@ -191,9 +191,9 @@ def objective_succeeded(objective: str, final_response: str, session: TestSessio
         judge_result = await session.agent.llm.generate_structured(
             prompt, response_model=ObjectiveSuccessResult
         )
-        assert judge_result.succeeded, (
-            f"Objective was not met. Reasoning: {judge_result.reasoning}"
-        )
+        assert (
+            judge_result.succeeded
+        ), f"Objective was not met. Reasoning: {judge_result.reasoning}"
 
     check.__name__ = f"objective_succeeded('{objective[:30]}...')"
     session.add_async_deferred_assertion(check)
@@ -232,9 +232,9 @@ def plan_is_efficient(objective: str, session: TestSession):
         judge_result = await session.agent.llm.generate_structured(
             prompt, response_model=EfficiencyResult
         )
-        assert judge_result.is_efficient, (
-            f"Plan was deemed inefficient. Reasoning: {judge_result.reasoning}"
-        )
+        assert (
+            judge_result.is_efficient
+        ), f"Plan was deemed inefficient. Reasoning: {judge_result.reasoning}"
 
     check.__name__ = f"plan_is_efficient('{objective[:30]}...')"
     session.add_async_deferred_assertion(check)

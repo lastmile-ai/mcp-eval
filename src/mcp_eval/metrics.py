@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from mcp_agent.tracing.token_counter import TokenCounter
 
+
 def unflatten_attributes(attributes: Dict[str, Any], prefix: str) -> Dict[str, Any]:
     """Unflatten values from span attributes with dot/list notation support.
 
@@ -115,16 +116,17 @@ class LLMMetrics:
 @dataclass
 class ToolCoverage:
     """Tool coverage metrics for a server."""
+
     server_name: str
     available_tools: List[str] = field(default_factory=list)
     used_tools: List[str] = field(default_factory=list)
-    
+
     @property
     def coverage_percentage(self) -> float:
         if not self.available_tools:
             return 0.0
         return (len(self.used_tools) / len(self.available_tools)) * 100
-    
+
     @property
     def unused_tools(self) -> List[str]:
         return [tool for tool in self.available_tools if tool not in self.used_tools]
@@ -138,7 +140,7 @@ class TestMetrics:
     tool_calls: List[ToolCall] = field(default_factory=list)
     unique_tools_used: List[str] = field(default_factory=list)
     unique_servers_used: List[str] = field(default_factory=list)
-    
+
     # Tool coverage per server
     tool_coverage: Dict[str, ToolCoverage] = field(default_factory=dict)
 
@@ -253,11 +255,11 @@ def process_spans(spans: List[TraceSpan]) -> TestMetrics:
 
     metrics.tool_calls = tool_calls
     metrics.unique_tools_used = list(set(call.name for call in tool_calls))
-    
+
     # Extract unique servers from tool calls
     servers = set()
     for call in tool_calls:
-        if hasattr(call, 'server_name') and call.server_name:
+        if hasattr(call, "server_name") and call.server_name:
             servers.add(call.server_name)
     metrics.unique_servers_used = list(servers)
 
@@ -280,10 +282,12 @@ def process_spans(spans: List[TraceSpan]) -> TestMetrics:
     max_turn = 0
     for span in spans:
         for event in span.events:
-            if "attributes" in event and "completion.response.turn" in event.get("attributes", {}):
+            if "attributes" in event and "completion.response.turn" in event.get(
+                "attributes", {}
+            ):
                 turn_num = event["attributes"]["completion.response.turn"]
                 max_turn = max(max_turn, turn_num + 1)  # Convert 0-based to count
-    
+
     if max_turn > 0:
         metrics.iteration_count = max_turn
     elif llm_spans:
@@ -291,7 +295,11 @@ def process_spans(spans: List[TraceSpan]) -> TestMetrics:
         metrics.iteration_count = len(llm_spans)
     else:
         # Method 3: Count high-level generate calls as a last resort
-        generate_spans = [span for span in spans if ".generate" in span.name and "AugmentedLLM" in span.name]
+        generate_spans = [
+            span
+            for span in spans
+            if ".generate" in span.name and "AugmentedLLM" in span.name
+        ]
         metrics.iteration_count = len(generate_spans) if generate_spans else 1
 
     # Calculate parallel tool calls
@@ -344,7 +352,7 @@ def _is_tool_call_span(span: TraceSpan) -> bool:
             or span.attributes.get("parsed_tool_name") is not None
         )
         return has_tool_name
-    
+
     return False
 
 
@@ -363,11 +371,11 @@ def _extract_tool_call(span: TraceSpan) -> Optional[ToolCall]:
         # For MCPAggregator.call_tool spans, the parsed_tool_name contains the clean tool name
         tool_name = span.attributes.get("parsed_tool_name")
         server_name = span.attributes.get("parsed_server_name")
-        
+
         # Fallback to mcp.tool.name if parsed_tool_name is not available
         if not tool_name:
             tool_name = span.attributes.get("mcp.tool.name")
-        
+
         # If still no tool name, try to extract from gen_ai.tool.name (servername_toolname format)
         if not tool_name:
             gen_ai_tool_name = span.attributes.get("gen_ai.tool.name")
@@ -376,10 +384,10 @@ def _extract_tool_call(span: TraceSpan) -> Optional[ToolCall]:
                 # In MCPAggregator spans, we also have parsed_server_name
                 if not server_name:
                     server_name = span.attributes.get("parsed_server_name")
-                
+
                 if server_name and gen_ai_tool_name.startswith(server_name + "_"):
                     # Extract tool name after the server prefix
-                    tool_name = gen_ai_tool_name[len(server_name) + 1:]
+                    tool_name = gen_ai_tool_name[len(server_name) + 1 :]
                 else:
                     # Simple split on first underscore as fallback
                     parts = gen_ai_tool_name.split("_", 1)
@@ -391,17 +399,21 @@ def _extract_tool_call(span: TraceSpan) -> Optional[ToolCall]:
 
         # Extract arguments from the span attributes
         arguments = {}
-        
+
         # MCPAggregator spans have arguments directly under "arguments."
         if span.name == "MCPAggregator.call_tool":
             arguments = unflatten_attributes(span.attributes, "arguments.")
         else:
             # Try other patterns for different span types
             if span.attributes.get("mcp.request.argument.url"):
-                arguments = unflatten_attributes(span.attributes, "mcp.request.argument.")
+                arguments = unflatten_attributes(
+                    span.attributes, "mcp.request.argument."
+                )
             elif span.attributes.get("request.params.arguments.url"):
-                arguments = unflatten_attributes(span.attributes, "request.params.arguments.")
-        
+                arguments = unflatten_attributes(
+                    span.attributes, "request.params.arguments."
+                )
+
         # Extract result
         result = unflatten_attributes(span.attributes, "result.")
 
@@ -434,8 +446,16 @@ def _extract_llm_metrics(llm_spans: List[TraceSpan]) -> LLMMetrics:
             metrics.model_name = attrs.get("gen_ai.request.model", "")
 
         # Token usage - try multiple possible attribute names
-        metrics.input_tokens += attrs.get("gen_ai.usage.input_tokens", 0) or attrs.get("llm.usage.input_tokens", 0) or attrs.get("input_tokens", 0)
-        metrics.output_tokens += attrs.get("gen_ai.usage.output_tokens", 0) or attrs.get("llm.usage.output_tokens", 0) or attrs.get("output_tokens", 0)
+        metrics.input_tokens += (
+            attrs.get("gen_ai.usage.input_tokens", 0)
+            or attrs.get("llm.usage.input_tokens", 0)
+            or attrs.get("input_tokens", 0)
+        )
+        metrics.output_tokens += (
+            attrs.get("gen_ai.usage.output_tokens", 0)
+            or attrs.get("llm.usage.output_tokens", 0)
+            or attrs.get("output_tokens", 0)
+        )
 
         # Latency
         duration_ms = (span.end_time - span.start_time) / 1e6
@@ -508,7 +528,7 @@ def _estimate_cost(llm_metrics: LLMMetrics) -> float:
             model_name=model_name,
             input_tokens=llm_metrics.input_tokens,
             output_tokens=llm_metrics.output_tokens,
-            provider=None  # Will be inferred from model name
+            provider=None,  # Will be inferred from model name
         )
 
         return cost
@@ -516,7 +536,7 @@ def _estimate_cost(llm_metrics: LLMMetrics) -> float:
         # Fallback to simple estimation if TokenCounter is not available
         cost_per_input_token = 0.000001
         cost_per_output_token = 0.000003
-        
+
         return (
             llm_metrics.input_tokens * cost_per_input_token
             + llm_metrics.output_tokens * cost_per_output_token

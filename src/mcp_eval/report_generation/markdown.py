@@ -1,6 +1,7 @@
 """Markdown report generation for MCP-Eval."""
 
 from typing import Dict, Any, Optional
+from urllib.parse import quote
 
 from mcp_eval.report_generation.utils import (
     get_environment_info,
@@ -83,7 +84,9 @@ def generate_combined_markdown_report(
 
         # Create link to individual test report
         test_name = test_data["test_name"]
-        test_report_link = f"[Link]({output_dir}/{test_name}.json)"
+        # URL-encode the test name to handle special characters
+        encoded_test_name = quote(test_name, safe="")
+        test_report_link = f"[Link]({output_dir}/{encoded_test_name}.json)"
 
         error = (
             test_data.get("error", "").replace("\n", " ").replace("|", "\\|")
@@ -96,32 +99,36 @@ def generate_combined_markdown_report(
     report += "\n## Dataset Evaluation Results\n\n"
 
     for dataset_data in report_data["dataset_reports"]:
-        dataset_summary = dataset_data["summary"]
         report += f"### {dataset_data['dataset_name']}\n\n"
 
-        report += "| Statistic | Value |\n"
-        report += "|-----------|-------|\n"
-        report += f"| **Cases** | {dataset_summary['passed_cases']}/{dataset_summary['total_cases']} passed |\n"
-        report += (
-            f"| **Success Rate** | {dataset_summary['success_rate'] * 100:.1f}% |\n"
-        )
-        report += f"| **Average Duration** | {dataset_summary['average_duration_ms']:.1f}ms |\n\n"
+        # Display summary statistics
+        dataset_summary = dataset_data["summary"]
+        report += f"**Summary:** {dataset_summary['passed_cases']}/{dataset_summary['total_cases']} passed ({dataset_summary['success_rate'] * 100:.1f}% success rate)\n\n"
 
-        # Add case details if available
-        if dataset_data.get("cases"):
-            report += "#### Case Details\n\n"
-            report += "| Case | Status | Duration | Score |\n"
-            report += "|------|--------|----------|-------|\n"
+        # Add case details table similar to decorator tests
+        if dataset_data.get("results"):
+            report += "| Case | Status | Duration | Test Report | Error |\n"
+            report += "|------|--------|----------|-------------|-------|\n"
 
-            for case in dataset_data["cases"]:
+            for case in dataset_data["results"]:
+                case_name = case.get("case_name", "Unknown")
                 case_status = "✅ PASS" if case.get("passed", False) else "❌ FAIL"
                 case_duration = f"{case.get('duration_ms', 0):.1f}ms"
-                case_score = (
-                    f"{case.get('score', 0):.2f}"
-                    if case.get("score") is not None
-                    else "N/A"
+
+                # Create link to individual test report (if reports are generated per case)
+                # URL-encode the dataset name and case name to handle special characters
+                encoded_dataset_name = quote(dataset_data["dataset_name"], safe="")
+                encoded_case_name = quote(case_name, safe="")
+                test_report_link = f"[Link]({output_dir}/{encoded_dataset_name}__{encoded_case_name}.json)"
+
+                # Get error message if failed
+                error = (
+                    case.get("error", "").replace("\n", " ").replace("|", "\\|")
+                    if not case.get("passed", False)
+                    else ""
                 )
-                report += f"| {case.get('case_name', 'Unknown')} | {case_status} | {case_duration} | {case_score} |\n"
+
+                report += f"| {case_name} | {case_status} | {case_duration} | {test_report_link} | {error} |\n"
 
             report += "\n"
 

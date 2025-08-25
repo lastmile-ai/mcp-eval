@@ -1,5 +1,4 @@
 import asyncio
-from mcp_agent.agents.agent import Agent
 from mcp_agent.agents.agent_spec import AgentSpec
 
 import mcp_eval
@@ -13,7 +12,7 @@ def configure_fetch_agent():
     spec = AgentSpec(
         name="FetchTester",
         instruction="You are a helpful assistant that can fetch and analyze web content.",
-        server_names=["fetch"]
+        server_names=["fetch"],
     )
     mcp_eval.use_agent(spec)
 
@@ -46,7 +45,9 @@ async def test_enhanced_judge(agent: TestAgent, session: TestSession):
 @task("Test with span tree analysis")
 async def test_span_analysis(agent: TestAgent, session: TestSession):
     """Test that demonstrates span tree analysis capabilities."""
-    response = await agent.generate_str("Fetch multiple URLs: example.com and github.com")
+    response = await agent.generate_str(
+        "Fetch multiple URLs: example.com and github.com"
+    )
 
     # Wait for execution to complete, then analyze span tree
     span_tree = session.get_span_tree()
@@ -108,8 +109,8 @@ dataset = Dataset(
     agent_spec=AgentSpec(
         name="DatasetFetchTester",
         instruction="You are a helpful assistant that can fetch and analyze web content.",
-        server_names=["fetch"]
-    )
+        server_names=["fetch"],
+    ),
     # LLM provider/model now configured globally in mcpeval.yaml
 )
 
@@ -117,7 +118,9 @@ dataset = Dataset(
 async def dataset_with_enhanced_features():
     """Dataset evaluation using enhanced features."""
 
-    async def enhanced_fetch_task(inputs: str, agent: TestAgent, session: TestSession) -> str:
+    async def enhanced_fetch_task(
+        inputs: str, agent: TestAgent, session: TestSession
+    ) -> str:
         # The Dataset.evaluate method passes the agent and session
         # We should use them instead of creating our own
         print(f"DEBUG: Agent name: {agent.agent.name}")
@@ -129,17 +132,21 @@ async def dataset_with_enhanced_features():
 
     # Run evaluation
     report = await dataset.evaluate(enhanced_fetch_task, max_concurrency=2)
-    
+
     # Print results manually since there's no print method
     print(f"\n{'='*60}")
     print(f"Evaluation Report: {report.dataset_name}")
     print(f"Task: {report.task_name}")
     print(f"{'='*60}")
-    
+
     for result in report.results:
         print(f"\nCase: {result.case_name}")
         print(f"  Input: {result.inputs}")
-        print(f"  Output: {result.output[:100]}..." if result.output and len(str(result.output)) > 100 else f"  Output: {result.output}")
+        print(
+            f"  Output: {result.output[:100]}..."
+            if result.output and len(str(result.output)) > 100
+            else f"  Output: {result.output}"
+        )
         print(f"  Passed: {result.passed}")
         for eval_result in result.evaluation_results:
             print(f"    - {eval_result.name}: {'✓' if eval_result.passed else '✗'}")
@@ -147,7 +154,9 @@ async def dataset_with_enhanced_features():
                 print(f"      Error: {eval_result.error}")
 
     print(f"\n{'='*60}")
-    print(f"Results: {report.passed_cases}/{report.total_cases} cases passed ({report.success_rate:.1%})")
+    print(
+        f"Results: {report.passed_cases}/{report.total_cases} cases passed ({report.success_rate:.1%})"
+    )
     print(f"Average duration: {report.average_duration_ms:.0f}ms")
     print(f"{'='*60}")
 
