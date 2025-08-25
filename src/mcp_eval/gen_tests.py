@@ -14,7 +14,9 @@ from mcp_agent.workflows.factory import _llm_factory
 from mcp_agent.mcp.gen_client import gen_client
 
 from mcp_eval.generation import ToolSchema, AssertionSpec
-from mcp_eval.generation import _assertion_catalog_prompt  # internal helper for catalog text
+from mcp_eval.generation import (
+    _assertion_catalog_prompt,
+)  # internal helper for catalog text
 
 app = typer.Typer()
 console = Console()
@@ -22,6 +24,7 @@ console = Console()
 
 class GeneratedAgentSpec(BaseModel):
     """LLM-generated AgentSpec for suite-level configuration."""
+
     name: str
     instruction: str
     server_names: List[str]
@@ -31,6 +34,7 @@ class GeneratedAgentSpec(BaseModel):
 
 class GeneratedAgent(BaseModel):
     """LLM-generated Agent for per-test override."""
+
     name: str
     instruction: str
     server_names: List[str]
@@ -84,7 +88,11 @@ async def list_tools_for_server(server_name: str) -> List[ToolSchema]:
                             or getattr(tool, "input", None)
                         )
                         tools.append(
-                            ToolSchema(name=name, description=description, input_schema=input_schema)
+                            ToolSchema(
+                                name=name,
+                                description=description,
+                                input_schema=input_schema,
+                            )
                         )
     except Exception as e:
         console.print(
@@ -172,11 +180,23 @@ def get_generation_prompt(tools: List[ToolSchema]) -> str:
                 "description": "Fetch example.com and verify content and tool usage",
                 "objective": "Fetch https://example.com and summarize",
                 "assertions": [
-                    {"kind": "response_contains", "text": "Example Domain", "case_sensitive": False},
+                    {
+                        "kind": "response_contains",
+                        "text": "Example Domain",
+                        "case_sensitive": False,
+                    },
                     {"kind": "tool_was_called", "tool_name": "fetch", "min_times": 1},
-                    {"kind": "llm_judge", "rubric": "Response should accurately summarize the page contents", "min_score": 0.8},
-                    {"kind": "tool_sequence", "sequence": ["fetch"], "allow_other_calls": False}
-                ]
+                    {
+                        "kind": "llm_judge",
+                        "rubric": "Response should accurately summarize the page contents",
+                        "min_score": 0.8,
+                    },
+                    {
+                        "kind": "tool_sequence",
+                        "sequence": ["fetch"],
+                        "allow_other_calls": False,
+                    },
+                ],
             },
             # Structured tool output matching + performance
             {
@@ -184,10 +204,16 @@ def get_generation_prompt(tools: List[ToolSchema]) -> str:
                 "description": "Ensure tool output returns text content",
                 "objective": "Print the first paragraph from https://example.com",
                 "assertions": [
-                    {"kind": "tool_output_matches", "tool_name": "fetch", "expected_output": {"content": [{"type": "text"}]}, "match_type": "partial", "case_sensitive": True},
+                    {
+                        "kind": "tool_output_matches",
+                        "tool_name": "fetch",
+                        "expected_output": {"content": [{"type": "text"}]},
+                        "match_type": "partial",
+                        "case_sensitive": True,
+                    },
                     {"kind": "max_iterations", "max_iterations": 3},
-                    {"kind": "response_time_under", "ms": 15000}
-                ]
+                    {"kind": "response_time_under", "ms": 15000},
+                ],
             },
             # Argument verification for tools
             {
@@ -196,8 +222,12 @@ def get_generation_prompt(tools: List[ToolSchema]) -> str:
                 "objective": "Fetch https://httpbin.org/json and summarize",
                 "assertions": [
                     {"kind": "tool_was_called", "tool_name": "fetch", "min_times": 1},
-                    {"kind": "tool_called_with", "tool_name": "fetch", "arguments": {"url": "https://httpbin.org/json"}}
-                ]
+                    {
+                        "kind": "tool_called_with",
+                        "tool_name": "fetch",
+                        "arguments": {"url": "https://httpbin.org/json"},
+                    },
+                ],
             },
             # Multi-tool flow and sequence
             {
@@ -205,9 +235,13 @@ def get_generation_prompt(tools: List[ToolSchema]) -> str:
                 "description": "Use two tools in sequence and verify the path",
                 "objective": "Fetch https://example.com then write a short summary to a file named summary.md",
                 "assertions": [
-                    {"kind": "tool_sequence", "sequence": ["fetch", "write"], "allow_other_calls": False},
-                    {"kind": "tool_was_called", "tool_name": "write", "min_times": 1}
-                ]
+                    {
+                        "kind": "tool_sequence",
+                        "sequence": ["fetch", "write"],
+                        "allow_other_calls": False,
+                    },
+                    {"kind": "tool_was_called", "tool_name": "write", "min_times": 1},
+                ],
             },
             # Edge case / error handling
             {
@@ -216,9 +250,13 @@ def get_generation_prompt(tools: List[ToolSchema]) -> str:
                 "objective": "Try to fetch https://this-does-not-exist-999999.tld",
                 "assertions": [
                     {"kind": "tool_was_called", "tool_name": "fetch", "min_times": 1},
-                    {"kind": "llm_judge", "rubric": "Response should acknowledge the error and explain it appropriately", "min_score": 0.8}
-                ]
-            }
+                    {
+                        "kind": "llm_judge",
+                        "rubric": "Response should acknowledge the error and explain it appropriately",
+                        "min_score": 0.8,
+                    },
+                ],
+            },
         ]
     }
 
@@ -249,7 +287,11 @@ def get_generation_prompt(tools: List[ToolSchema]) -> str:
         },
         "per_test_agent": {
             "description": "Optionally propose per-test Agent overrides when beneficial (e.g., specialized instructions)",
-            "schema": {"name": "str", "instruction": "str", "server_names": "List[str]"},
+            "schema": {
+                "name": "str",
+                "instruction": "str",
+                "server_names": "List[str]",
+            },
             "when_to_use": [
                 "When a test benefits from custom instruction or server selection",
                 "When experimenting with different tool invocation strategies",
@@ -265,7 +307,9 @@ def get_generation_prompt(tools: List[ToolSchema]) -> str:
     )
 
 
-async def generate_tests_from_llm(tools: List[ToolSchema], *, batch_size: int = 20) -> GeneratedTests:
+async def generate_tests_from_llm(
+    tools: List[ToolSchema], *, batch_size: int = 20
+) -> GeneratedTests:
     """Use an LLM to generate tests following the GeneratedTests schema, from typed tool specs."""
     prompt = get_generation_prompt(tools)
 
@@ -301,10 +345,14 @@ async def generate_tests_from_llm(tools: List[ToolSchema], *, batch_size: int = 
             aggregated.extend(model.tests)
         else:
             total_batches = (len(tools) + BATCH_SIZE - 1) // BATCH_SIZE
-            console.print(f"[cyan]Large tool list detected:[/] {len(tools)} tools. Generating in {total_batches} batches of up to {BATCH_SIZE} tools each...")
+            console.print(
+                f"[cyan]Large tool list detected:[/] {len(tools)} tools. Generating in {total_batches} batches of up to {BATCH_SIZE} tools each..."
+            )
             for i in range(0, len(tools), BATCH_SIZE):
                 batch = tools[i : i + BATCH_SIZE]
-                console.print(f"[cyan]Batch {i // BATCH_SIZE + 1}/{total_batches}:[/] {len(batch)} tools")
+                console.print(
+                    f"[cyan]Batch {i // BATCH_SIZE + 1}/{total_batches}:[/] {len(batch)} tools"
+                )
                 batch_prompt = get_generation_prompt(batch)
                 model = await llm.generate_structured(
                     batch_prompt, response_model=GeneratedTests
@@ -313,14 +361,16 @@ async def generate_tests_from_llm(tools: List[ToolSchema], *, batch_size: int = 
                     t.test_name = _uniquify(t.test_name)
                     seen_names.add(t.test_name)
                 aggregated.extend(model.tests)
-                console.print(f"  [green]✓[/] Generated {len(model.tests)} tests (cumulative: {len(aggregated)})")
+                console.print(
+                    f"  [green]✓[/] Generated {len(model.tests)} tests (cumulative: {len(aggregated)})"
+                )
 
         # Merge suite agent from the last model if available; otherwise None
         suite_agent = None
         try:
             # If we had a single batch, model is defined above. If multiple, take the last one.
             # We won't track each model separately for brevity here.
-            if 'model' in locals() and hasattr(model, 'suite_agent'):
+            if "model" in locals() and hasattr(model, "suite_agent"):
                 suite_agent = model.suite_agent
         except Exception:
             pass
@@ -363,7 +413,9 @@ def generate(
     )
 
     try:
-        generated_tests = asyncio.run(generate_tests_from_llm(tools, batch_size=batch_size))
+        generated_tests = asyncio.run(
+            generate_tests_from_llm(tools, batch_size=batch_size)
+        )
     except Exception as e:
         console.print(f"[bold red]Failed to generate tests from LLM: {e}[/bold red]")
         raise typer.Exit(1)

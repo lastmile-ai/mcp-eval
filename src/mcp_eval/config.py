@@ -334,9 +334,9 @@ class ProgrammaticDefaults:
         _programmatic_default_agent_factory.set(value)
 
     @staticmethod
-    def get_default_agent_factory() -> (
-        Optional[Callable[[], Union[Agent, AugmentedLLM]]]
-    ):
+    def get_default_agent_factory() -> Optional[
+        Callable[[], Union[Agent, AugmentedLLM]]
+    ]:
         return _programmatic_default_agent_factory.get()
 
 

@@ -380,7 +380,9 @@ async def generate_scenarios_with_agent(
             nm = t.name or "unknown"
             desc = t.description or ""
             input_schema = t.input_schema or {}
-            tool_lines.append({"name": nm, "description": desc, "input_schema": input_schema})
+            tool_lines.append(
+                {"name": nm, "description": desc, "input_schema": input_schema}
+            )
 
         guidance = (
             "You are generating test scenarios for an MCP server. Each scenario is a user-facing prompt to the agent.\n"

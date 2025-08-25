@@ -10,7 +10,6 @@ Interactive flow to:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import re
@@ -37,19 +36,14 @@ from mcp_eval.generation import (
     ToolSchema,
 )
 from mcp_eval.cli.models import (
-    ServerImport,
-    ConfigPaths,
     MCPServerConfig,
     AgentConfig,
-    MCPEvalConfig,
-    GeneratorState,
 )
 from mcp_eval.cli.utils import (
     load_yaml,
     save_yaml,
     deep_merge,
     find_mcp_json,
-    find_config_files,
     import_servers_from_json,
     import_servers_from_dxt,
     load_all_servers,
@@ -146,7 +140,9 @@ async def _generate_llm_slug(
         return None
 
 
-def _convert_servers_to_mcp_settings(servers: Dict[str, MCPServerConfig]) -> Dict[str, MCPServerSettings]:
+def _convert_servers_to_mcp_settings(
+    servers: Dict[str, MCPServerConfig],
+) -> Dict[str, MCPServerSettings]:
     """Convert MCPServerConfig to MCPServerSettings."""
     result: Dict[str, MCPServerSettings] = {}
     for name, server in servers.items():
@@ -181,24 +177,31 @@ def _prompt_provider(
         if existing_key:
             console.print("[green]API key already configured[/green]")
             # Optionally ask for model override
-            model = Prompt.ask("Model (press Enter to auto-select)", default="").strip() or None
+            model = (
+                Prompt.ask("Model (press Enter to auto-select)", default="").strip()
+                or None
+            )
             return existing_provider, existing_key, model
         # Ask only for missing key
         api_key = Prompt.ask(f"Enter {existing_provider} API key", password=True)
-        model = Prompt.ask("Model (press Enter to auto-select)", default="").strip() or None
+        model = (
+            Prompt.ask("Model (press Enter to auto-select)", default="").strip() or None
+        )
         return existing_provider, api_key, model
     # No existing provider; prompt fresh
-    provider = Prompt.ask(
-        "LLM provider", 
-        choices=["anthropic", "openai"],
-        default="anthropic"
-    ).strip().lower()
+    provider = (
+        Prompt.ask("LLM provider", choices=["anthropic", "openai"], default="anthropic")
+        .strip()
+        .lower()
+    )
     api_key = Prompt.ask(f"Enter {provider} API key", password=True)
     model = Prompt.ask("Model (press Enter to auto-select)", default="").strip() or None
     return provider, api_key, model
 
 
-def _write_mcpeval_configs(project: Path, provider: str, api_key: str, model: Optional[str] = None) -> None:
+def _write_mcpeval_configs(
+    project: Path, provider: str, api_key: str, model: Optional[str] = None
+) -> None:
     """Write provider configuration to mcpeval.yaml and secrets."""
     cfg_path = ensure_mcpeval_yaml(project)
     sec_path = project / "mcpeval.secrets.yaml"
@@ -220,7 +223,9 @@ def _write_mcpeval_configs(project: Path, provider: str, api_key: str, model: Op
             judge_model = model_info.name
         except Exception as e:
             # Fallback if ModelSelector fails
-            console.print(f"[yellow]Warning: Could not select model automatically: {e}[/yellow]")
+            console.print(
+                f"[yellow]Warning: Could not select model automatically: {e}[/yellow]"
+            )
             judge_model = "claude-sonnet-4-0" if provider == "anthropic" else "gpt-4o"
     else:
         judge_model = model
@@ -258,18 +263,16 @@ def _prompt_server_settings(
     transport = Prompt.ask(
         "Transport",
         choices=["stdio", "sse", "streamable_http", "websocket"],
-        default="stdio"
+        default="stdio",
     ).strip()
-    
+
     server = MCPServerConfig(name=server_name, transport=transport)
-    
+
     if transport == "stdio":
         server.command = Prompt.ask("Command (e.g., npx, uvx, python)")
-        args = Prompt.ask(
-            "Args (space-separated, blank for none)", default=""
-        ).strip()
+        args = Prompt.ask("Args (space-separated, blank for none)", default="").strip()
         server.args = [a for a in args.split(" ") if a]
-        
+
         if Confirm.ask("Add environment variables?", default=False):
             kv = Prompt.ask("KEY=VALUE pairs (comma-separated)", default="").strip()
             if kv:
@@ -282,9 +285,7 @@ def _prompt_server_settings(
     else:
         server.url = Prompt.ask("Server URL")
         if Confirm.ask("Add HTTP headers?", default=False):
-            kv = Prompt.ask(
-                "Header:Value pairs (comma-separated)", default=""
-            ).strip()
+            kv = Prompt.ask("Header:Value pairs (comma-separated)", default="").strip()
             if kv:
                 headers: Dict[str, str] = {}
                 for pair in kv.split(","):
@@ -312,7 +313,12 @@ async def _discover_tools(server_name: str) -> List[ToolSchema]:
                 if hasattr(result, "tools") and isinstance(result.tools, list):
                     items = result.tools  # type: ignore[assignment]
                     for t in items:
-                        name: str = getattr(t, "name", None) or getattr(t, "tool", None) or getattr(t, "id", None) or ""
+                        name: str = (
+                            getattr(t, "name", None)
+                            or getattr(t, "tool", None)
+                            or getattr(t, "id", None)
+                            or ""
+                        )
                         if not name:
                             continue
                         description: Optional[str] = getattr(t, "description", None)
@@ -322,7 +328,11 @@ async def _discover_tools(server_name: str) -> List[ToolSchema]:
                             or getattr(t, "input", None)
                         )
                         tools.append(
-                            ToolSchema(name=name, description=description, input_schema=input_schema)
+                            ToolSchema(
+                                name=name,
+                                description=description,
+                                input_schema=input_schema,
+                            )
                         )
                 else:
                     try:
@@ -338,7 +348,10 @@ async def _discover_tools(server_name: str) -> List[ToolSchema]:
                             ToolSchema(
                                 name=name,
                                 description=t.get("description"),
-                                input_schema=t.get("inputSchema") or t.get("input_schema") or t.get("input") or None,
+                                input_schema=t.get("inputSchema")
+                                or t.get("input_schema")
+                                or t.get("input")
+                                or None,
                             )
                         )
     except Exception as e:
@@ -453,30 +466,39 @@ def init_project(
     console.print("[cyan]Discovering servers...[/cyan]")
     existing_servers = load_all_servers(project)
     imported_servers: Dict[str, MCPServerConfig] = {}
-    
+
     # Check for mcp.json files and prompt user
     mcp_json = find_mcp_json()
     if mcp_json:
         console.print(f"[cyan]Found MCP configuration at {mcp_json}[/cyan]")
-        if Confirm.ask("Would you like to import servers from this file?", default=True):
+        if Confirm.ask(
+            "Would you like to import servers from this file?", default=True
+        ):
             console.print(f"[cyan]Importing servers from {mcp_json}...[/cyan]")
             import_result = import_servers_from_json(mcp_json)
             if import_result.success:
                 for name, cfg in import_result.servers.items():
                     imported_servers[name] = MCPServerConfig(**cfg)
-                console.print(f"[green]Imported {len(imported_servers)} servers[/green]")
+                console.print(
+                    f"[green]Imported {len(imported_servers)} servers[/green]"
+                )
             else:
-                console.print(f"[yellow]Failed to import: {import_result.error}[/yellow]")
-    
-    merged_servers: Dict[str, MCPServerConfig] = {**existing_servers, **imported_servers}
-    
+                console.print(
+                    f"[yellow]Failed to import: {import_result.error}[/yellow]"
+                )
+
+    merged_servers: Dict[str, MCPServerConfig] = {
+        **existing_servers,
+        **imported_servers,
+    }
+
     if merged_servers:
         console.print("[cyan]Available servers:[/cyan]")
         for n in sorted(merged_servers.keys()):
             console.print(f" - {n}")
     else:
         console.print("[yellow]No servers found; let's add one[/yellow]")
-    
+
     server_name, server_config = _prompt_server_settings(merged_servers)
     write_server_to_mcpeval(project, server_config)
 
@@ -492,7 +514,7 @@ def init_project(
         "Server names for this agent (comma-separated)", default=server_name
     )
     server_list = [s.strip() for s in server_list_str.split(",") if s.strip()]
-    
+
     agent = AgentConfig(
         name=agent_name,
         instruction=instruction,
@@ -507,7 +529,9 @@ def init_project(
 @app.command("generate")
 def run_generator(
     out_dir: str = typer.Option(".", help="Project directory to write configs/tests"),
-    style: Optional[str] = typer.Option(None, help="Test style: pytest|decorators|dataset"),
+    style: Optional[str] = typer.Option(
+        None, help="Test style: pytest|decorators|dataset"
+    ),
     n_examples: int = typer.Option(6, help="Number of scenarios to generate"),
     provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
     model: Optional[str] = typer.Option(None, help="Model id (optional)"),
@@ -524,7 +548,9 @@ def run_generator(
     project = Path(out_dir)
     project.mkdir(parents=True, exist_ok=True)
 
-    console.print("[cyan]Checking credentials and writing mcpeval configs if needed...[/cyan]")
+    console.print(
+        "[cyan]Checking credentials and writing mcpeval configs if needed...[/cyan]"
+    )
     # Provider + API key (load existing when re-running)
     existing_provider, existing_key = _load_existing_provider(project)
     # Get provider, api_key, and optional model from prompt
@@ -547,7 +573,9 @@ def run_generator(
         console.print(
             "Type an existing server name to use it, or type a new name to add one."
         )
-        chosen = Prompt.ask("Server name", default=next(iter(sorted(existing_servers.keys()))))
+        chosen = Prompt.ask(
+            "Server name", default=next(iter(sorted(existing_servers.keys())))
+        )
         if chosen in existing_servers:
             server_name = chosen
             server_config = existing_servers[chosen]
@@ -558,7 +586,7 @@ def run_generator(
         # No servers known yet; prompt fresh
         console.print("[yellow]No servers configured yet[/yellow]")
         server_name, server_config = _prompt_server_settings({})
-    
+
     # Persist to mcpeval.yaml (source of truth for this tool)
     write_server_to_mcpeval(project, server_config)
     console.print(f"[cyan]Server '{server_name}' configured.[/cyan]")
@@ -568,34 +596,35 @@ def run_generator(
     cfg_path = ensure_mcpeval_yaml(project)
     cfg = load_yaml(cfg_path)
     default_agent = cfg.get("default_agent")
-    
+
     if agents:
         console.print("[cyan]Available agents:[/cyan]")
         for agent in agents:
             marker = "(default)" if agent.name == default_agent else ""
             console.print(f" - {agent.name} {marker}")
-        
+
         agent_names = [a.name for a in agents]
         chosen_agent = Prompt.ask(
-            "Agent to use", 
-            choices=agent_names,
-            default=default_agent or agent_names[0]
+            "Agent to use", choices=agent_names, default=default_agent or agent_names[0]
         )
         _set_default_agent(project, chosen_agent)
     else:
-        console.print("[yellow]No agents defined. Consider running 'mcp-eval init' first to define a default agent.[/yellow]")
+        console.print(
+            "[yellow]No agents defined. Consider running 'mcp-eval init' first to define a default agent.[/yellow]"
+        )
 
     # Discovery
     console.print(f"[cyan]Discovering tools for server '{server_name}'...[/cyan]")
     try:
         import asyncio
+
         tools = asyncio.run(_discover_tools(server_name))
     except Exception as e:
         console.print(f"[yellow]Warning: Could not list tools: {e}[/yellow]")
         tools = []
         if not Confirm.ask("Continue without tool discovery?", default=True):
             raise typer.Exit(1)
-    
+
     if tools:
         console.print(
             f"[green]Discovered {len(tools)} tools:[/green] "
@@ -606,11 +635,11 @@ def run_generator(
         console.print("[yellow]No tools discovered[/yellow]")
 
     # Two-stage generation (first: scenarios; second: assertions refinement per scenario)
-    console.print(f"[cyan]Generating test scenarios...[/cyan]")
+    console.print("[cyan]Generating test scenarios...[/cyan]")
     try:
         import asyncio
         from rich.progress import Progress, SpinnerColumn, TextColumn
-        
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -619,11 +648,14 @@ def run_generator(
             task = progress.add_task("Generating scenarios...", total=None)
             scenarios = asyncio.run(
                 generate_scenarios_with_agent(
-                    tools=tools, n_examples=n_examples, provider=provider, model=final_model
+                    tools=tools,
+                    n_examples=n_examples,
+                    provider=provider,
+                    model=final_model,
                 )
             )
             progress.update(task, description=f"Generated {len(scenarios)} scenarios")
-            
+
             progress.update(task, description="Refining assertions...")
             scenarios = asyncio.run(
                 refine_assertions_with_agent(
@@ -631,7 +663,7 @@ def run_generator(
                 )
             )
             progress.update(task, description="Completed generation")
-        
+
         console.print(f"[green]✓ Generated {len(scenarios)} test scenarios[/green]")
     except KeyboardInterrupt:
         console.print("\n[yellow]Generation cancelled by user[/yellow]")
@@ -642,9 +674,15 @@ def run_generator(
 
     # Prompt for style if not provided
     if not style:
-        style = typer.prompt("Test style (pytest|decorators|dataset)", default="pytest").strip().lower()
+        style = (
+            typer.prompt("Test style (pytest|decorators|dataset)", default="pytest")
+            .strip()
+            .lower()
+        )
 
-    _emit_tests(project, style, server_name, scenarios, provider=provider, model=final_model)
+    _emit_tests(
+        project, style, server_name, scenarios, provider=provider, model=final_model
+    )
     # Summary of generated scenarios
     if scenarios:
         console.print("\n[bold]Summary of generated scenarios:[/bold]")
@@ -657,9 +695,15 @@ def run_generator(
 @app.command("update")
 def update_tests(
     out_dir: str = typer.Option(".", help="Project directory"),
-    target_file: str = typer.Option(..., help="Path to an existing test file to append to"),
-    server_name: str = typer.Option(None, help="Server to generate against (prompted if omitted)"),
-    style: str = typer.Option("pytest", help="Test style for new tests: pytest|decorators|dataset"),
+    target_file: str = typer.Option(
+        ..., help="Path to an existing test file to append to"
+    ),
+    server_name: str = typer.Option(
+        None, help="Server to generate against (prompted if omitted)"
+    ),
+    style: str = typer.Option(
+        "pytest", help="Test style for new tests: pytest|decorators|dataset"
+    ),
     n_examples: int = typer.Option(4, help="Number of new scenarios to generate"),
     provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
     model: Optional[str] = typer.Option(None, help="Model id (optional)"),
@@ -680,16 +724,22 @@ def update_tests(
     existing_servers = load_all_servers(project)
     if not server_name:
         if not existing_servers:
-            console.print("[yellow]No servers configured. Run 'mcp-eval init' first.[/yellow]")
+            console.print(
+                "[yellow]No servers configured. Run 'mcp-eval init' first.[/yellow]"
+            )
             raise typer.Exit(1)
         console.print("Available servers:")
         for n in sorted(existing_servers.keys()):
             console.print(f" - {n}")
-        server_name = typer.prompt("Server name", default=next(iter(sorted(existing_servers.keys()))))
+        server_name = typer.prompt(
+            "Server name", default=next(iter(sorted(existing_servers.keys())))
+        )
 
     # Provider + key (reuse flow)
     existing_provider, existing_key = _load_existing_provider(project)
-    provider, api_key, prompted_model = _prompt_provider(existing_provider, existing_key)
+    provider, api_key, prompted_model = _prompt_provider(
+        existing_provider, existing_key
+    )
     final_model = model or prompted_model
     if api_key:
         _write_mcpeval_configs(project, provider, api_key, final_model)
@@ -724,25 +774,35 @@ def update_tests(
     if style.strip().lower() == "decorators":
         content = render_decorator_tests(scenarios, server_name)
     elif style.strip().lower() == "dataset":
-        content = render_pytest_tests(scenarios, server_name)  # dataset append not ideal
+        content = render_pytest_tests(
+            scenarios, server_name
+        )  # dataset append not ideal
     else:
         content = render_pytest_tests(scenarios, server_name)
 
     sep = "\n\n# ---- mcp-eval: additional generated tests ----\n\n"
     appended = sep + content
-    file_path.write_text(file_path.read_text(encoding="utf-8") + appended, encoding="utf-8")
+    file_path.write_text(
+        file_path.read_text(encoding="utf-8") + appended, encoding="utf-8"
+    )
     console.print(f"[green]✓[/] Appended {len(scenarios)} tests to {file_path}")
 
 
-add_app = typer.Typer(help="Add resources to mcpeval.yaml (servers, agents).\n\nExamples:\n  - Add a server interactively:\n    mcp-eval add server\n\n  - Import servers from mcp.json:\n    mcp-eval add server --from-mcp-json .cursor/mcp.json\n\n  - Add an agent:\n    mcp-eval add agent")
+add_app = typer.Typer(
+    help="Add resources to mcpeval.yaml (servers, agents).\n\nExamples:\n  - Add a server interactively:\n    mcp-eval add server\n\n  - Import servers from mcp.json:\n    mcp-eval add server --from-mcp-json .cursor/mcp.json\n\n  - Add an agent:\n    mcp-eval add agent"
+)
 app.add_typer(add_app, name="add")
 
 
 @add_app.command("server")
 def add_server(
     out_dir: str = typer.Option(".", help="Project directory"),
-    from_mcp_json: Optional[str] = typer.Option(None, help="Path to mcp.json to import servers from"),
-    from_dxt: Optional[str] = typer.Option(None, help="Path to DXT file to import servers from"),
+    from_mcp_json: Optional[str] = typer.Option(
+        None, help="Path to mcp.json to import servers from"
+    ),
+    from_dxt: Optional[str] = typer.Option(
+        None, help="Path to DXT file to import servers from"
+    ),
 ):
     """Add a server to mcpeval.yaml, either interactively or from mcp.json/DXT file.
 
@@ -757,44 +817,52 @@ def add_server(
     project.mkdir(parents=True, exist_ok=True)
 
     imported_servers: Dict[str, MCPServerConfig] = {}
-    
+
     if from_mcp_json:
         json_path = Path(from_mcp_json)
         if not json_path.exists():
             console.print(f"[red]Error: File not found: {json_path}[/red]")
             raise typer.Exit(1)
-        
+
         import_result = import_servers_from_json(json_path)
         if import_result.success:
             for name, cfg in import_result.servers.items():
                 imported_servers[name] = MCPServerConfig(**cfg)
-            console.print(f"[green]Found {len(imported_servers)} servers in {json_path}[/green]")
+            console.print(
+                f"[green]Found {len(imported_servers)} servers in {json_path}[/green]"
+            )
         else:
             console.print(f"[red]Failed to import: {import_result.error}[/red]")
             raise typer.Exit(1)
-            
+
     elif from_dxt:
         dxt_path = Path(from_dxt)
         if not dxt_path.exists():
             console.print(f"[red]Error: File not found: {dxt_path}[/red]")
             raise typer.Exit(1)
-            
+
         import_result = import_servers_from_dxt(dxt_path)
         if import_result.success:
             for name, cfg in import_result.servers.items():
                 imported_servers[name] = MCPServerConfig(**cfg)
-            console.print(f"[green]Found {len(imported_servers)} servers in {dxt_path}[/green]")
+            console.print(
+                f"[green]Found {len(imported_servers)} servers in {dxt_path}[/green]"
+            )
         else:
-            console.print(f"[yellow]No servers found in DXT file: {import_result.error}[/yellow]")
+            console.print(
+                f"[yellow]No servers found in DXT file: {import_result.error}[/yellow]"
+            )
 
     if imported_servers:
         console.print("[cyan]Imported servers:[/cyan]")
         for n in imported_servers.keys():
             console.print(f" - {n}")
-        
+
         server_names = list(imported_servers.keys())
-        chosen = Prompt.ask("Server to add", choices=server_names, default=server_names[0])
-        
+        chosen = Prompt.ask(
+            "Server to add", choices=server_names, default=server_names[0]
+        )
+
         if chosen in imported_servers:
             write_server_to_mcpeval(project, imported_servers[chosen])
             console.print(f"[green]✓ Added server '{chosen}'[/green]")
@@ -823,33 +891,37 @@ def add_agent(
     # Check existing agents to avoid duplicates
     existing_agents = load_all_agents(project)
     existing_names = [a.name for a in existing_agents]
-    
+
     # Gather AgentSpec fields
     name = Prompt.ask("Agent name")
     if name in existing_names:
-        if not Confirm.ask(f"Agent '{name}' already exists. Replace it?", default=False):
+        if not Confirm.ask(
+            f"Agent '{name}' already exists. Replace it?", default=False
+        ):
             console.print("[yellow]Cancelled[/yellow]")
             raise typer.Exit(0)
-    
+
     instruction = Prompt.ask(
-        "Instruction", 
-        default="You are a helpful assistant that can use MCP servers effectively."
+        "Instruction",
+        default="You are a helpful assistant that can use MCP servers effectively.",
     )
-    
+
     # Show available servers
     existing_servers = load_all_servers(project)
     if existing_servers:
         console.print("[cyan]Available servers:[/cyan]")
         for server_name in existing_servers.keys():
             console.print(f" - {server_name}")
-    
+
     server_list_str = Prompt.ask("Server names (comma-separated)")
     server_names = [s.strip() for s in server_list_str.split(",") if s.strip()]
 
     # Validate servers exist
     missing = [s for s in server_names if s not in existing_servers]
     if missing:
-        console.print(f"[yellow]Warning: Referenced servers not found: {', '.join(missing)}[/yellow]")
+        console.print(
+            f"[yellow]Warning: Referenced servers not found: {', '.join(missing)}[/yellow]"
+        )
         if Confirm.ask("Would you like to add them now?", default=True):
             for s in missing:
                 console.print(f"\n[cyan]Adding server '{s}'...[/cyan]")
@@ -860,12 +932,10 @@ def add_agent(
                 write_server_to_mcpeval(project, server_config)
 
     # Create and save agent
-    agent = AgentConfig(
-        name=name,
-        instruction=instruction,
-        server_names=server_names
+    agent = AgentConfig(name=name, instruction=instruction, server_names=server_names)
+
+    set_default = Confirm.ask(
+        "Set this as default agent?", default=len(existing_agents) == 0
     )
-    
-    set_default = Confirm.ask("Set this as default agent?", default=len(existing_agents) == 0)
     write_agent_to_mcpeval(project, agent, set_default=set_default)
     console.print(f"[green]✓ Added agent '{name}'[/green]")

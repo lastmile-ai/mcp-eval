@@ -2,11 +2,10 @@
 
 import typer
 from pathlib import Path
-from typing import Optional
 from rich.console import Console
 
 from mcp_eval.runner import app as runner_app
-from mcp_eval.cli.generator import app as generator_app, add_app
+from mcp_eval.cli.generator import add_app, init_project, run_generator, update_tests
 from mcp_eval.cli.list_command import app as list_app
 from mcp_eval.cli.validate import validate
 from mcp_eval.cli.doctor import doctor
@@ -34,9 +33,6 @@ def version():
 
 
 # Add init, generate and update commands from generator to top level
-# These need to be imported directly to work properly
-from mcp_eval.cli.generator import init_project, run_generator, update_tests
-
 app.command("init")(init_project)
 app.command("generate")(run_generator)
 app.command("update")(update_tests)
