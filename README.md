@@ -26,3 +26,4 @@ Install `mcp_eval` and its dependencies. Make sure `mcp-agent` is also installed
 
 ```bash
 pip install "typer[all]" rich pydantic jinja2
+```

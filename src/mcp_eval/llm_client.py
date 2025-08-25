@@ -85,9 +85,9 @@ class JudgeLLMClient:
     async def _mock_llm_call(self, prompt: str) -> str:
         """Mock LLM call for demo purposes."""
         # In real implementation, this would call the actual LLM
-        # For now, return a mock score
+        # For now, return a mock JSON response for judge evaluations
         if "score" in prompt.lower() or "rate" in prompt.lower():
-            return "0.85"
+            return '{"score": 0.85, "reasoning": "Task appears to be successfully completed based on trace analysis", "passed": true, "confidence": 0.9}'
         return "The response meets the specified criteria."
 
 

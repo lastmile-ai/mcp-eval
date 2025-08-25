@@ -23,7 +23,9 @@ async def test_basic_fetch_with_pytest(mcp_agent: TestAgent):
     response = await mcp_agent.generate_str(
         "Fetch the content from https://example.com"
     )
-
+    response = await mcp_agent.generate_str(
+        "Fetch the content from https://bbc.com"
+    )
     # Modern evaluator approach
     await mcp_agent.session.assert_that(
         Expect.tools.was_called("fetch"), name="fetch_tool_called", response=response

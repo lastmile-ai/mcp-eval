@@ -1,3 +1,4 @@
+import json
 import os
 import dspy
 from typing import List, Dict, Any, Tuple
@@ -13,18 +14,26 @@ class ToolCall(dspy.Module):
 
 
 class DocstringImprover(dspy.Signature):
-    """Signature for improving tool docstrings based on failed examples"""
-
+    """Signature for improving tool docstrings based on successful and failed examples"""
     tool_name = dspy.InputField(desc="Name of the tool to optimize docstring for")
+    tool_input_arguments = dspy.InputField(desc="List of input arguments for the tool with the type of the argument")
     original_docstring = dspy.InputField(desc="Original docstring of the tool")
-    failed_examples = dspy.InputField(
-        desc="List of examples where the tool selection failed"
-    )
-    correct_examples = dspy.InputField(
-        desc="List of examples where the tool was correctly selected"
-    )
+    correct_examples = dspy.InputField(desc="List of examples where the tool was correctly selected")
+    failed_examples = dspy.InputField(desc="List of examples where the tool selection failed")
     improved_docstring = dspy.OutputField(
-        desc="Improved docstring that better describes the tool's purpose"
+        desc=
+        """ 
+     Your task is to create a concise and effective tool usage description based on the tool documentation. You should ensure the description only contains the purposes of the
+     tool without irrelevant information. Here is an example:
+     /* Examples */
+     {Tool Documentation}
+     Tool usage description:
+     {Tool_name} is a tool that can {General_Purposes}.
+     This tool has {Number} multiple built-in functions:
+     1. {Function_1} is to {Functionality_of_Function_1} 2. {Function_2} is to ...
+     /* Auto generation of tool description */ {ToolDocumentationof'AviationWeatherCenter'} Tool usage description:
+     'Aviation Weather Center' is a tool which can provide official aviation weather data...
+    """
     )
 
 
@@ -228,8 +237,10 @@ class ToolPredictor(dspy.Module):
         # Store optimization report data
         self.optimization_report = {}
 
+        unique_dicts = list({json.dumps(d, sort_keys=True) for d in tools_list})
+        unique_dicts = [json.loads(d) for d in unique_dicts]
         # Optimize docstrings for tools that have both failed and successful examples
-        for tool in tools_list:
+        for tool in unique_dicts:
             try:
                 tool_name = tool.get("name", "")
                 tool_docstring = tool.get("description", "")
@@ -238,21 +249,26 @@ class ToolPredictor(dspy.Module):
                 successful_queries = []
 
                 # Analyze examples to find successful and failed cases for this tool
+                successful_examples = []
+                failed_examples = []
                 for example in examples:
                     # Check if this tool was used in the example
-                    if tool_name in example.unique_tools_used:
-                        # Determine if the example was successful
-                        is_successful = (
-                            example.success_rate
-                            if hasattr(example, "success_rate")
-                            else 1.0
-                        )
-
-                        if is_successful:
-                            successful_queries.append(example.user_query)
-                        else:
-                            failed_queries.append(example.user_query)
-
+                    if any(example.get('tool_calls')):
+                        if any([True for tool in example.get('tool_calls') if tool_name in tool.get("name", "")]):
+                            # Determine if the example was successful                        
+                            if example.is_successful:
+                                successful_examples.append(example)
+                            else:
+                                failed_examples.append(example)
+                
+                # Sort successful examples by score (descending) and extract queries
+                successful_examples.sort(key=lambda x: x.score, reverse=True)
+                successful_queries = [example.user_query for example in successful_examples]
+                
+                # Sort failed examples by score (ascending - lowest score first) and extract queries
+                failed_examples.sort(key=lambda x: x.score)
+                failed_queries = [example.user_query for example in failed_examples]
+                
                 # Initialize report entry for this tool
                 self.optimization_report[tool_name] = {
                     "original_docstring": tool_docstring,
@@ -277,11 +293,10 @@ class ToolPredictor(dspy.Module):
                     # Use docstring improver to generate better docstring
                     improved_docstring = self.docstring_improver(
                         tool_name=tool_name,
+                        tool_input_arguments=tool_schema,
                         original_docstring=tool_docstring,
-                        failed_examples=str(failed_queries[:3]),  # Limit to 3 examples
-                        correct_examples=str(
-                            successful_queries[:3]
-                        ),  # Limit to 3 examples
+                        failed_examples=str(failed_queries),  # Limit to 3 examples
+                        correct_examples=str(successful_queries)  # Limit to 3 examples
                     )
 
                     # Store the optimized docstring
