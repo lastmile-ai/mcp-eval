@@ -1,7 +1,7 @@
 """MultiCriteriaJudge evaluator with multiple criteria and detailed rubrics."""
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 

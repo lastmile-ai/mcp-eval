@@ -1,6 +1,6 @@
 """PathEfficiency evaluator for checking optimal task completion paths."""
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 from dataclasses import dataclass
 from collections import defaultdict
 

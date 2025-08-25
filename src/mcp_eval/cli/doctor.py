@@ -4,7 +4,7 @@ import asyncio
 import platform
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 import json
 
 import typer

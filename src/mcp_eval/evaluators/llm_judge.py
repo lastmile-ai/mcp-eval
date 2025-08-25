@@ -1,7 +1,7 @@
 """LLMJudge evaluator for using LLM to judge response quality."""
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from dataclasses import dataclass
 from pydantic import BaseModel, Field
 

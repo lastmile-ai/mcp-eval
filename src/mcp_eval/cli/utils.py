@@ -3,7 +3,7 @@
 import json
 import yaml
 from pathlib import Path
-from typing import Dict, Optional, List, Any
+from typing import Dict, List, Any
 from rich.console import Console
 
 from mcp_eval.cli.models import (

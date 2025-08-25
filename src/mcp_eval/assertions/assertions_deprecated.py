@@ -2,7 +2,6 @@ import json
 from mcp_eval.core import TestSession
 from mcp_eval.metrics import TestMetrics
 from pydantic import BaseModel, Field
-from typing import Optional
 
 # --- Pydantic Models for Judge Assertions ---
 

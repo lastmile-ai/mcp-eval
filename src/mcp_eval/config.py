@@ -7,7 +7,7 @@ and consolidates configuration in a single typed object.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional, List, Union, Any, Callable
+from typing import Dict, List, Any, Callable
 from contextvars import ContextVar
 
 import yaml
@@ -118,11 +118,11 @@ def _deep_merge(base: dict, update: dict) -> dict:
 
 # Global configuration state
 _current_settings: MCPEvalSettings | None = None
-_programmatic_default_agent: ContextVar[Union[Agent, AugmentedLLM, None]] = ContextVar(
+_programmatic_default_agent: ContextVar[Agent | AugmentedLLM | None] = ContextVar(
     "programmatic_default_agent", default=None
 )
 _programmatic_default_agent_factory: ContextVar[
-    Optional[Callable[[], Union[Agent, AugmentedLLM]]]
+    Callable[[], Agent | AugmentedLLM] | None
 ] = ContextVar("programmatic_default_agent_factory", default=None)
 
 
@@ -202,7 +202,7 @@ def _find_eval_secrets() -> Path | None:
     return _search_upwards_for(candidates)
 
 
-def load_config(config_path: Union[str, Path] | None = None) -> MCPEvalSettings:
+def load_config(config_path: str | Path | None = None) -> MCPEvalSettings:
     """Load configuration with full validation.
 
     Priority overlay (later overrides earlier where fields overlap):
@@ -320,23 +320,21 @@ class ProgrammaticDefaults:
     """
 
     @staticmethod
-    def set_default_agent(value: Union[Agent, AugmentedLLM, None]) -> None:
+    def set_default_agent(value: Agent | AugmentedLLM | None) -> None:
         _programmatic_default_agent.set(value)
 
     @staticmethod
-    def get_default_agent() -> Union[Agent, AugmentedLLM, None]:
+    def get_default_agent() -> Agent | AugmentedLLM | None:
         return _programmatic_default_agent.get()
 
     @staticmethod
     def set_default_agent_factory(
-        value: Optional[Callable[[], Union[Agent, AugmentedLLM]]],
+        value: Callable[[], Agent | AugmentedLLM] | None,
     ) -> None:
         _programmatic_default_agent_factory.set(value)
 
     @staticmethod
-    def get_default_agent_factory() -> Optional[
-        Callable[[], Union[Agent, AugmentedLLM]]
-    ]:
+    def get_default_agent_factory() -> Callable[[], Agent | AugmentedLLM] | None:
         return _programmatic_default_agent_factory.get()
 
 
@@ -352,7 +350,7 @@ def update_config(config: Dict[str, object]):
             setattr(_current_settings, key, value)
 
 
-def set_settings(settings: Union[MCPEvalSettings, Dict[str, Any]]):
+def set_settings(settings: MCPEvalSettings | Dict[str, Any]):
     """Programmatically set MCP‑Eval settings (bypass file discovery).
 
     Accepts either an MCPEvalSettings instance or a raw dict that will be
@@ -370,7 +368,7 @@ def set_settings(settings: Union[MCPEvalSettings, Dict[str, Any]]):
 # Deprecated helpers removed: prefer defining server_names on Agent/AgentSpec
 
 
-def use_config(config: Union[MCPEvalSettings, str]) -> MCPEvalSettings:
+def use_config(config: MCPEvalSettings | str) -> MCPEvalSettings:
     """Programmatically set MCP‑Eval configuration.
 
     Accepts either a fully-formed MCPEvalSettings object, or a string path to a
@@ -398,7 +396,7 @@ def use_config(config: Union[MCPEvalSettings, str]) -> MCPEvalSettings:
 
 
 def use_agent(
-    agent_or_config: Union[Agent, AugmentedLLM, AgentSpec, str],
+    agent_or_config: Agent | AugmentedLLM | AgentSpec | str,
 ):
     """Configure default agent for tests.
 
@@ -423,7 +421,7 @@ def use_agent(
     raise TypeError("Unsupported agent configuration type")
 
 
-def use_agent_factory(factory: Callable[[], Union[Agent, AugmentedLLM]]):
+def use_agent_factory(factory: Callable[[], Agent | AugmentedLLM]):
     """Configure a factory for creating a default Agent/AugmentedLLM per session.
 
     This is the concurrency-safe way to set a programmatic default when running
@@ -436,7 +434,7 @@ def use_agent_factory(factory: Callable[[], Union[Agent, AugmentedLLM]]):
     ProgrammaticDefaults.set_default_agent_factory(factory)
 
 
-def use_agent_object(obj: Union[Agent, AugmentedLLM]):
+def use_agent_object(obj: Agent | AugmentedLLM):
     """Explicitly set a programmatic agent or LLM instance for tests (strongly-typed)."""
     return use_agent(obj)
 

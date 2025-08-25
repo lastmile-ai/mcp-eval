@@ -1,6 +1,6 @@
 """Markdown report generation for MCP-Eval."""
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from urllib.parse import quote
 
 from mcp_eval.report_generation.utils import (

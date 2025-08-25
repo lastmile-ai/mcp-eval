@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Union, Any, Dict, List, Pattern
+from typing import Literal, Any, Dict, List, Pattern
 
 from mcp_eval.evaluators import (
     ExactToolCount,
@@ -134,7 +134,7 @@ async def judge(
 def tool_output_matches(
     session: TestSession,
     tool_name: str,
-    expected_output: Union[Dict[str, Any], str, Pattern, int, float, List[Any]],
+    expected_output: Dict[str, Any] | str | Pattern | int | float | List[Any],
     field_path: str | None = None,
     match_type: Literal["exact", "contains", "regex", "partial"] = "exact",
     case_sensitive: bool = True,

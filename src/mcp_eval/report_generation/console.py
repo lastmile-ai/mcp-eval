@@ -1,6 +1,6 @@
 """Console output formatting for mcp-eval test results."""
 
-from typing import List, Dict, Literal, Optional
+from typing import List, Dict, Literal
 from pathlib import Path
 from rich.console import Console
 from rich.text import Text

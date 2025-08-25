@@ -9,7 +9,7 @@ import shutil
 import logging
 import inspect
 from pathlib import Path
-from typing import Any, Callable, List, Literal, Dict, Optional, Union
+from typing import Any, Callable, List, Literal, Dict
 from datetime import datetime
 from contextlib import asynccontextmanager
 
@@ -137,9 +137,7 @@ class TestSession:
         test_name: str,
         verbose: bool = False,
         *,
-        agent_override: 
-            Union[Agent, AugmentedLLM, AgentSpec, str, Callable]
-         | None = None,
+        agent_override: Agent | AugmentedLLM | AgentSpec | str | Callable | None = None,
     ):
         self.test_name = test_name
         self.verbose = verbose
@@ -864,7 +862,7 @@ class TestSession:
 @asynccontextmanager
 async def test_session(
     test_name: str,
-    agent: Union[Agent, AugmentedLLM, AgentSpec, str] | None = None,
+    agent: Agent | AugmentedLLM | AgentSpec | str | None = None,
 ):
     """Context manager for creating test sessions.
 

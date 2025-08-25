@@ -1,7 +1,7 @@
 """ToolOutputMatches evaluator for validating tool output against expected patterns."""
 
 import re
-from typing import Any, Dict, List, Literal, Optional, Pattern, Union
+from typing import Any, Dict, List, Literal, Pattern
 from dataclasses import dataclass
 
 from mcp_eval.evaluators.base import SyncEvaluator, EvaluatorContext
@@ -47,7 +47,7 @@ class ToolOutputMatches(SyncEvaluator):
     tool_name: str
     """Name of the tool whose output should be validated."""
 
-    expected_output: Union[Dict[str, Any], str, Pattern, int, float, List[Any]]
+    expected_output: Dict[str, Any] | str | Pattern | int | float | List[Any]
     """Expected output value or pattern to match against."""
 
     field_path: str | None = None
@@ -168,7 +168,7 @@ class ToolOutputMatches(SyncEvaluator):
 
         return current
 
-    def _parse_field_path(self, path: str) -> List[Union[str, int]]:
+    def _parse_field_path(self, path: str) -> List[str | int]:
         """Parse field path into components."""
         parts = []
         current = ""

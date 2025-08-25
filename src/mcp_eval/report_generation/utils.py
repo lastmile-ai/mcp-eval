@@ -4,7 +4,7 @@ import os
 import sys
 import platform
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import yaml
 
 

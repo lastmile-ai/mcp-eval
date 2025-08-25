@@ -1,7 +1,6 @@
 """List command for showing configured servers and agents."""
 
 from pathlib import Path
-from typing import Optional
 import typer
 from rich.console import Console
 from rich.table import Table

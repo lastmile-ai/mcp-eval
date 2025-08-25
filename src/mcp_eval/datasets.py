@@ -3,7 +3,7 @@
 import json
 import yaml
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TypeVar, Generic, Callable, Union
+from typing import Any, Dict, List, TypeVar, Generic, Callable
 from dataclasses import dataclass, field
 
 from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
@@ -78,7 +78,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         self,
         task_func: Callable,
         max_concurrency: int | None = None,
-        progress_callback: Optional[Callable[[bool, bool], None]] = None,
+        progress_callback: Callable[[bool, bool], None] | None = None,
     ) -> EvaluationReport:
         """Evaluate the task function against all cases using unified TestSession.
 
@@ -228,7 +228,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
 
         return asyncio.run(self.evaluate(task_func, max_concurrency))
 
-    def to_file(self, path: Union[str, Path], format: str | None = None):
+    def to_file(self, path: str | Path, format: str | None = None):
         """Save dataset to file in YAML or JSON format."""
         path = Path(path)
         if format is None:
@@ -274,7 +274,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
     @classmethod
     def from_file(
         cls,
-        path: Union[str, Path],
+        path: str | Path,
         input_type: type = str,
         output_type: type = str,
         metadata_type: type = dict,

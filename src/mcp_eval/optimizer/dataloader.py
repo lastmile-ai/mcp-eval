@@ -1,7 +1,7 @@
 """Data loader for trace datasets."""
 
 import dspy
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 
 class DataExample(dspy.Example):

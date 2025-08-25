@@ -1,6 +1,6 @@
 """OpenTelemetry span tree analysis utilities."""
 
-from typing import Any, Dict, List, Optional, Callable, Union
+from typing import Any, Dict, List, Callable, Union
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 

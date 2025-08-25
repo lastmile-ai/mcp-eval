@@ -4,7 +4,7 @@ import asyncio
 import inspect
 import traceback
 import hashlib
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Callable
+from typing import TYPE_CHECKING, Any, Dict, List, Callable
 from functools import wraps
 from dataclasses import dataclass, asdict
 from pathlib import Path

@@ -1,7 +1,7 @@
 """Base evaluator classes and context."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Generic, Optional, TypeVar, TYPE_CHECKING
+from typing import Any, Dict, Generic, TypeVar, TYPE_CHECKING
 from dataclasses import dataclass
 
 from mcp_eval.metrics import TestMetrics

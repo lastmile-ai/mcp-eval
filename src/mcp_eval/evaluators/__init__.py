@@ -1,6 +1,6 @@
 """Evaluators package - imports all evaluators and shared components."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 # Import shared components
 from mcp_eval.evaluators.shared import EvaluatorResult, EvaluationRecord

@@ -3,7 +3,7 @@
 import json
 import webbrowser
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from urllib.parse import quote
 from datetime import datetime
 

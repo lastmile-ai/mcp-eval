@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn

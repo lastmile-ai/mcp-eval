@@ -1,6 +1,6 @@
 """Simple LLM client for judge evaluations."""
 
-from typing import Optional, TypeVar
+from typing import TypeVar
 from pydantic import BaseModel
 from mcp_agent.workflows.factory import create_llm
 from mcp_eval.config import get_settings

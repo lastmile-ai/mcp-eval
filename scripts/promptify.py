@@ -5,7 +5,7 @@ Really helpful for using as a prompt for LLM code generation tasks.
 
 import fnmatch
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import typer
 from rich.console import Console

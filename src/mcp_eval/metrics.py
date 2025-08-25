@@ -1,7 +1,7 @@
 """Metrics collection and processing from OTEL traces."""
 
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from dataclasses import dataclass, field
 
 from mcp_agent.tracing.token_counter import TokenCounter

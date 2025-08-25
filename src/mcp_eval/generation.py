@@ -5,7 +5,7 @@ This module provides two complementary approaches:
 - Backward-compatible simple dataset generation
 """
 
-from typing import List, Dict, Any, Optional, Annotated, Literal, Union
+from typing import List, Dict, Any, Annotated, Literal
 from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
@@ -274,7 +274,7 @@ class NotContainsSpec(BaseModel):
 class ToolOutputMatchesSpec(BaseModel):
     kind: Literal["tool_output_matches"] = "tool_output_matches"
     tool_name: str
-    expected_output: Union[Dict[str, Any], str, int, float, List[Any]]
+    expected_output: Dict[str, Any] | str | int | float | List[Any]
     field_path: str | None = None
     match_type: str = Field("exact", description="exact|contains|regex|partial")
     case_sensitive: bool = True
@@ -304,17 +304,15 @@ class ToolSequenceSpec(BaseModel):
 
 
 AssertionSpec = Annotated[
-    Union[
-        ToolWasCalledSpec,
-        ToolCalledWithSpec,
-        ResponseContainsSpec,
-        NotContainsSpec,
-        ToolOutputMatchesSpec,
-        MaxIterationsSpec,
-        ResponseTimeUnderSpec,
-        LLMJudgeSpec,
-        ToolSequenceSpec,
-    ],
+    ToolWasCalledSpec
+    | ToolCalledWithSpec
+    | ResponseContainsSpec
+    | NotContainsSpec
+    | ToolOutputMatchesSpec
+    | MaxIterationsSpec
+    | ResponseTimeUnderSpec
+    | LLMJudgeSpec
+    | ToolSequenceSpec,
     Field(discriminator="kind"),
 ]
 

@@ -13,7 +13,7 @@ themselves. Pair them with `session.assert_that(...)`.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Pattern, Union
+from typing import Any, Dict, List, Pattern
 
 from mcp_eval.evaluators import (
     ToolWasCalled,
@@ -66,9 +66,7 @@ class Tools:
         return ExactToolCount(tool_name, expected_count)
 
     @staticmethod
-    def success_rate(
-        min_rate: float, tool_name: str | None = None
-    ) -> ToolSuccessRate:
+    def success_rate(min_rate: float, tool_name: str | None = None) -> ToolSuccessRate:
         return ToolSuccessRate(min_rate=min_rate, tool_name=tool_name)
 
     @staticmethod
@@ -78,7 +76,7 @@ class Tools:
     @staticmethod
     def output_matches(
         tool_name: str,
-        expected_output: Union[Dict[str, Any], str, Pattern, int, float, List[Any]],
+        expected_output: Dict[str, Any] | str | Pattern | int | float | List[Any],
         *,
         field_path: str | None = None,
         match_type: str = "exact",

@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import typer
 from jinja2 import Environment, PackageLoader
