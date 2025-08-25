@@ -21,6 +21,7 @@ from mcp_eval.cli.utils import (
     load_all_servers,
     load_all_agents,
     load_yaml,
+    find_mcpeval_config,
 )
 from mcp_eval.cli.models import MCPServerConfig, AgentConfig
 
@@ -44,12 +45,13 @@ class ValidationResult:
         self.details = details or {}
 
 
-async def validate_server(server: MCPServerConfig, project: Path) -> ValidationResult:
+async def validate_server(
+    server: MCPServerConfig, project: Path, config_path: Path | None
+) -> ValidationResult:
     """Validate a single server by connecting and listing tools."""
     try:
         # Load the full configuration from mcp-eval (includes all servers and secrets)
-        config_path = project / "mcpeval.yaml"
-        settings = load_config(config_path if config_path.exists() else None)
+        settings = load_config(config_path)
 
         # Filter to only the server we're testing to avoid starting unnecessary servers
         if settings.mcp and settings.mcp.servers:
@@ -113,7 +115,9 @@ async def validate_server(server: MCPServerConfig, project: Path) -> ValidationR
         )
 
 
-async def validate_agent(agent: AgentConfig, project: Path) -> ValidationResult:
+async def validate_agent(
+    agent: AgentConfig, project: Path, config_path: Path | None
+) -> ValidationResult:
     """Validate an agent configuration."""
     issues = []
 
@@ -124,8 +128,7 @@ async def validate_agent(agent: AgentConfig, project: Path) -> ValidationResult:
         issues.append(f"Missing servers: {', '.join(missing_servers)}")
 
     # Load configuration using mcp-eval's config loading (handles all providers automatically)
-    config_path = project / "mcpeval.yaml"
-    settings = load_config(config_path if config_path.exists() else None)
+    settings = load_config(config_path)
 
     # Check if provider/model or defaults are configured
     # We'll validate this by actually trying to create an LLM factory later
@@ -274,9 +277,16 @@ def check_api_keys(project: Path) -> ValidationResult:
     )
 
 
-def check_judge_config(project: Path) -> ValidationResult:
+def check_judge_config(config_path: Path | None) -> ValidationResult:
     """Check judge configuration."""
-    cfg = load_yaml(project / "mcpeval.yaml")
+    if config_path is None:
+        return ValidationResult(
+            name="Judge",
+            success=False,
+            message="No configuration file found",
+        )
+
+    cfg = load_yaml(config_path)
     judge = cfg.get("judge", {})
 
     if not judge:
@@ -306,6 +316,7 @@ def check_judge_config(project: Path) -> ValidationResult:
 
 async def run_all_validations(
     project: Path,
+    config_path: Path | None,
     servers: bool,
     agents: bool,
     quick: bool,
@@ -324,7 +335,7 @@ async def run_all_validations(
         ) as progress:
             for name, server in all_servers.items():
                 task = progress.add_task(f"Testing {name}...", total=None)
-                result = await validate_server(server, project)
+                result = await validate_server(server, project, config_path)
                 results.append(result)
                 progress.update(task, description=f"Tested {name}")
                 _print_result(result)
@@ -332,7 +343,7 @@ async def run_all_validations(
     # Validate agents
     if agents and all_agents and not quick:
         for agent in all_agents:
-            result = await validate_agent(agent, project)
+            result = await validate_agent(agent, project, config_path)
             results.append(result)
             _print_result(result)
 
@@ -368,9 +379,14 @@ def validate(
     """
     project = Path(project_dir)
 
-    if not (project / "mcpeval.yaml").exists():
+    # Find config file once
+    config_path = find_mcpeval_config(project)
+    if config_path is None:
         console.print(
-            "[red]Error: No mcpeval.yaml found. Run 'mcp-eval init' first.[/red]"
+            "[red]Error: No mcpeval config found. Run 'mcp-eval init' first.[/red]"
+        )
+        console.print(
+            "[dim]Searched for: mcpeval.yaml, mcpeval.config.yaml, .mcp-eval/config.yaml, etc.[/dim]"
         )
         raise typer.Exit(1)
 
@@ -385,7 +401,7 @@ def validate(
     _print_result(api_result)
 
     # Judge config
-    judge_result = check_judge_config(project)
+    judge_result = check_judge_config(config_path)
     results.append(judge_result)
     _print_result(judge_result)
 
@@ -457,6 +473,7 @@ def validate(
             async_results = asyncio.run(
                 run_all_validations(
                     project=project,
+                    config_path=config_path,
                     servers=servers,
                     agents=agents,
                     quick=quick,

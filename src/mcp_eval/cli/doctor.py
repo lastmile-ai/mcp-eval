@@ -11,7 +11,7 @@ import typer
 from rich.console import Console
 
 from mcp_eval.cli.validate import ValidationResult
-from mcp_eval.cli.utils import find_config_files, load_yaml
+from mcp_eval.cli.utils import find_config_files, load_yaml, find_mcpeval_config
 
 app = typer.Typer(help="Diagnose MCP-Eval setup")
 console = Console()
@@ -35,29 +35,60 @@ def check_python_version() -> ValidationResult:
 
 def check_package_versions() -> ValidationResult:
     """Check installed package versions."""
+    versions = {}
+
+    # Try importlib.metadata first (more reliable)
     try:
-        import mcp_eval
-        import mcp_agent
-        import mcp
+        import importlib.metadata
 
-        versions = {
-            "mcp-eval": getattr(mcp_eval, "__version__", "unknown"),
-            "mcp-agent": getattr(mcp_agent, "__version__", "unknown"),
-            "mcp": getattr(mcp, "__version__", "unknown"),
-        }
+        for package_name in ["mcp-eval", "mcp-agent", "mcp"]:
+            try:
+                versions[package_name] = importlib.metadata.version(package_name)
+            except importlib.metadata.PackageNotFoundError:
+                # Try importing and checking __version__
+                module_name = package_name.replace("-", "_")
+                try:
+                    module = __import__(module_name)
+                    versions[package_name] = getattr(
+                        module, "__version__", "installed (version unknown)"
+                    )
+                except ImportError:
+                    versions[package_name] = "not installed"
+    except ImportError:
+        # Fallback to old method
+        try:
+            import mcp_eval
+            import mcp_agent
+            import mcp
 
-        return ValidationResult(
-            name="Package Versions",
-            success=True,
-            message="All required packages installed",
-            details=versions,
-        )
-    except ImportError as e:
+            versions = {
+                "mcp-eval": getattr(mcp_eval, "__version__", "unknown"),
+                "mcp-agent": getattr(mcp_agent, "__version__", "unknown"),
+                "mcp": getattr(mcp, "__version__", "unknown"),
+            }
+        except ImportError as e:
+            return ValidationResult(
+                name="Package Versions",
+                success=False,
+                message=f"Missing package: {e.name}",
+            )
+
+    # Check if all are installed
+    missing = [k for k, v in versions.items() if v == "not installed"]
+    if missing:
         return ValidationResult(
             name="Package Versions",
             success=False,
-            message=f"Missing package: {e.name}",
+            message=f"Missing packages: {', '.join(missing)}",
+            details=versions,
         )
+
+    return ValidationResult(
+        name="Package Versions",
+        success=True,
+        message="All required packages installed",
+        details=versions,
+    )
 
 
 def check_config_files(project: Path) -> ValidationResult:
@@ -98,9 +129,16 @@ def check_config_files(project: Path) -> ValidationResult:
     )
 
 
-def check_test_reports(project: Path) -> ValidationResult:
+def check_test_reports(project: Path, config_path: Path | None) -> ValidationResult:
     """Check test reports directory."""
-    cfg = load_yaml(project / "mcpeval.yaml")
+    if config_path is None:
+        return ValidationResult(
+            name="Test Reports",
+            success=True,
+            message="No config file found to determine report directory",
+        )
+
+    cfg = load_yaml(config_path)
     report_dir = Path(cfg.get("reporting", {}).get("output_dir", "./test-reports"))
 
     if not report_dir.is_absolute():
@@ -202,9 +240,12 @@ def check_system_info() -> ValidationResult:
     )
 
 
-def get_last_error(project: Path) -> Dict[str, Any] | None:
+def get_last_error(project: Path, config_path: Path | None) -> Dict[str, Any] | None:
     """Try to find the last error from test reports."""
-    cfg = load_yaml(project / "mcpeval.yaml")
+    if config_path is None:
+        return None
+
+    cfg = load_yaml(config_path)
     report_dir = Path(cfg.get("reporting", {}).get("output_dir", "./test-reports"))
 
     if not report_dir.is_absolute():
@@ -267,6 +308,9 @@ def doctor(
 
     console.print("\n[bold cyan]🩺 Running MCP-Eval Doctor[/bold cyan]\n")
 
+    # Find config file once
+    config_path = find_mcpeval_config(project)
+
     results: List[ValidationResult] = []
 
     # System checks
@@ -295,7 +339,7 @@ def doctor(
     results.append(result)
     _print_result(result)
 
-    if (project / "mcpeval.yaml").exists():
+    if config_path is not None:
         # Run validation
         console.print("\n[bold]Validation Checks[/bold]")
         console.print("[dim]Running validation...[/dim]")
@@ -317,7 +361,7 @@ def doctor(
             _print_result(result)
 
             # Judge
-            result = check_judge_config(project)
+            result = check_judge_config(config_path)
             results.append(result)
             _print_result(result)
 
@@ -325,13 +369,13 @@ def doctor(
                 # Full validation with connections
                 servers = load_all_servers(project)
                 for name, server in servers.items():
-                    result = asyncio.run(validate_server(server))
+                    result = asyncio.run(validate_server(server, project, config_path))
                     results.append(result)
                     _print_result(result)
 
                 agents = load_all_agents(project)
                 for agent in agents:
-                    result = asyncio.run(validate_agent(agent, project))
+                    result = asyncio.run(validate_agent(agent, project, config_path))
                     results.append(result)
                     _print_result(result)
 
@@ -340,12 +384,12 @@ def doctor(
 
     # Check for test reports
     console.print("\n[bold]Test Reports[/bold]")
-    result = check_test_reports(project)
+    result = check_test_reports(project, config_path)
     results.append(result)
     _print_result(result)
 
     # Check for recent errors
-    last_error = get_last_error(project)
+    last_error = get_last_error(project, config_path)
     if last_error:
         console.print("\n[bold yellow]⚠️  Last Test Error[/bold yellow]")
         console.print(f"Test: {last_error['test']}")

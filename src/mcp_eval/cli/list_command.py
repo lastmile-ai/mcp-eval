@@ -6,7 +6,12 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 
-from mcp_eval.cli.utils import load_all_servers, load_all_agents, load_yaml
+from mcp_eval.cli.utils import (
+    load_all_servers,
+    load_all_agents,
+    load_yaml,
+    find_mcpeval_config,
+)
 
 app = typer.Typer(help="List configured resources")
 console = Console()
@@ -109,9 +114,9 @@ def list_agents(
     agents = load_all_agents(project)
 
     # Get default agent
-    config_path = project / "mcpeval.yaml"
+    config_path = find_mcpeval_config(project)
     default_agent = None
-    if config_path.exists():
+    if config_path is not None:
         data = load_yaml(config_path)
         default_agent = data.get("default_agent")
 

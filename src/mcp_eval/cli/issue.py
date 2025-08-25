@@ -12,7 +12,7 @@ from rich.console import Console
 from rich.prompt import Prompt, Confirm
 from rich.panel import Panel
 
-from mcp_eval.cli.utils import load_yaml, find_config_files
+from mcp_eval.cli.utils import load_yaml, find_config_files, find_mcpeval_config
 from mcp_eval.cli.doctor import (
     check_python_version,
     check_package_versions,
@@ -24,7 +24,7 @@ app = typer.Typer(help="Create GitHub issues with diagnostic info")
 console = Console()
 
 
-def gather_diagnostic_info(project: Path) -> Dict[str, Any]:
+def gather_diagnostic_info(project: Path, config_path: Path | None) -> Dict[str, Any]:
     """Gather diagnostic information for the report."""
     info = {}
 
@@ -39,7 +39,7 @@ def gather_diagnostic_info(project: Path) -> Dict[str, Any]:
     # Package versions
     pkg_info = check_package_versions()
     info["packages"] = (
-        pkg_info.details if pkg_info.success else {"error": pkg_info.message}
+        pkg_info.details if pkg_info.details else {"error": pkg_info.message}
     )
 
     # Config files
@@ -50,17 +50,39 @@ def gather_diagnostic_info(project: Path) -> Dict[str, Any]:
         "mcp-agent.config.yaml": paths.mcp_agent_config.exists(),
     }
 
+    # Include actual config content
+    if config_path and config_path.exists():
+        try:
+            with open(config_path, "r") as f:
+                info["config_content"] = f.read()
+        except Exception as e:
+            info["config_content"] = f"Error reading config: {e}"
+
+    # Working directory info
+    import os
+
+    info["working_directory"] = os.getcwd()
+    info["project_directory"] = str(project.absolute())
+
     # Last error
-    last_error = get_last_error(project)
+    last_error = get_last_error(project, config_path)
     if last_error:
         info["last_error"] = last_error
 
     return info
 
 
-def get_recent_test_outputs(project: Path, max_files: int = 3) -> List[Dict[str, Any]]:
+def get_recent_test_outputs(
+    project: Path, config_path: Path | None, max_files: int = 3
+) -> List[Dict[str, Any]]:
     """Get recent test outputs."""
-    cfg = load_yaml(project / "mcpeval.yaml")
+    if config_path is None:
+        console.print(
+            "[yellow]Warning: No mcpeval config found, cannot retrieve test outputs[/yellow]"
+        )
+        return []
+
+    cfg = load_yaml(config_path)
     report_dir = Path(cfg.get("reporting", {}).get("output_dir", "./test-reports"))
 
     if not report_dir.is_absolute():
@@ -145,12 +167,23 @@ def format_issue_body(
     lines.append("```json")
     env_info = {
         "python": diagnostics["python"],
-        "system": diagnostics["system"]["platform"],
+        "system": diagnostics["system"],
+        "working_directory": diagnostics.get("working_directory", "unknown"),
+        "project_directory": diagnostics.get("project_directory", "unknown"),
         "packages": diagnostics.get("packages", {}),
+        "config_files": diagnostics.get("config_files", {}),
     }
     lines.append(json.dumps(env_info, indent=2))
     lines.append("```")
     lines.append("")
+
+    # Add config content if available
+    if "config_content" in diagnostics:
+        lines.append("## Configuration (mcpeval.yaml)")
+        lines.append("```yaml")
+        lines.append(diagnostics["config_content"])
+        lines.append("```")
+        lines.append("")
 
     if test_outputs:
         lines.append("## Recent Test Results")
@@ -209,27 +242,30 @@ def issue(
 
     console.print("\n[bold cyan]📝 Creating GitHub Issue[/bold cyan]\n")
 
-    # Check if we have a config
-    if not (project / "mcpeval.yaml").exists():
-        console.print("[yellow]Warning: No mcpeval.yaml found[/yellow]")
+    # Find config file once
+    config_path = find_mcpeval_config(project)
+    if config_path is None:
+        console.print(
+            "[yellow]Warning: No mcpeval config found (searched for mcpeval.yaml, mcpeval.config.yaml, .mcp-eval/config.yaml, etc.)[/yellow]"
+        )
         if not Confirm.ask("Continue without configuration?", default=False):
             raise typer.Exit(0)
 
     # Gather diagnostic info
     console.print("Gathering diagnostic information...")
-    diagnostics = gather_diagnostic_info(project)
+    diagnostics = gather_diagnostic_info(project, config_path)
 
     # Get recent test outputs if requested
     test_outputs = []
     if include_outputs:
         console.print("Collecting recent test results...")
-        test_outputs = get_recent_test_outputs(project)
+        test_outputs = get_recent_test_outputs(project, config_path)
         if test_outputs:
             console.print(f"Found {len(test_outputs)} recent test results")
 
     # Get issue details
     if not title:
-        title = Prompt.ask("Issue title", default="MCP-Eval Issue")
+        title = Prompt.ask("Issue title (brief summary)", default="MCP-Eval Issue")
 
     console.print("\n[bold]Issue Categories:[/bold]")
     console.print("1. Bug - Something isn't working")
@@ -254,24 +290,44 @@ def issue(
     }
     category = categories[category_num]
 
-    description = Prompt.ask("Describe the issue (or press Enter to skip)", default="")
+    description = Prompt.ask("Describe the issue", default="")
 
     # Ask for command that caused the issue
     command = Prompt.ask(
-        "Command that caused the issue (or press Enter to skip)", default=""
+        "Command that caused the issue (e.g., 'mcp-eval run test_fetch.py')", default=""
     )
 
     # Ask for error message
-    error_message = None
-    if Confirm.ask("Do you have an error message to include?", default=False):
-        console.print("Paste the error message (press Ctrl+D or Ctrl+Z when done):")
-        lines = []
+    console.print("\n[bold]Error message:[/bold]")
+    console.print(
+        "[dim]Paste your error message below, then type CTRL+C to finish (or just press Enter to skip)[/dim]"
+    )
+
+    error_lines = []
+    empty_line_count = 0
+
+    while True:
         try:
-            while True:
-                lines.append(input())
-        except EOFError:
-            pass
-        error_message = "\n".join(lines)
+            line = input()
+            if line == "":
+                empty_line_count += 1
+                if empty_line_count >= 2:
+                    # Two consecutive empty lines means we're done
+                    break
+                elif len(error_lines) == 0:
+                    # First line is empty, skip error message
+                    break
+                else:
+                    # Add the empty line (it might be part of the error)
+                    error_lines.append(line)
+            else:
+                empty_line_count = 0
+                error_lines.append(line)
+        except (EOFError, KeyboardInterrupt):
+            # Handle Ctrl+D (EOFError) or Ctrl+C (KeyboardInterrupt)
+            break
+
+    error_message = "\n".join(error_lines) if error_lines else None
 
     # Format the issue
     body = format_issue_body(
