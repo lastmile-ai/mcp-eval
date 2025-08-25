@@ -9,7 +9,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import typer
 from rich.console import Console
 from rich.live import Live
@@ -18,7 +18,12 @@ from rich.text import Text
 from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.session import TestAgent, TestSession
 
-from mcp_eval.core import TestResult, generate_test_id, _setup_functions, _teardown_functions
+from mcp_eval.core import (
+    TestResult,
+    generate_test_id,
+    _setup_functions,
+    _teardown_functions,
+)
 from mcp_eval.datasets import Dataset
 from mcp_eval.report_generation.models import EvaluationReport
 from mcp_eval.report_generation import (
@@ -40,10 +45,12 @@ from mcp_eval.report_generation.console import (
 app = typer.Typer()
 console = Console()
 
+
 # Register an atexit handler to suppress subprocess cleanup warnings
 def suppress_cleanup_warnings():
     """Suppress stderr during final cleanup to avoid subprocess warnings."""
-    sys.stderr = open(os.devnull, 'w')
+    sys.stderr = open(os.devnull, "w")
+
 
 # Register the suppression to happen at program exit
 atexit.register(suppress_cleanup_warnings)
@@ -195,50 +202,54 @@ async def run_decorator_tests(
                     log_handler.setLevel(logging.INFO)
                     # Add formatter to match pytest style
                     formatter = logging.Formatter(
-                        '[%(levelname)s] %(asctime)s %(name)s - %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S'
+                        "[%(levelname)s] %(asctime)s %(name)s - %(message)s",
+                        datefmt="%Y-%m-%d %H:%M:%S",
                     )
                     log_handler.setFormatter(formatter)
                     # Get root logger and add handler
                     root_logger = logging.getLogger()
                     root_logger.addHandler(log_handler)
-                
+
                 try:
                     # Call task decorated function
                     result: TestResult = await func(**kwargs)
-                    
+
                     # Add session information if verbose mode
                     if verbose:
                         # Extract actual agent and session info from the result and config
                         session_info = {}
                         try:
                             from mcp_eval.config import get_settings
+
                             settings = get_settings()
-                            
+
                             # Get provider and model (these are global settings)
                             if settings.provider:
-                                session_info['provider'] = settings.provider
+                                session_info["provider"] = settings.provider
                             if settings.model:
-                                session_info['model'] = settings.model
-                            
+                                session_info["model"] = settings.model
+
                             # The actual agent info is already in the result
                             # No need to get it from default_agent_spec
                             # as it may have been overridden
-                            
+
                             # Get LLM Judge configuration if available
-                            if hasattr(settings, 'judge') and settings.judge:
+                            if hasattr(settings, "judge") and settings.judge:
                                 judge_config = {}
-                                if hasattr(settings.judge, 'provider'):
-                                    judge_config['provider'] = settings.judge.provider
-                                if hasattr(settings.judge, 'model'):
-                                    judge_config['model'] = settings.judge.model
-                                if hasattr(settings.judge, 'temperature'):
-                                    judge_config['temperature'] = settings.judge.temperature
+                                if hasattr(settings.judge, "provider"):
+                                    judge_config["provider"] = settings.judge.provider
+                                if hasattr(settings.judge, "model"):
+                                    judge_config["model"] = settings.judge.model
+                                if hasattr(settings.judge, "temperature"):
+                                    judge_config["temperature"] = (
+                                        settings.judge.temperature
+                                    )
                                 if judge_config:
-                                    session_info['llm_judge'] = judge_config
-                        except:
+                                    session_info["llm_judge"] = judge_config
+                        except Exception as e:
+                            console.print(f"  [red]ERROR[/] {test_name}: {e}")
                             pass
-                        
+
                         # Attach session info to result for verbose display
                         if session_info:
                             result._session_info = session_info
@@ -280,7 +291,7 @@ async def run_decorator_tests(
                     if verbose and log_stream:
                         captured_logs[test_name] = log_stream.getvalue()
                     failed_results.append(result)
-                
+
                 finally:
                     # Clean up log handler
                     if log_handler:
@@ -292,12 +303,22 @@ async def run_decorator_tests(
                 live.update(display.create_display(type="test"))
 
     # Print detailed failures section if there are any failures
-    print_failure_details(console, failed_results, verbose=verbose, captured_logs=captured_logs if verbose else None)
+    print_failure_details(
+        console,
+        failed_results,
+        verbose=verbose,
+        captured_logs=captured_logs if verbose else None,
+    )
 
     return results
 
 
-async def run_dataset_evaluations(datasets: List[Dataset], *, max_concurrency: int | None = None, verbose: bool = False) -> List[EvaluationReport]:
+async def run_dataset_evaluations(
+    datasets: List[Dataset],
+    *,
+    max_concurrency: int | None = None,
+    verbose: bool = False,
+) -> List[EvaluationReport]:
     """Run dataset-style evaluations with live progress display."""
     reports: list[EvaluationReport] = []
     failed_results: list[TestResult] = []
@@ -328,7 +349,9 @@ async def run_dataset_evaluations(datasets: List[Dataset], *, max_concurrency: i
                 live.update(display.create_display(type="case"))
 
             report = await ds.evaluate(
-                standard_task, max_concurrency=max_concurrency, progress_callback=progress_callback
+                standard_task,
+                max_concurrency=max_concurrency,
+                progress_callback=progress_callback,
             )
 
             reports.append(report)
@@ -350,8 +373,12 @@ async def run_dataset_evaluations(datasets: List[Dataset], *, max_concurrency: i
                         else [],
                         agent_name="",
                         parameters={
-                            "inputs": result.inputs if hasattr(result, 'inputs') else {},
-                            "expected_output": result.expected_output if hasattr(result, 'expected_output') else None,
+                            "inputs": result.inputs
+                            if hasattr(result, "inputs")
+                            else {},
+                            "expected_output": result.expected_output
+                            if hasattr(result, "expected_output")
+                            else None,
                         },
                         passed=result.passed,
                         evaluation_results=result.evaluation_results,
@@ -366,44 +393,53 @@ async def run_dataset_evaluations(datasets: List[Dataset], *, max_concurrency: i
                         result.evaluation_results
                     )
                     test_result.error = failure_message
-                    
+
                     # Store additional metadata for verbose output
                     if verbose:
                         # Store the actual output for verbose display
-                        if hasattr(result, 'output'):
+                        if hasattr(result, "output"):
                             test_result.actual_output = result.output
-                        
+
                         # Add session information for dataset tests
                         session_info = {}
                         try:
                             from mcp_eval.config import get_settings
+
                             settings = get_settings()
                             if settings.provider:
-                                session_info['provider'] = settings.provider
+                                session_info["provider"] = settings.provider
                             if settings.model:
-                                session_info['model'] = settings.model
-                            
+                                session_info["model"] = settings.model
+
                             # Get LLM Judge configuration if available
-                            if hasattr(settings, 'judge') and settings.judge:
+                            if hasattr(settings, "judge") and settings.judge:
                                 judge_config = {}
-                                if hasattr(settings.judge, 'provider'):
-                                    judge_config['provider'] = settings.judge.provider
-                                if hasattr(settings.judge, 'model'):
-                                    judge_config['model'] = settings.judge.model
-                                if hasattr(settings.judge, 'temperature'):
-                                    judge_config['temperature'] = settings.judge.temperature
+                                if hasattr(settings.judge, "provider"):
+                                    judge_config["provider"] = settings.judge.provider
+                                if hasattr(settings.judge, "model"):
+                                    judge_config["model"] = settings.judge.model
+                                if hasattr(settings.judge, "temperature"):
+                                    judge_config["temperature"] = (
+                                        settings.judge.temperature
+                                    )
                                 if judge_config:
-                                    session_info['llm_judge'] = judge_config
-                        except:
+                                    session_info["llm_judge"] = judge_config
+                        except Exception as e:
+                            console.print(f"  [red]ERROR[/] {ds.name}: {e}")
                             pass
-                        
+
                         if session_info:
                             test_result._session_info = session_info
-                    
+
                     failed_results.append(test_result)
 
     # Print detailed failures section if there are any failures
-    print_failure_details(console, failed_results, verbose=verbose, captured_logs=captured_logs if verbose else None)
+    print_failure_details(
+        console,
+        failed_results,
+        verbose=verbose,
+        captured_logs=captured_logs if verbose else None,
+    )
 
     return reports
 
@@ -508,7 +544,9 @@ async def _run_async(
 
     if datasets and format in ["auto", "dataset"]:
         console.print(f"\n[blue]Running {len(datasets)} dataset evaluations...[/blue]")
-        dataset_reports = await run_dataset_evaluations(datasets, max_concurrency=max_concurrency, verbose=verbose)
+        dataset_reports = await run_dataset_evaluations(
+            datasets, max_concurrency=max_concurrency, verbose=verbose
+        )
 
     # Print short test summary info (pytest-like)
     if test_results:
@@ -528,7 +566,9 @@ async def _run_async(
     # Generate combined summary for all test results
     if test_results or dataset_reports:
         console.print(Text(console.width * "="))
-        generate_combined_summary(test_results, dataset_reports, console, verbose=verbose)
+        generate_combined_summary(
+            test_results, dataset_reports, console, verbose=verbose
+        )
 
     # Generate reports
     if json_report or markdown_report or html_report:
@@ -568,7 +608,7 @@ async def _run_async(
 
     # Give subprocess transports time to close properly before exit
     await asyncio.sleep(0.2)
-    
+
     # Exit with error if any tests failed
     total_failed = sum(1 for r in test_results if not r.passed) + sum(
         r.failed_cases for r in dataset_reports

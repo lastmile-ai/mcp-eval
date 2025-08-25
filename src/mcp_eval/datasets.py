@@ -155,7 +155,9 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
                             passed=all(r.passed for r in evaluation_results),
                             duration_ms=session.get_duration_ms(),
                             agent_name=session.agent.name if session.agent else None,
-                            servers=session.agent.server_names if session.agent else None,
+                            servers=session.agent.server_names
+                            if session.agent
+                            else None,
                             error=generate_failure_message(evaluation_results),
                         )
 
@@ -177,8 +179,12 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
                         passed=False,
                         error=str(e),
                         duration_ms=0.0,
-                        agent_name=session.agent.name if session and session.agent else None,
-                        servers=session.agent.server_names if session and session.agent else None,
+                        agent_name=session.agent.name
+                        if session and session.agent
+                        else None,
+                        servers=session.agent.server_names
+                        if session and session.agent
+                        else None,
                     )
 
                     # Call progress callback if provided
@@ -203,7 +209,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         agent_name = None
         if results and results[0].agent_name:
             agent_name = results[0].agent_name
-        
+
         return EvaluationReport(
             dataset_name=self.name,
             task_name=task_func.__name__,

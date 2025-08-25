@@ -196,11 +196,17 @@ def _prompt_provider(
         if existing_key:
             console.print("API key already set in secrets; skipping prompt.")
             # Optionally ask for model override
-            model = typer.prompt("Model (press Enter to auto-select)", default="").strip() or None
+            model = (
+                typer.prompt("Model (press Enter to auto-select)", default="").strip()
+                or None
+            )
             return existing_provider, existing_key, model
         # Ask only for missing key
         api_key = typer.prompt(f"Enter {existing_provider} API key", hide_input=True)
-        model = typer.prompt("Model (press Enter to auto-select)", default="").strip() or None
+        model = (
+            typer.prompt("Model (press Enter to auto-select)", default="").strip()
+            or None
+        )
         return existing_provider, api_key, model
     # No existing provider; prompt fresh
     provider = (
@@ -211,11 +217,15 @@ def _prompt_provider(
     if provider not in ("anthropic", "openai"):
         provider = "anthropic"
     api_key = typer.prompt(f"Enter {provider} API key", hide_input=True)
-    model = typer.prompt("Model (press Enter to auto-select)", default="").strip() or None
+    model = (
+        typer.prompt("Model (press Enter to auto-select)", default="").strip() or None
+    )
     return provider, api_key, model
 
 
-def _write_mcpeval_configs(project: Path, provider: str, api_key: str, model: Optional[str] = None) -> None:
+def _write_mcpeval_configs(
+    project: Path, provider: str, api_key: str, model: Optional[str] = None
+) -> None:
     cfg_path = project / "mcpeval.yaml"
     sec_path = project / "mcpeval.secrets.yaml"
 
@@ -228,13 +238,10 @@ def _write_mcpeval_configs(project: Path, provider: str, api_key: str, model: Op
             selector = ModelSelector()
             # For judge, prioritize intelligence and cost-effectiveness
             preferences = ModelPreferences(
-                costPriority=0.4,
-                speedPriority=0.2,
-                intelligencePriority=0.4
+                costPriority=0.4, speedPriority=0.2, intelligencePriority=0.4
             )
             model_info = selector.select_best_model(
-                model_preferences=preferences,
-                provider=provider
+                model_preferences=preferences, provider=provider
             )
             judge_model = model_info.name
         except Exception:
@@ -242,7 +249,7 @@ def _write_mcpeval_configs(project: Path, provider: str, api_key: str, model: Op
             judge_model = "claude-sonnet-4-0" if provider == "anthropic" else "gpt-4o"
     else:
         judge_model = model
-    
+
     cfg_overlay = {
         "judge": {"model": judge_model, "min_score": 0.8},
         "reporting": {"formats": ["json", "markdown"], "output_dir": "./test-reports"},
@@ -507,7 +514,9 @@ def run_generator(
     # Provider + API key (load existing when re-running)
     existing_provider, existing_key = _load_existing_provider(project)
     # Get provider, api_key, and optional model from prompt
-    provider, api_key, prompted_model = _prompt_provider(existing_provider, existing_key)
+    provider, api_key, prompted_model = _prompt_provider(
+        existing_provider, existing_key
+    )
     # Use CLI model if provided, otherwise use prompted model
     final_model = model or prompted_model
     if api_key:
@@ -574,4 +583,6 @@ def run_generator(
         console.print(f"[red]Failed to generate scenarios:[/] {e}")
         return
 
-    _emit_tests(project, style, server_name, scenarios, provider=provider, model=final_model)
+    _emit_tests(
+        project, style, server_name, scenarios, provider=provider, model=final_model
+    )

@@ -104,32 +104,32 @@ def _metrics_to_dict(metrics):
     """Convert TestMetrics object to dict, handling nested objects."""
     if not metrics:
         return None
-    
+
     result = metrics.__dict__.copy()
-    
+
     # Convert tool_calls list - they might already be dicts or might be ToolCall objects
-    if 'tool_calls' in result:
+    if "tool_calls" in result:
         tool_calls_list = []
-        for call in result['tool_calls']:
+        for call in result["tool_calls"]:
             if isinstance(call, dict):
                 # Already a dict, just use it
                 tool_calls_list.append(call)
             else:
                 # It's a ToolCall dataclass, convert it
                 tool_calls_list.append(asdict(call))
-        result['tool_calls'] = tool_calls_list
-    
+        result["tool_calls"] = tool_calls_list
+
     # Convert tool_coverage dict of ToolCoverage objects to dict
-    if 'tool_coverage' in result:
+    if "tool_coverage" in result:
         coverage_dict = {}
-        for server_name, coverage in result['tool_coverage'].items():
+        for server_name, coverage in result["tool_coverage"].items():
             coverage_dict[server_name] = asdict(coverage)
-        result['tool_coverage'] = coverage_dict
-    
+        result["tool_coverage"] = coverage_dict
+
     # Convert llm_metrics if it's an object
-    if 'llm_metrics' in result and hasattr(result['llm_metrics'], '__dict__'):
-        result['llm_metrics'] = asdict(result['llm_metrics'])
-    
+    if "llm_metrics" in result and hasattr(result["llm_metrics"], "__dict__"):
+        result["llm_metrics"] = asdict(result["llm_metrics"])
+
     return result
 
 
@@ -161,12 +161,11 @@ def task(description: str = ""):
 
             try:
                 # Check if function has been decorated with with_agent
-                agent_override = getattr(func, '_mcpeval_agent_override', None)
-                
+                agent_override = getattr(func, "_mcpeval_agent_override", None)
+
                 # Create unified session with optional agent override
                 session = TestSession(
-                    test_name=func.__name__,
-                    agent_override=agent_override
+                    test_name=func.__name__, agent_override=agent_override
                 )
 
                 start_time = asyncio.get_event_loop().time()
@@ -207,31 +206,32 @@ def task(description: str = ""):
                     duration_ms=duration_ms,
                     file=file_name,
                 )
-                
+
                 # Add agent details for verbose mode
                 if session and session.agent:
                     agent_details = {}
                     # Try to get agent instruction
-                    if hasattr(session.agent, 'instruction'):
-                        agent_details['instruction'] = session.agent.instruction
-                    elif hasattr(session.agent, '_instruction'):
-                        agent_details['instruction'] = session.agent._instruction
-                    
+                    if hasattr(session.agent, "instruction"):
+                        agent_details["instruction"] = session.agent.instruction
+                    elif hasattr(session.agent, "_instruction"):
+                        agent_details["instruction"] = session.agent._instruction
+
                     # Get provider/model from session settings
-                    if hasattr(session, 'app') and session.app:
+                    if hasattr(session, "app") and session.app:
                         try:
                             from mcp_eval.config import get_settings
+
                             settings = get_settings()
                             if settings.provider:
-                                agent_details['provider'] = settings.provider
+                                agent_details["provider"] = settings.provider
                             if settings.model:
-                                agent_details['model'] = settings.model
+                                agent_details["model"] = settings.model
                         except Exception:
                             pass
-                    
+
                     if agent_details:
                         result._agent_details = agent_details
-                
+
                 return result
 
             except Exception:
@@ -274,7 +274,9 @@ def task(description: str = ""):
     return decorator
 
 
-def with_agent(agent: Agent | AugmentedLLM | AgentSpec | str | Callable[[], Agent | AugmentedLLM]):
+def with_agent(
+    agent: Agent | AugmentedLLM | AgentSpec | str | Callable[[], Agent | AugmentedLLM],
+):
     """Per-test override for the agent.
 
     This decorator is a pure marker: it attaches the override to the function so

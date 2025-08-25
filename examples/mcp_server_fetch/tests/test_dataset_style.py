@@ -2,7 +2,7 @@
 
 import asyncio
 from mcp_eval import Case, Dataset, test_session
-from mcp_eval import ToolWasCalled, ResponseContains, LLMJudge, ToolSuccessRate
+from mcp_eval import ToolWasCalled, ResponseContains, LLMJudge
 
 
 # Define test cases for dataset evaluation
@@ -14,7 +14,9 @@ basic_fetch_cases = [
         metadata={"difficulty": "easy", "category": "basic_functionality"},
         evaluators=[
             ToolWasCalled("fetch"),
-            ResponseContains("example", case_sensitive=False),  # Just check it mentions example
+            ResponseContains(
+                "example", case_sensitive=False
+            ),  # Just check it mentions example
         ],
     ),
     Case(
@@ -69,7 +71,9 @@ fetch_dataset = Dataset(
     # Agent configuration is now driven by global provider/model settings in mcpeval.yaml
     evaluators=[
         # Global evaluators applied to all cases
-        ToolWasCalled("fetch", min_times=1),  # Every test should call fetch at least once
+        ToolWasCalled(
+            "fetch", min_times=1
+        ),  # Every test should call fetch at least once
         # LLMJudge("Response is relevant and addresses the user's request appropriately"),
     ],
 )

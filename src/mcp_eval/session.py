@@ -6,7 +6,6 @@ import time
 import asyncio
 import tempfile
 import shutil
-import re
 import logging
 import inspect
 from pathlib import Path
@@ -20,7 +19,12 @@ from mcp_agent.agents.agent_spec import AgentSpec
 from mcp_agent.workflows.llm.augmented_llm import AugmentedLLM, MessageTypes
 from mcp_agent.workflows.factory import agent_from_spec as _agent_from_spec_factory
 
-from mcp_eval.config import get_settings, ProgrammaticDefaults, MCPEvalSettings, get_current_config
+from mcp_eval.config import (
+    get_settings,
+    ProgrammaticDefaults,
+    MCPEvalSettings,
+    get_current_config,
+)
 from mcp_eval.metrics import TestMetrics, process_spans, TraceSpan, ToolCoverage
 from mcp_eval.otel.span_tree import SpanTree, SpanNode
 from mcp_eval.evaluators.base import Evaluator, EvaluatorContext
@@ -133,7 +137,9 @@ class TestSession:
         test_name: str,
         verbose: bool = False,
         *,
-        agent_override: Optional[Union[Agent, AugmentedLLM, AgentSpec, str, Callable]] = None,
+        agent_override: Optional[
+            Union[Agent, AugmentedLLM, AgentSpec, str, Callable]
+        ] = None,
     ):
         self.test_name = test_name
         self.verbose = verbose
@@ -161,7 +167,7 @@ class TestSession:
     async def __aenter__(self) -> TestAgent:
         """Initialize the test session with OTEL tracing as source of truth."""
         import warnings
-        
+
         # Clear any cached metrics for fresh session
         self._metrics = None
         self._span_tree = None
@@ -181,8 +187,12 @@ class TestSession:
         # Suppress warnings about global context/settings that may occur when
         # Agent instances are created at module import time
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="get_settings.*returned the global Settings singleton")
-            warnings.filterwarnings("ignore", message="get_current_context.*created a global Context")
+            warnings.filterwarnings(
+                "ignore", message="get_settings.*returned the global Settings singleton"
+            )
+            warnings.filterwarnings(
+                "ignore", message="get_current_context.*created a global Context"
+            )
             self.app = MCPApp(settings=settings)
             await self.app.initialize()
 
@@ -213,7 +223,7 @@ class TestSession:
         # 1) Per-call override
         if self._agent_override is not None:
             override = self._agent_override
-            
+
             # If override is a callable (factory), call it now that context exists
             if callable(override):
                 candidate = override()
@@ -222,7 +232,7 @@ class TestSession:
                     override = await candidate
                 else:
                     override = candidate
-            
+
             if isinstance(override, AugmentedLLM):
                 if override.agent is None:
                     override.agent = Agent(
@@ -243,7 +253,10 @@ class TestSession:
                 # - No context was set (None)
                 # - Or the context has different settings (e.g., default mcp-agent settings)
                 # This preserves explicitly set contexts with matching settings
-                if override.context is None or getattr(override.context, 'config', None) != settings:
+                if (
+                    override.context is None
+                    or getattr(override.context, "config", None) != settings
+                ):
                     override.context = self.app.context
                 self.agent = override
             elif isinstance(override, AgentSpec):
@@ -266,7 +279,7 @@ class TestSession:
                     spec_kwargs["provider"] = spec_provider
                 if spec_model:
                     spec_kwargs["model"] = spec_model
-                    
+
                 self.agent = await _agent_from_spec(AgentSpec(**spec_kwargs))
             elif isinstance(override, str):
                 loaded_specs = getattr(self.app.context, "loaded_subagents", []) or []
@@ -321,7 +334,9 @@ class TestSession:
                 self.agent = default_agent
             elif isinstance(default_agent, AgentSpec):
                 # Extract provider/model if specified in the AgentSpec
-                spec_provider = getattr(default_agent, "provider", None) or spec_provider
+                spec_provider = (
+                    getattr(default_agent, "provider", None) or spec_provider
+                )
                 spec_model = getattr(default_agent, "model", None) or spec_model
                 self.agent = await _agent_from_spec(default_agent)
             elif isinstance(default_agent, str):
@@ -351,7 +366,7 @@ class TestSession:
                 self.agent = await _agent_from_spec(spec)
 
         await self.agent.initialize()
-        
+
         # Fetch available tools from configured servers for coverage tracking
         await self._fetch_available_tools()
 
@@ -399,63 +414,69 @@ class TestSession:
             # handles OTEL cleanup properly without affecting other apps
             if self.app:
                 await self.app.cleanup()
-                
+
             # Give subprocess transports time to close properly
             await asyncio.sleep(0.1)
 
         except Exception as e:
             logger.warning(f"Error during session cleanup: {e}")
             # Continue with cleanup even if there's an error
-    
+
     async def _fetch_available_tools(self):
         """Fetch list of available tools from configured servers."""
         if not self.agent:
             return
-            
+
         try:
             # Get list of configured servers
-            servers = self.agent.server_names if hasattr(self.agent, 'server_names') else []
-            
+            servers = (
+                self.agent.server_names if hasattr(self.agent, "server_names") else []
+            )
+
             for server_name in servers:
                 try:
                     # Use the agent's list_tools method to get tools for this specific server
                     tools_result = await self.agent.list_tools(server_name=server_name)
-                    if tools_result and hasattr(tools_result, 'tools'):
+                    if tools_result and hasattr(tools_result, "tools"):
                         # Extract tool names (remove server prefix if present)
                         tool_names = []
                         for tool in tools_result.tools:
                             tool_name = tool.name
                             # Remove server prefix if it exists (format: server_toolname)
                             if tool_name.startswith(f"{server_name}_"):
-                                tool_name = tool_name[len(server_name) + 1:]
+                                tool_name = tool_name[len(server_name) + 1 :]
                             tool_names.append(tool_name)
                         self._available_tools_by_server[server_name] = tool_names
-                        logger.info(f"Found {len(tool_names)} tools for server {server_name}")
+                        logger.info(
+                            f"Found {len(tool_names)} tools for server {server_name}"
+                        )
                 except Exception as e:
-                    logger.warning(f"Failed to fetch tools for server {server_name}: {e}")
+                    logger.warning(
+                        f"Failed to fetch tools for server {server_name}: {e}"
+                    )
                     self._available_tools_by_server[server_name] = []
         except Exception as e:
             logger.warning(f"Failed to fetch available tools: {e}")
-    
+
     def _calculate_tool_coverage(self, metrics: TestMetrics):
         """Calculate tool coverage metrics per server."""
         # Group used tools by server
         tools_used_by_server: Dict[str, set] = {}
-        
+
         for tool_call in metrics.tool_calls:
             if tool_call.server_name:
                 server = tool_call.server_name
                 if server not in tools_used_by_server:
                     tools_used_by_server[server] = set()
                 tools_used_by_server[server].add(tool_call.name)
-        
+
         # Create coverage metrics for each server
         for server_name, available_tools in self._available_tools_by_server.items():
             used_tools = list(tools_used_by_server.get(server_name, set()))
             coverage = ToolCoverage(
                 server_name=server_name,
                 available_tools=available_tools,
-                used_tools=used_tools
+                used_tools=used_tools,
             )
             metrics.tool_coverage[server_name] = coverage
 
@@ -726,10 +747,10 @@ class TestSession:
 
         # Process spans into metrics (OTEL is the source of truth)
         metrics = process_spans(spans)
-        
+
         # Calculate tool coverage per server
         self._calculate_tool_coverage(metrics)
-        
+
         self._metrics = metrics
 
         # Build span tree for advanced analysis
