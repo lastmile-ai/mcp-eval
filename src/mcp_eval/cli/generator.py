@@ -440,14 +440,21 @@ def init_project(
 ):
     """Initialize an mcp-eval project.
 
+    Steps:
+
     - Ensure mcpeval.yaml and mcpeval.secrets.yaml exist (write minimal defaults)
+
     - Configure provider + API key
+
     - Import servers from mcp-agent.config.yaml and optionally mcp.json (cursor/vscode)
+
     - Define/select a default AgentSpec and set default_agent
 
+
+
     Examples:
-      - Initialize project:
-        mcp-eval init
+
+    Initialize project: $ mcp-eval init
     """
     project = Path(out_dir)
     project.mkdir(parents=True, exist_ok=True)
@@ -539,11 +546,10 @@ def run_generator(
     """Generate scenarios and write a single test file.
 
     Examples:
-      - Quick start (prompt for style):
-        mcp-eval generate
 
-      - Explicit pytest style and 10 scenarios:
-        mcp-eval generate --style pytest --n-examples 10
+    Quick start (prompt for style): $ mcp-eval generate
+
+    Explicit pytest style and 10 scenarios: $ mcp-eval generate --style pytest --n-examples 10
     """
     project = Path(out_dir)
     project.mkdir(parents=True, exist_ok=True)
@@ -711,8 +717,8 @@ def update_tests(
     """Append newly generated tests to an existing test file (non-interactive).
 
     Examples:
-      - Append 4 pytest-style tests to a file:
-        mcp-eval update --target-file tests/test_fetch_generated.py --style pytest --n-examples 4
+
+    Append 4 pytest-style tests to a file: $ mcp-eval update --target-file tests/test_fetch_generated.py --style pytest --n-examples 4
     """
     project = Path(out_dir)
     file_path = Path(target_file)
@@ -807,11 +813,10 @@ def add_server(
     """Add a server to mcpeval.yaml, either interactively or from mcp.json/DXT file.
 
     Examples:
-      - Interactive add:
-        mcp-eval add server
 
-      - From mcp.json:
-        mcp-eval add server --from-mcp-json .cursor/mcp.json
+    Interactive add: $ mcp-eval add server
+
+    From mcp.json: $ mcp-eval add server --from-mcp-json .cursor/mcp.json
     """
     project = Path(out_dir)
     project.mkdir(parents=True, exist_ok=True)
@@ -881,8 +886,8 @@ def add_agent(
     """Add an AgentSpec to mcpeval.yaml (validates referenced servers exist).
 
     Examples:
-      - Add an agent and set as default:
-        mcp-eval add agent
+
+    Add an agent and set as default: $ mcp-eval add agent
     """
     project = Path(out_dir)
     project.mkdir(parents=True, exist_ok=True)

@@ -8,13 +8,13 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from mcp_agent.app import MCPApp
+from mcp_agent.config import LoggerSettings, MCPServerSettings
 from mcp_agent.mcp.gen_client import gen_client
 from mcp_agent.workflows.factory import (
     _llm_factory,
     agent_from_spec as _agent_from_spec_factory,
 )
 from mcp_agent.agents.agent_spec import AgentSpec
-from mcp_agent.config import MCPSettings, MCPServerSettings
 
 from mcp_eval.config import load_config
 from mcp_eval.cli.utils import (
@@ -53,38 +53,11 @@ async def validate_server(
         # Load the full configuration from mcp-eval (includes all servers and secrets)
         settings = load_config(config_path)
 
-        # Filter to only the server we're testing to avoid starting unnecessary servers
-        if settings.mcp and settings.mcp.servers:
-            # Keep only the server we're validating
-            settings.mcp.servers = {
-                server.name: settings.mcp.servers.get(
-                    server.name,
-                    MCPServerSettings(
-                        name=server.name,
-                        transport=server.transport,
-                        command=server.command,
-                        args=server.args,
-                        url=server.url,
-                        headers=server.headers,
-                        env=server.env,
-                    ),
-                )
-            }
-        else:
-            # If no mcp settings, create them with just this server
-            settings.mcp = MCPSettings(
-                servers={
-                    server.name: MCPServerSettings(
-                        name=server.name,
-                        transport=server.transport,
-                        command=server.command,
-                        args=server.args,
-                        url=server.url,
-                        headers=server.headers,
-                        env=server.env,
-                    )
-                }
-            )
+        # Set logger settings to just errors to avoid noise
+        settings.logger = LoggerSettings(
+            type="console",
+            level="error",
+        )
 
         # Create MCP app with the settings
         mcp_app = MCPApp(settings=settings)
@@ -328,6 +301,7 @@ async def run_all_validations(
 
     # Validate servers
     if servers and all_servers and not quick:
+        console.print("\n[bold cyan]Validating servers...[/bold cyan]")
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -342,6 +316,7 @@ async def run_all_validations(
 
     # Validate agents
     if agents and all_agents and not quick:
+        console.print("\n[bold cyan]Validating agents...[/bold cyan]")
         for agent in all_agents:
             result = await validate_agent(agent, project, config_path)
             results.append(result)
@@ -360,22 +335,26 @@ def validate(
     """Validate MCP-Eval configuration.
 
     Checks:
+
     - API keys are configured
+
     - Judge configuration is valid
+
     - Servers can be connected to and tools listed
+
     - Agents reference valid servers
+
     - Agents can be created with configured LLMs
+
+
 
     Examples:
 
-    Full validation:
-        mcp-eval validate
+    Full validation: $ mcp-eval validate
 
-    Quick validation (no connections):
-        mcp-eval validate --quick
+    Quick validation (no connections): $ mcp-eval validate --quick
 
-    Servers only:
-        mcp-eval validate --no-agents
+    Servers only: $ mcp-eval validate --no-agents
     """
     project = Path(project_dir)
 
@@ -463,11 +442,6 @@ def validate(
                 console.print("[yellow]No agents configured[/yellow]")
     else:
         # Full validation with connection tests
-        if servers and all_servers:
-            console.print("\n[bold cyan]Validating servers...[/bold cyan]")
-        if agents and all_agents:
-            console.print("\n[bold cyan]Validating agents...[/bold cyan]")
-
         # Run all async validations in a single event loop
         if (servers and all_servers) or (agents and all_agents):
             async_results = asyncio.run(

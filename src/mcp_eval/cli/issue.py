@@ -223,20 +223,24 @@ def issue(
     """Create a GitHub issue with diagnostic information.
 
     Gathers:
+
     - System and environment information
+
     - Recent test results and errors
+
     - Configuration status
+
     - Last command run
 
+
+
     Examples:
-      - Create issue interactively:
-        mcp-eval issue
 
-      - Create with title:
-        mcp-eval issue --title "Server connection fails"
+    Create issue interactively: $ mcp-eval issue
 
-      - Just show URL without opening browser:
-        mcp-eval issue --no-open-browser
+    Create with title: $ mcp-eval issue --title "Server connection fails"
+
+    Just show URL without opening browser: $ mcp-eval issue --no-open-browser
     """
     project = Path(project_dir)
 

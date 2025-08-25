@@ -134,7 +134,7 @@ def check_test_reports(project: Path, config_path: Path | None) -> ValidationRes
     if config_path is None:
         return ValidationResult(
             name="Test Reports",
-            success=True,
+            success=False,
             message="No config file found to determine report directory",
         )
 
@@ -284,25 +284,34 @@ def get_last_error(project: Path, config_path: Path | None) -> Dict[str, Any] | 
 def doctor(
     project_dir: str = typer.Option(".", help="Project directory"),
     full: bool = typer.Option(
-        False, help="Run full validation including connection tests"
+        False, "--full", help="Run full validation including connection tests"
     ),
 ):
     """Run comprehensive diagnostics on MCP-Eval setup.
 
     Checks:
+
     - Python version and packages
+
     - Configuration files
+
     - Environment variables
+
     - System information
+
     - Runs validation checks
+
     - Looks for recent errors
 
-    Examples:
-      - Quick diagnosis:
-        mcp-eval doctor
 
-      - Full diagnosis with connection tests:
-        mcp-eval doctor --full
+
+    Examples:
+
+    Quick diagnosis: $ mcp-eval doctor
+
+    Full diagnosis with connection tests: $ mcp-eval doctor --full
+
+    To create an issue: $ mcp-eval issue
     """
     project = Path(project_dir)
 
