@@ -285,6 +285,41 @@ def check_judge_config(project: Path) -> ValidationResult:
     )
 
 
+async def run_all_validations(
+    project: Path,
+    servers: bool,
+    agents: bool, 
+    quick: bool,
+    all_servers: Dict[str, MCPServerConfig],
+    all_agents: List[AgentConfig],
+) -> List[ValidationResult]:
+    """Run all validations in a single async context."""
+    results = []
+    
+    # Validate servers
+    if servers and all_servers and not quick:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            transient=True,
+        ) as progress:
+            for name, server in all_servers.items():
+                task = progress.add_task(f"Testing {name}...", total=None)
+                result = await validate_server(server, project)
+                results.append(result)
+                progress.update(task, description=f"Tested {name}")
+                _print_result(result)
+    
+    # Validate agents
+    if agents and all_agents and not quick:
+        for agent in all_agents:
+            result = await validate_agent(agent, project)
+            results.append(result)
+            _print_result(result)
+    
+    return results
+
+
 @app.command()
 def validate(
     project_dir: str = typer.Option(".", help="Project directory"),
@@ -293,22 +328,23 @@ def validate(
     quick: bool = typer.Option(False, help="Quick validation (skip connection tests)"),
 ):
     """Validate MCP-Eval configuration.
-    
+
     Checks:
     - API keys are configured
     - Judge configuration is valid
     - Servers can be connected to and tools listed
     - Agents reference valid servers
     - Agents can be created with configured LLMs
-    
+
     Examples:
-      - Full validation:
+
+    Full validation:
         mcp-eval validate
-        
-      - Quick validation (no connections):
+
+    Quick validation (no connections):
         mcp-eval validate --quick
-        
-      - Servers only:
+
+    Servers only:
         mcp-eval validate --no-agents
     """
     project = Path(project_dir)
@@ -332,14 +368,16 @@ def validate(
     results.append(judge_result)
     _print_result(judge_result)
     
-    # Validate servers
-    if servers:
-        all_servers = load_all_servers(project)
-        if all_servers:
-            console.print("\n[bold cyan]Validating servers...[/bold cyan]")
-            
-            if quick:
-                # Just check configuration
+    # Load servers and agents
+    all_servers = load_all_servers(project) if servers else {}
+    all_agents = load_all_agents(project) if agents else []
+    
+    # Quick validation - just check configuration
+    if quick:
+        # Validate servers
+        if servers:
+            if all_servers:
+                console.print("\n[bold cyan]Validating servers...[/bold cyan]")
                 for name, server in all_servers.items():
                     if server.transport == "stdio" and not server.command:
                         result = ValidationResult(
@@ -362,31 +400,13 @@ def validate(
                     results.append(result)
                     _print_result(result)
             else:
-                # Test connections
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    transient=True,
-                ) as progress:
-                    for name, server in all_servers.items():
-                        task = progress.add_task(f"Testing {name}...", total=None)
-                        result = asyncio.run(validate_server(server, project))
-                        results.append(result)
-                        progress.update(task, description=f"Tested {name}")
-                        _print_result(result)
-        else:
-            console.print("[yellow]No servers configured[/yellow]")
-    
-    # Validate agents
-    if agents:
-        all_agents = load_all_agents(project)
-        if all_agents:
-            console.print("\n[bold cyan]Validating agents...[/bold cyan]")
-            
-            for agent in all_agents:
-                if quick:
-                    # Just check references
-                    all_servers = load_all_servers(project)
+                console.print("[yellow]No servers configured[/yellow]")
+        
+        # Validate agents
+        if agents:
+            if all_agents:
+                console.print("\n[bold cyan]Validating agents...[/bold cyan]")
+                for agent in all_agents:
                     missing = [s for s in agent.server_names if s not in all_servers]
                     if missing:
                         result = ValidationResult(
@@ -400,13 +420,35 @@ def validate(
                             success=True,
                             message="Configuration valid (not tested)"
                         )
-                else:
-                    # Full validation
-                    result = asyncio.run(validate_agent(agent, project))
-                results.append(result)
-                _print_result(result)
+                    results.append(result)
+                    _print_result(result)
+            else:
+                console.print("[yellow]No agents configured[/yellow]")
+    else:
+        # Full validation with connection tests
+        if servers and all_servers:
+            console.print("\n[bold cyan]Validating servers...[/bold cyan]")
+        if agents and all_agents:
+            console.print("\n[bold cyan]Validating agents...[/bold cyan]")
+            
+        # Run all async validations in a single event loop
+        if (servers and all_servers) or (agents and all_agents):
+            async_results = asyncio.run(
+                run_all_validations(
+                    project=project,
+                    servers=servers,
+                    agents=agents,
+                    quick=quick,
+                    all_servers=all_servers,
+                    all_agents=all_agents,
+                )
+            )
+            results.extend(async_results)
         else:
-            console.print("[yellow]No agents configured[/yellow]")
+            if servers and not all_servers:
+                console.print("[yellow]No servers configured[/yellow]")
+            if agents and not all_agents:
+                console.print("[yellow]No agents configured[/yellow]")
     
     # Summary
     console.print("\n[bold]Validation Summary[/bold]")
