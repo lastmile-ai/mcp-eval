@@ -27,7 +27,7 @@ def unregister_test_trace_file(test_name: str):
         logger.info(f"Unregistered trace file for {test_name}")
 
 
-def get_current_trace_file() -> Optional[str]:
+def get_current_trace_file() -> str | None:
     """Get the most recently registered trace file."""
     if _test_trace_files:
         # Return the most recently added trace file

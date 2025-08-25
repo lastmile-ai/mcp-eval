@@ -15,7 +15,7 @@ class ToolSuccessRate(SyncEvaluator):
     """
 
     min_rate: float = 0.9
-    tool_name: Optional[str] = None  # If None, checks all tools
+    tool_name: str | None = None  # If None, checks all tools
     requires_final_metrics: bool = True
 
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:

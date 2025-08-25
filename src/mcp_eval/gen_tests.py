@@ -28,8 +28,8 @@ class GeneratedAgentSpec(BaseModel):
     name: str
     instruction: str
     server_names: List[str]
-    provider: Optional[str] = None
-    model: Optional[str] = None
+    provider: str | None = None
+    model: str | None = None
 
 
 class GeneratedAgent(BaseModel):
@@ -53,14 +53,14 @@ class StructuredTestCase(BaseModel):
     assertions: List[AssertionSpec] = Field(
         description="A list of structured assertions using the catalog (discriminated by 'kind')."
     )
-    agent: Optional[GeneratedAgent] = Field(
+    agent: GeneratedAgent | None = Field(
         default=None,
         description="Optional per-test Agent override (Agent fields)",
     )
 
 
 class GeneratedTests(BaseModel):
-    suite_agent: Optional[GeneratedAgentSpec] = Field(
+    suite_agent: GeneratedAgentSpec | None = Field(
         default=None, description="Optional suite-level AgentSpec"
     )
     tests: List[StructuredTestCase]
@@ -81,7 +81,7 @@ async def list_tools_for_server(server_name: str) -> List[ToolSchema]:
                         name = getattr(tool, "name", None)
                         if not name or name == "__human_input__":
                             continue
-                        description: Optional[str] = getattr(tool, "description", None)
+                        description: str | None = getattr(tool, "description", None)
                         input_schema = (
                             getattr(tool, "inputSchema", None)
                             or getattr(tool, "input_schema", None)
@@ -281,8 +281,8 @@ def get_generation_prompt(tools: List[ToolSchema]) -> str:
                 "name": "str",
                 "instruction": "str",
                 "server_names": "List[str]",
-                "provider": "Optional[str]",
-                "model": "Optional[str]",
+                "provider": "str | None",
+                "model": "str | None",
             },
         },
         "per_test_agent": {

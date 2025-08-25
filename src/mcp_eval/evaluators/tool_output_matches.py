@@ -50,7 +50,7 @@ class ToolOutputMatches(SyncEvaluator):
     expected_output: Union[Dict[str, Any], str, Pattern, int, float, List[Any]]
     """Expected output value or pattern to match against."""
 
-    field_path: Optional[str] = None
+    field_path: str | None = None
     """Optional path to extract nested field from tool output.
     
     Supports dot notation for nested objects and bracket notation for arrays:

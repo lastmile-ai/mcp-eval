@@ -47,7 +47,7 @@ def deep_merge(base: Dict, overlay: Dict) -> Dict:
     return result
 
 
-def find_mcp_json() -> Optional[Path]:
+def find_mcp_json() -> Path | None:
     """Look for mcp.json in common locations."""
     candidates = [
         Path(".cursor/mcp.json"),

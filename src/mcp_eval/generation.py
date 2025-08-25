@@ -35,7 +35,7 @@ from pathlib import Path
 class MCPCaseGenerator:
     """Generates test cases for MCP servers using LLM."""
 
-    def __init__(self, model: Optional[str] = None):
+    def __init__(self, model: str | None = None):
         """Initialize generator with optional model override.
 
         If no model is provided, will use settings configuration.
@@ -241,8 +241,8 @@ async def generate_dataset(
 
 class ToolSchema(BaseModel):
     name: str
-    description: Optional[str] = None
-    input_schema: Optional[Dict[str, Any]] = Field(
+    description: str | None = None
+    input_schema: Dict[str, Any] | None = Field(
         default=None, description="JSON Schema for tool input"
     )
 
@@ -275,7 +275,7 @@ class ToolOutputMatchesSpec(BaseModel):
     kind: Literal["tool_output_matches"] = "tool_output_matches"
     tool_name: str
     expected_output: Union[Dict[str, Any], str, int, float, List[Any]]
-    field_path: Optional[str] = None
+    field_path: str | None = None
     match_type: str = Field("exact", description="exact|contains|regex|partial")
     case_sensitive: bool = True
     call_index: int = -1
@@ -321,9 +321,9 @@ AssertionSpec = Annotated[
 
 class ScenarioSpec(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     prompt: str
-    expected_output: Optional[str] = None
+    expected_output: str | None = None
     assertions: List[AssertionSpec]
 
 
@@ -335,7 +335,7 @@ class AssertionBundle(BaseModel):
     assertions: List[AssertionSpec]
 
 
-def _build_llm(agent: Agent, provider: str, model: Optional[str]):
+def _build_llm(agent: Agent, provider: str, model: str | None):
     factory = _llm_factory(provider=provider, model=model, context=agent.context)
     return factory(agent)
 
@@ -360,7 +360,7 @@ async def generate_scenarios_with_agent(
     *,
     n_examples: int = 8,
     provider: str = "anthropic",
-    model: Optional[str] = None,
+    model: str | None = None,
 ) -> List[ScenarioSpec]:
     """Use an mcp-agent Agent to generate structured scenarios and assertion specs."""
     app = MCPApp()
@@ -411,7 +411,7 @@ async def refine_assertions_with_agent(
     tools: List["ToolSchema"],
     *,
     provider: str = "anthropic",
-    model: Optional[str] = None,
+    model: str | None = None,
 ) -> List[ScenarioSpec]:
     """For each scenario, ask an agent to propose additional assertions using available tool schemas and the assertion catalog."""
     if not scenarios:

@@ -13,9 +13,9 @@ from mcp_eval.report_generation.utils import (
 def generate_combined_markdown_report(
     report_data: Dict[str, Any],
     output_path: str,
-    env_info: Optional[Dict[str, Any]] = None,
-    config_data: Optional[Dict[str, Any]] = None,
-    config_path: Optional[str] = None,
+    env_info: Dict[str, Any] | None = None,
+    config_data: Dict[str, Any] | None = None,
+    config_path: str | None = None,
     output_dir: str = "./test-reports",
 ) -> None:
     """Generate a combined markdown report."""

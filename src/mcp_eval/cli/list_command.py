@@ -103,7 +103,7 @@ def list_agents(
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Show full instructions"
     ),
-    name: Optional[str] = typer.Option(None, help="Show details for specific agent"),
+    name: str | None = typer.Option(None, help="Show details for specific agent"),
 ):
     """List all configured agents."""
     project = Path(project_dir)

@@ -31,8 +31,8 @@ class JudgeConfig(BaseSettings):
     If not specified, falls back to global provider/model settings.
     """
 
-    provider: Optional[str] = None  # Judge-specific provider (falls back to global)
-    model: Optional[str] = (
+    provider: str | None = None  # Judge-specific provider (falls back to global)
+    model: str | None = (
         None  # Judge-specific model (falls back to global or ModelSelector)
     )
     min_score: float = 0.8
@@ -100,8 +100,8 @@ class MCPEvalSettings(AgentSettings):
     default_servers: List[str] | None = Field(default_factory=list)
 
     # LLM defaults for tests
-    provider: Optional[str] = "anthropic"
-    model: Optional[str] = "claude-sonnet-4-0"
+    provider: str | None = "anthropic"
+    model: str | None = "claude-sonnet-4-0"
 
     default_agent: AgentSpec | str | None = None
 
@@ -117,7 +117,7 @@ def _deep_merge(base: dict, update: dict) -> dict:
 
 
 # Global configuration state
-_current_settings: Optional[MCPEvalSettings] = None
+_current_settings: MCPEvalSettings | None = None
 _programmatic_default_agent: ContextVar[Union[Agent, AugmentedLLM, None]] = ContextVar(
     "programmatic_default_agent", default=None
 )
@@ -126,7 +126,7 @@ _programmatic_default_agent_factory: ContextVar[
 ] = ContextVar("programmatic_default_agent_factory", default=None)
 
 
-def _search_upwards_for(paths: List[str]) -> Optional[Path]:
+def _search_upwards_for(paths: List[str]) -> Path | None:
     """Search current and parent directories (including .mcp-eval subdir) for first matching path.
 
     Supports both direct filenames and subdir patterns like '.mcp-eval/config.yaml'.
@@ -161,7 +161,7 @@ def _search_upwards_for(paths: List[str]) -> Optional[Path]:
     return None
 
 
-def _find_eval_config() -> Optional[Path]:
+def _find_eval_config() -> Path | None:
     """Locate an mcp-eval config file.
 
     Looks for (in current dir upwards and ~/.mcp-eval):
@@ -183,7 +183,7 @@ def _find_eval_config() -> Optional[Path]:
     return _search_upwards_for(candidates)
 
 
-def _find_eval_secrets() -> Optional[Path]:
+def _find_eval_secrets() -> Path | None:
     """Locate an mcp-eval secrets file.
 
     Looks for (in current dir upwards and ~/.mcp-eval):
@@ -202,7 +202,7 @@ def _find_eval_secrets() -> Optional[Path]:
     return _search_upwards_for(candidates)
 
 
-def load_config(config_path: Optional[Union[str, Path]] = None) -> MCPEvalSettings:
+def load_config(config_path: Union[str, Path] | None = None) -> MCPEvalSettings:
     """Load configuration with full validation.
 
     Priority overlay (later overrides earlier where fields overlap):

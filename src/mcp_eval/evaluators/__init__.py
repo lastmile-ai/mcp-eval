@@ -53,7 +53,7 @@ _EVALUATOR_REGISTRY = {
 }
 
 
-def get_evaluator_by_name(name: str, config: Dict[str, Any]) -> Optional[Evaluator]:
+def get_evaluator_by_name(name: str, config: Dict[str, Any]) -> Evaluator | None:
     """Get evaluator instance by name and configuration."""
     evaluator_class = _EVALUATOR_REGISTRY.get(name)
     if evaluator_class:

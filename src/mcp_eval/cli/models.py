@@ -15,7 +15,7 @@ class ServerImport:
     servers: Dict[str, Any] = field(default_factory=dict)
     source: str = ""
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -25,8 +25,8 @@ class ConfigPaths:
     mcpeval_yaml: Path
     mcpeval_secrets: Path
     mcp_agent_config: Path
-    mcp_json: Optional[Path] = None
-    dxt_file: Optional[Path] = None
+    mcp_json: Path | None = None
+    dxt_file: Path | None = None
 
 
 class MCPServerConfig(BaseModel):
@@ -34,11 +34,11 @@ class MCPServerConfig(BaseModel):
 
     name: str
     transport: str = "stdio"
-    command: Optional[str] = None
+    command: str | None = None
     args: List[str] = PydField(default_factory=list)
-    url: Optional[str] = None
-    headers: Optional[Dict[str, str]] = None
-    env: Optional[Dict[str, str]] = None
+    url: str | None = None
+    headers: Dict[str, str] | None = None
+    env: Dict[str, str] | None = None
 
     def to_mcp_agent_settings(self) -> Dict[str, Any]:
         """Convert to mcp_agent.MCPServerSettings compatible dict."""
@@ -62,8 +62,8 @@ class AgentConfig(BaseModel):
     name: str
     instruction: str
     server_names: List[str]
-    provider: Optional[str] = None
-    model: Optional[str] = None
+    provider: str | None = None
+    model: str | None = None
 
 
 class MCPEvalConfig(BaseModel):
@@ -76,9 +76,9 @@ class MCPEvalConfig(BaseModel):
         }
     )
     judge: Dict[str, Any] = PydField(default_factory=lambda: {"min_score": 0.8})
-    mcp: Optional[Dict[str, Any]] = None
-    agents: Optional[Dict[str, Any]] = None
-    default_agent: Optional[str] = None
+    mcp: Dict[str, Any] | None = None
+    agents: Dict[str, Any] | None = None
+    default_agent: str | None = None
 
 
 class GeneratorState(BaseModel):
@@ -86,11 +86,11 @@ class GeneratorState(BaseModel):
 
     project_dir: Path
     provider: str
-    api_key: Optional[str] = None
-    model: Optional[str] = None
+    api_key: str | None = None
+    model: str | None = None
     servers: Dict[str, MCPServerConfig] = PydField(default_factory=dict)
     agents: List[AgentConfig] = PydField(default_factory=list)
-    selected_server: Optional[str] = None
-    selected_agent: Optional[str] = None
+    selected_server: str | None = None
+    selected_agent: str | None = None
     style: str = "pytest"
     n_examples: int = 6

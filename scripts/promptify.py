@@ -432,16 +432,16 @@ def package_project(
 def main(
     path: str = typer.Argument(".", help="Path to the project directory"),
     output: str = typer.Option("prompt.md", "--output", "-o", help="Output file path"),
-    include: Optional[List[str]] = typer.Option(
+    include: List[str] | None = typer.Option(
         None, "--include", "-i", help="Patterns to ONLY include (e.g. '*.py')"
     ),
-    append_include: Optional[List[str]] = typer.Option(
+    append_include: List[str] | None = typer.Option(
         None,
         "--append-include",
         "-a",
         help="Additional patterns to include (has precedence over -i and -x)",
     ),
-    ignore: Optional[List[str]] = typer.Option(
+    ignore: List[str] | None = typer.Option(
         None, "--ignore", "-x", help="Patterns to ignore"
     ),
     skip_gitignore: bool = typer.Option(

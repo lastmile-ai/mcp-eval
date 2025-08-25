@@ -108,14 +108,14 @@ def _sanitize_slug(value: str) -> str:
     return s or "gen"
 
 
-def _build_llm(agent: Agent, provider: str, model: Optional[str]) -> Any:
+def _build_llm(agent: Agent, provider: str, model: str | None) -> Any:
     factory = _llm_factory(provider=provider, model=model, context=agent.context)
     return factory(agent)
 
 
 async def _generate_llm_slug(
-    server_name: str, provider: str, model: Optional[str]
-) -> Optional[str]:
+    server_name: str, provider: str, model: str | None
+) -> str | None:
     try:
         mcp_app = MCPApp()
         async with mcp_app.run() as running:
@@ -150,7 +150,7 @@ def _convert_servers_to_mcp_settings(
     return result
 
 
-def _load_existing_provider(project: Path) -> tuple[Optional[str], Optional[str]]:
+def _load_existing_provider(project: Path) -> tuple[str | None, str | None]:
     """Load existing provider configuration from secrets."""
     sec_path = project / "mcpeval.secrets.yaml"
     sec = load_yaml(sec_path)
@@ -169,8 +169,8 @@ def _load_existing_provider(project: Path) -> tuple[Optional[str], Optional[str]
 
 
 def _prompt_provider(
-    existing_provider: Optional[str], existing_key: Optional[str]
-) -> tuple[str, Optional[str], Optional[str]]:
+    existing_provider: str | None, existing_key: str | None
+) -> tuple[str, str | None, str | None]:
     """Prompt for provider, API key, and optional model."""
     if existing_provider:
         console.print(f"[cyan]Using existing provider: {existing_provider}[/cyan]")
@@ -200,7 +200,7 @@ def _prompt_provider(
 
 
 def _write_mcpeval_configs(
-    project: Path, provider: str, api_key: str, model: Optional[str] = None
+    project: Path, provider: str, api_key: str, model: str | None = None
 ) -> None:
     """Write provider configuration to mcpeval.yaml and secrets."""
     cfg_path = ensure_mcpeval_yaml(project)
@@ -321,8 +321,8 @@ async def _discover_tools(server_name: str) -> List[ToolSchema]:
                         )
                         if not name:
                             continue
-                        description: Optional[str] = getattr(t, "description", None)
-                        input_schema: Optional[Dict[str, Any]] = (
+                        description: str | None = getattr(t, "description", None)
+                        input_schema: Dict[str, Any] | None = (
                             getattr(t, "inputSchema", None)
                             or getattr(t, "input_schema", None)
                             or getattr(t, "input", None)
@@ -368,7 +368,7 @@ def _emit_tests(
     server_name: str,
     scenarios: List[Any],
     provider: str,
-    model: Optional[str] = None,
+    model: str | None = None,
 ) -> None:
     style = style.strip().lower()
     safe_server = _sanitize_filename_component(server_name)
@@ -529,12 +529,12 @@ def init_project(
 @app.command("generate")
 def run_generator(
     out_dir: str = typer.Option(".", help="Project directory to write configs/tests"),
-    style: Optional[str] = typer.Option(
+    style: str | None = typer.Option(
         None, help="Test style: pytest|decorators|dataset"
     ),
     n_examples: int = typer.Option(6, help="Number of scenarios to generate"),
     provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
-    model: Optional[str] = typer.Option(None, help="Model id (optional)"),
+    model: str | None = typer.Option(None, help="Model id (optional)"),
 ):
     """Generate scenarios and write a single test file.
 
@@ -706,7 +706,7 @@ def update_tests(
     ),
     n_examples: int = typer.Option(4, help="Number of new scenarios to generate"),
     provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
-    model: Optional[str] = typer.Option(None, help="Model id (optional)"),
+    model: str | None = typer.Option(None, help="Model id (optional)"),
 ):
     """Append newly generated tests to an existing test file (non-interactive).
 
@@ -797,10 +797,10 @@ app.add_typer(add_app, name="add")
 @add_app.command("server")
 def add_server(
     out_dir: str = typer.Option(".", help="Project directory"),
-    from_mcp_json: Optional[str] = typer.Option(
+    from_mcp_json: str | None = typer.Option(
         None, help="Path to mcp.json to import servers from"
     ),
-    from_dxt: Optional[str] = typer.Option(
+    from_dxt: str | None = typer.Option(
         None, help="Path to DXT file to import servers from"
     ),
 ):

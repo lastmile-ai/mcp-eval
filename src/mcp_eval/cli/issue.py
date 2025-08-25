@@ -117,8 +117,8 @@ def format_issue_body(
     category: str,
     diagnostics: Dict[str, Any],
     test_outputs: List[Dict[str, Any]],
-    command: Optional[str] = None,
-    error_message: Optional[str] = None,
+    command: str | None = None,
+    error_message: str | None = None,
 ) -> str:
     """Format the GitHub issue body."""
 
@@ -183,7 +183,7 @@ def format_issue_body(
 @app.command()
 def issue(
     project_dir: str = typer.Option(".", help="Project directory"),
-    title: Optional[str] = typer.Option(None, help="Issue title"),
+    title: str | None = typer.Option(None, help="Issue title"),
     include_outputs: bool = typer.Option(True, help="Include recent test outputs"),
     open_browser: bool = typer.Option(True, help="Open browser to create issue"),
 ):

@@ -36,7 +36,7 @@ class ValidationResult:
         name: str,
         success: bool,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: Dict[str, Any] | None = None,
     ):
         self.name = name
         self.success = success

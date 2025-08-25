@@ -16,7 +16,7 @@ class DataExample(dspy.Example):
             metrics: Dictionary containing performance metrics and tool usage data
         """
         unique_tools = metrics.get("unique_tools_used", [])
-        correct_tool: Optional[str] = unique_tools[0] if unique_tools else None
+        correct_tool: str | None = unique_tools[0] if unique_tools else None
 
         super().__init__(
             user_query=user_query,

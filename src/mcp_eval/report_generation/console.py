@@ -48,7 +48,7 @@ def print_failure_details(
     console: Console,
     failed_results: List[TestResult],
     verbose: bool = False,
-    captured_logs: Optional[Dict[str, str]] = None,
+    captured_logs: Dict[str, str] | None = None,
 ) -> None:
     """Print detailed failure information.
 
@@ -220,7 +220,7 @@ class TestProgressDisplay:
 
 
 def _print_verbose_failure_details(
-    console: Console, result: TestResult, log_output: Optional[str] = None
+    console: Console, result: TestResult, log_output: str | None = None
 ) -> None:
     """Print verbose failure details including trace information.
 

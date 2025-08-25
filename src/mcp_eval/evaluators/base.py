@@ -21,10 +21,10 @@ class EvaluatorContext(Generic[InputType, OutputType]):
 
     inputs: InputType
     output: OutputType
-    expected_output: Optional[OutputType]
-    metadata: Optional[Dict[str, Any]]
+    expected_output: OutputType | None
+    metadata: Dict[str, Any] | None
     metrics: TestMetrics
-    span_tree: Optional[SpanTree] = None
+    span_tree: SpanTree | None = None
 
     @property
     def tool_calls(self):

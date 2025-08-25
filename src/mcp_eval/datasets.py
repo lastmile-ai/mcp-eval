@@ -31,8 +31,8 @@ class Case(Generic[InputType, OutputType, MetadataType]):
 
     name: str
     inputs: InputType
-    expected_output: Optional[OutputType] = None
-    metadata: Optional[MetadataType] = None
+    expected_output: OutputType | None = None
+    metadata: MetadataType | None = None
     evaluators: List[Evaluator] = field(default_factory=list)
 
     def __post_init__(self):
@@ -54,8 +54,8 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
         name: str = "Unnamed Dataset",
         cases: List[Case[InputType, OutputType, MetadataType]] = None,
         evaluators: List[Evaluator] = None,
-        server_name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        server_name: str | None = None,
+        metadata: Dict[str, Any] | None = None,
         agent_spec: AgentSpec | str | None = None,
     ):
         self.name = name
@@ -77,7 +77,7 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
     async def evaluate(
         self,
         task_func: Callable,
-        max_concurrency: Optional[int] = None,
+        max_concurrency: int | None = None,
         progress_callback: Optional[Callable[[bool, bool], None]] = None,
     ) -> EvaluationReport:
         """Evaluate the task function against all cases using unified TestSession.
@@ -221,14 +221,14 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
     def evaluate_sync(
         self,
         task_func: Callable[[InputType], OutputType],
-        max_concurrency: Optional[int] = None,
+        max_concurrency: int | None = None,
     ) -> EvaluationReport:
         """Synchronous wrapper for evaluate."""
         import asyncio
 
         return asyncio.run(self.evaluate(task_func, max_concurrency))
 
-    def to_file(self, path: Union[str, Path], format: Optional[str] = None):
+    def to_file(self, path: Union[str, Path], format: str | None = None):
         """Save dataset to file in YAML or JSON format."""
         path = Path(path)
         if format is None:

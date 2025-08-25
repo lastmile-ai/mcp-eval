@@ -100,7 +100,7 @@ def tool_call_failed(session: TestSession, tool_name: str):
 
 
 def tool_success_rate(
-    session: TestSession, min_rate: float, tool_name: Optional[str] = None
+    session: TestSession, min_rate: float, tool_name: str | None = None
 ):
     """Assert minimum tool success rate."""
     session = _get_session() if session is None else session
@@ -135,7 +135,7 @@ def tool_output_matches(
     session: TestSession,
     tool_name: str,
     expected_output: Union[Dict[str, Any], str, Pattern, int, float, List[Any]],
-    field_path: Optional[str] = None,
+    field_path: str | None = None,
     match_type: Literal["exact", "contains", "regex", "partial"] = "exact",
     case_sensitive: bool = True,
     call_index: int = -1,
@@ -183,13 +183,13 @@ def tool_output_matches(
 
 def path_efficiency(
     session: TestSession,
-    optimal_steps: Optional[int] = None,
-    expected_tool_sequence: Optional[List[str]] = None,
-    golden_path: Optional[List[str]] = None,
+    optimal_steps: int | None = None,
+    expected_tool_sequence: List[str] | None = None,
+    golden_path: List[str] | None = None,
     allow_extra_steps: int = 0,
     penalize_backtracking: bool = True,
     penalize_repeated_tools: bool = True,
-    tool_usage_limits: Optional[Dict[str, int]] = None,
+    tool_usage_limits: Dict[str, int] | None = None,
     default_tool_limit: int = 1,
 ):
     """Assert that agent took an efficient path to complete the task.

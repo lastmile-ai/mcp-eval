@@ -34,10 +34,10 @@ class TestResult:
     parameters: Dict[str, Any]
     passed: bool
     evaluation_results: List["EvaluationRecord"]
-    metrics: Optional[Dict[str, Any]]
+    metrics: Dict[str, Any] | None
     duration_ms: float
     file: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 # Global test configuration state

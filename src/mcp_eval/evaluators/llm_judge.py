@@ -27,7 +27,7 @@ class LLMJudge(Evaluator):
 
     rubric: str
     min_score: float = 0.8
-    model: Optional[str] = None
+    model: str | None = None
     include_input: bool = False
     include_expected: bool = True
     require_reasoning: bool = True

@@ -202,7 +202,7 @@ def check_system_info() -> ValidationResult:
     )
 
 
-def get_last_error(project: Path) -> Optional[Dict[str, Any]]:
+def get_last_error(project: Path) -> Dict[str, Any] | None:
     """Try to find the last error from test reports."""
     cfg = load_yaml(project / "mcpeval.yaml")
     report_dir = Path(cfg.get("reporting", {}).get("output_dir", "./test-reports"))

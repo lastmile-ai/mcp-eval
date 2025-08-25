@@ -30,7 +30,7 @@ class EfficiencyResult(BaseModel):
     reasoning: str = Field(
         description="An explanation of any inefficiencies found or a confirmation of efficiency."
     )
-    suggested_improvement: Optional[str] = Field(
+    suggested_improvement: str | None = Field(
         None, description="A more efficient plan of action, if applicable."
     )
 

@@ -15,7 +15,7 @@ class SpanNode:
     end_time: datetime
     attributes: Dict[str, Any]
     events: List[Dict[str, Any]]
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
     children: List["SpanNode"] = None
 
     def __post_init__(self):
@@ -104,7 +104,7 @@ class SpanTree:
         _check_span(self.root)
         return matches
 
-    def find_first(self, query: SpanQuery) -> Optional[SpanNode]:
+    def find_first(self, query: SpanQuery) -> SpanNode | None:
         """Find the first span matching the query."""
         matches = self.find(query)
         return matches[0] if matches else None
