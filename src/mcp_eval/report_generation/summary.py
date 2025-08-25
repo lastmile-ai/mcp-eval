@@ -5,6 +5,7 @@ from rich.console import Console
 from rich.table import Table
 
 from mcp_eval.core import TestResult
+from mcp_eval.report_generation.console import pad
 from mcp_eval.report_generation.models import EvaluationReport
 from mcp_eval.report_generation.base import calculate_overall_stats
 from mcp_eval.config import get_settings
@@ -135,8 +136,9 @@ def _print_configuration_details(
     console: Console,
 ) -> None:
     """Print test configuration details."""
-    console.print("\n[bold cyan]Test Environment Configuration[/bold cyan]")
-    console.print("=" * 50)
+    console.print(
+        pad("Test Environment Configuration", console=console), style="bold cyan"
+    )
 
     try:
         settings = get_settings()
@@ -185,8 +187,7 @@ def _print_test_breakdown(
     """Print detailed breakdown of each test."""
 
     if test_results or dataset_reports:
-        console.print("\n[bold cyan]Test Details[/bold cyan]")
-        console.print("=" * 50)
+        console.print(pad("Test Details", console=console), style="bold cyan")
 
     # Group tests by agent
     agents_used: Dict[str, List[TestResult]] = {}
@@ -272,8 +273,7 @@ def _print_aggregate_info(
     console: Console,
 ) -> None:
     """Print aggregate information across all tests."""
-    console.print("\n[bold cyan]Aggregate Statistics[/bold cyan]")
-    console.print("=" * 50)
+    console.print(pad("Aggregate Statistics", console=console), style="bold cyan")
 
     # Collect all unique servers from test results and metrics
     all_servers: Set[str] = set()
@@ -373,8 +373,7 @@ def _print_tool_coverage(
     console: Console,
 ) -> None:
     """Print tool coverage metrics per server."""
-    console.print("\n[bold cyan]Tool Coverage by Server[/bold cyan]")
-    console.print("=" * 50)
+    console.print(pad("Tool Coverage by Server", console=console), style="bold cyan")
 
     # Aggregate tool coverage across all tests
     server_coverage: Dict[
