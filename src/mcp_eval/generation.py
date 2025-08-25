@@ -27,6 +27,7 @@ from mcp_eval.evaluators import (
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
 from mcp_agent.workflows.factory import _llm_factory
+from mcp_agent.config import LoggerSettings
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 
@@ -361,7 +362,14 @@ async def generate_scenarios_with_agent(
     model: str | None = None,
 ) -> List[ScenarioSpec]:
     """Use an mcp-agent Agent to generate structured scenarios and assertion specs."""
-    app = MCPApp()
+    # Load settings to get API keys
+    from mcp_eval.config import load_config
+    settings = load_config()
+    
+    # Reduce logging noise
+    settings.logger = LoggerSettings(type="console", level="error")
+    
+    app = MCPApp(settings=settings)
     async with app.run() as running:
         # Minimal agent just for content generation
         agent = Agent(
@@ -414,7 +422,15 @@ async def refine_assertions_with_agent(
     """For each scenario, ask an agent to propose additional assertions using available tool schemas and the assertion catalog."""
     if not scenarios:
         return scenarios
-    app = MCPApp()
+    
+    # Load settings to get API keys
+    from mcp_eval.config import load_config
+    settings = load_config()
+    
+    # Reduce logging noise
+    settings.logger = LoggerSettings(type="console", level="error")
+    
+    app = MCPApp(settings=settings)
     async with app.run() as running:
         agent = Agent(
             name="assertion_refiner",

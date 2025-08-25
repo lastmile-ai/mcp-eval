@@ -16,12 +16,11 @@ from mcp_agent.workflows.factory import (
 )
 from mcp_agent.agents.agent_spec import AgentSpec
 
-from mcp_eval.config import load_config
+from mcp_eval.config import load_config, find_eval_config
 from mcp_eval.cli.utils import (
     load_all_servers,
     load_all_agents,
     load_yaml,
-    find_mcpeval_config,
 )
 from mcp_eval.cli.models import MCPServerConfig, AgentConfig
 
@@ -359,8 +358,10 @@ def validate(
     project = Path(project_dir)
 
     # Find config file once
-    config_path = find_mcpeval_config(project)
-    if config_path is None:
+    config_path = find_eval_config(project)
+    if config_path:
+        console.print(f"[dim]Using config: {config_path}[/dim]")
+    else:
         console.print(
             "[red]Error: No mcpeval config found. Run 'mcp-eval init' first.[/red]"
         )

@@ -12,7 +12,8 @@ from rich.console import Console
 from rich.prompt import Prompt, Confirm
 from rich.panel import Panel
 
-from mcp_eval.cli.utils import load_yaml, find_config_files, find_mcpeval_config
+from mcp_eval.cli.utils import load_yaml, find_config_files
+from mcp_eval.config import find_eval_config
 from mcp_eval.cli.doctor import (
     check_python_version,
     check_package_versions,
@@ -247,8 +248,10 @@ def issue(
     console.print("\n[bold cyan]📝 Creating GitHub Issue[/bold cyan]\n")
 
     # Find config file once
-    config_path = find_mcpeval_config(project)
-    if config_path is None:
+    config_path = find_eval_config(project)
+    if config_path:
+        console.print(f"[dim]Using config: {config_path}[/dim]")
+    else:
         console.print(
             "[yellow]Warning: No mcpeval config found (searched for mcpeval.yaml, mcpeval.config.yaml, .mcp-eval/config.yaml, etc.)[/yellow]"
         )

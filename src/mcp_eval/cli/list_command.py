@@ -10,8 +10,8 @@ from mcp_eval.cli.utils import (
     load_all_servers,
     load_all_agents,
     load_yaml,
-    find_mcpeval_config,
 )
+from mcp_eval.config import find_eval_config
 
 app = typer.Typer(help="List configured resources")
 console = Console()
@@ -114,7 +114,9 @@ def list_agents(
     agents = load_all_agents(project)
 
     # Get default agent
-    config_path = find_mcpeval_config(project)
+    config_path = find_eval_config(project)
+    if config_path:
+        console.print(f"[dim]Using config: {config_path}[/dim]")
     default_agent = None
     if config_path is not None:
         data = load_yaml(config_path)

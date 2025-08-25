@@ -21,7 +21,7 @@ from rich.prompt import Prompt, Confirm
 
 from mcp_agent.app import MCPApp
 from mcp_agent.mcp.gen_client import gen_client
-from mcp_agent.config import MCPServerSettings
+from mcp_agent.config import MCPServerSettings, LoggerSettings
 from mcp_agent.agents.agent import Agent
 from mcp_agent.workflows.factory import _llm_factory
 from mcp_agent.workflows.llm.llm_selector import ModelSelector, ModelPreferences
@@ -39,6 +39,7 @@ from mcp_eval.cli.models import (
     MCPServerConfig,
     AgentConfig,
 )
+from mcp_eval.config import load_config, MCPEvalSettings, find_eval_config
 from mcp_eval.cli.utils import (
     load_yaml,
     save_yaml,
@@ -58,6 +59,21 @@ console = Console()
 
 
 # --------------- helpers -----------------
+
+
+def _parse_command_string(cmd: str) -> tuple[str, List[str]]:
+    """Parse a command string into command and args.
+    
+    Examples:
+        "uvx mcp-server-fetch" -> ("uvx", ["mcp-server-fetch"])
+        "npx -y @modelcontextprotocol/server-filesystem /path" -> ("npx", ["-y", "@modelcontextprotocol/server-filesystem", "/path"])
+        "python -m server" -> ("python", ["-m", "server"])
+    """
+    import shlex
+    parts = shlex.split(cmd.strip())
+    if not parts:
+        return "", []
+    return parts[0], parts[1:] if len(parts) > 1 else []
 
 
 def _set_default_agent(project: Path, agent_name: str) -> None:
@@ -117,7 +133,13 @@ async def _generate_llm_slug(
     server_name: str, provider: str, model: str | None
 ) -> str | None:
     try:
-        mcp_app = MCPApp()
+        # Load settings from config (includes secrets)
+        settings = load_config()
+        
+        # Set logger to errors only to reduce noise
+        settings.logger = LoggerSettings(type="console", level="error")
+        
+        mcp_app = MCPApp(settings=settings)
         async with mcp_app.run() as running:
             agent = Agent(
                 name="filename_disambiguator",
@@ -150,28 +172,81 @@ def _convert_servers_to_mcp_settings(
     return result
 
 
-def _load_existing_provider(project: Path) -> tuple[str | None, str | None]:
-    """Load existing provider configuration from secrets."""
-    sec_path = project / "mcpeval.secrets.yaml"
-    sec = load_yaml(sec_path)
-    # Also check .mcp-eval/secrets.yaml
-    if not sec:
-        sec = load_yaml(project / ".mcp-eval" / "secrets.yaml")
-    if not sec:
-        return None, None
-    if "anthropic" in sec and isinstance(sec["anthropic"], dict):
-        key = sec["anthropic"].get("api_key")
-        return ("anthropic", key) if key else ("anthropic", None)
-    if "openai" in sec and isinstance(sec["openai"], dict):
-        key = sec["openai"].get("api_key")
-        return ("openai", key) if key else ("openai", None)
-    return None, None
+def _load_existing_provider() -> tuple[str | None, str | None, Dict[str, str], MCPEvalSettings]:
+    """Load existing provider configuration from environment and config files.
+    
+    Returns:
+        (selected_provider, selected_key, available_providers, settings)
+        where available_providers is a dict of provider_name -> api_key
+    """
+    available_providers = {}
+    selected_provider = None
+    selected_key = None
+    
+    # Load settings - this handles all merging of env, configs, and secrets
+    settings = load_config()
+    
+    # Show which config file we're using
+    config_path = find_eval_config()
+    if config_path:
+        console.print(f"[dim]Using config: {config_path}[/dim]")
+    
+    # Check all providers for API keys
+    if settings.anthropic and settings.anthropic.api_key:
+        available_providers["anthropic"] = settings.anthropic.api_key
+        if not selected_provider:
+            selected_provider = "anthropic"
+            selected_key = settings.anthropic.api_key
+    
+    if settings.openai and settings.openai.api_key:
+        available_providers["openai"] = settings.openai.api_key
+        if not selected_provider:
+            selected_provider = "openai"
+            selected_key = settings.openai.api_key
+    
+    if settings.google and settings.google.api_key:
+        available_providers["google"] = settings.google.api_key
+        if not selected_provider:
+            selected_provider = "google"
+            selected_key = settings.google.api_key
+    
+    if settings.cohere and settings.cohere.api_key:
+        available_providers["cohere"] = settings.cohere.api_key
+        if not selected_provider:
+            selected_provider = "cohere"
+            selected_key = settings.cohere.api_key
+    
+    if settings.azure and settings.azure.api_key:
+        available_providers["azure"] = settings.azure.api_key
+        if not selected_provider:
+            selected_provider = "azure"
+            selected_key = settings.azure.api_key
+    
+    return selected_provider, selected_key, available_providers, settings
 
 
 def _prompt_provider(
-    existing_provider: str | None, existing_key: str | None
+    existing_provider: str | None, 
+    existing_key: str | None, 
+    available_providers: Dict[str, str] | None = None
 ) -> tuple[str, str | None, str | None]:
     """Prompt for provider, API key, and optional model."""
+    # If we have available providers from environment, show them to user
+    if available_providers:
+        console.print("\n[bold]🔍 Detected API keys from environment:[/bold]")
+        for provider_name in available_providers:
+            key_preview = available_providers[provider_name][:8] + "..." if len(available_providers[provider_name]) > 8 else "***"
+            console.print(f"  • {provider_name}: {key_preview}")
+        
+        if existing_provider and existing_key:
+            use_existing = Confirm.ask(f"\nUse {existing_provider}?", default=True)
+            if use_existing:
+                model = (
+                    Prompt.ask("Model (press Enter to auto-select)", default="").strip()
+                    or None
+                )
+                return existing_provider, existing_key, model
+    
     if existing_provider:
         console.print(f"[cyan]Using existing provider: {existing_provider}[/cyan]")
         if existing_key:
@@ -188,21 +263,45 @@ def _prompt_provider(
             Prompt.ask("Model (press Enter to auto-select)", default="").strip() or None
         )
         return existing_provider, api_key, model
+    
     # No existing provider; prompt fresh
+    # Build choices based on available providers
+    choices = ["anthropic", "openai"]
+    if available_providers:
+        # Put available providers first
+        available_choices = list(available_providers.keys())
+        other_choices = [c for c in choices if c not in available_choices]
+        choices = available_choices + other_choices
+    
     provider = (
-        Prompt.ask("LLM provider", choices=["anthropic", "openai"], default="anthropic")
+        Prompt.ask("LLM provider", choices=choices, default=choices[0])
         .strip()
         .lower()
     )
-    api_key = Prompt.ask(f"Enter {provider} API key", password=True)
+    
+    # If this provider has a key in environment, use it
+    if available_providers and provider in available_providers:
+        api_key = available_providers[provider]
+        console.print(f"[green]Using API key from environment for {provider}[/green]")
+    else:
+        api_key = Prompt.ask(f"Enter {provider} API key", password=True)
+    
     model = Prompt.ask("Model (press Enter to auto-select)", default="").strip() or None
     return provider, api_key, model
 
 
 def _write_mcpeval_configs(
-    project: Path, provider: str, api_key: str, model: str | None = None
-) -> None:
-    """Write provider configuration to mcpeval.yaml and secrets."""
+    project: Path, 
+    settings: MCPEvalSettings,
+    provider: str, 
+    api_key: str, 
+    model: str | None = None
+) -> MCPEvalSettings:
+    """Update settings and write provider configuration to mcpeval.yaml and secrets.
+    
+    Returns:
+        Updated MCPEvalSettings object
+    """
     cfg_path = ensure_mcpeval_yaml(project)
     sec_path = project / "mcpeval.secrets.yaml"
 
@@ -230,6 +329,10 @@ def _write_mcpeval_configs(
     else:
         judge_model = model
 
+    # Update settings object
+    settings.judge.model = judge_model
+    settings.judge.min_score = 0.8
+    
     cfg_overlay = {
         "judge": {"model": judge_model, "min_score": 0.8},
         "reporting": {"formats": ["json", "markdown"], "output_dir": "./test-reports"},
@@ -242,6 +345,9 @@ def _write_mcpeval_configs(
     save_yaml(cfg_path, deep_merge(cfg, cfg_overlay))
     save_yaml(sec_path, deep_merge(sec, sec_overlay))
     console.print(f"[green]✓[/] Wrote {cfg_path} and {sec_path}")
+    
+    # Reload settings to get the merged config
+    return load_config()
 
 
 # This function is replaced by load_all_servers from utils
@@ -249,14 +355,63 @@ def _write_mcpeval_configs(
 
 def _prompt_server_settings(
     imported: Dict[str, MCPServerConfig],
+    server_name: str | None = None,
 ) -> tuple[str, MCPServerConfig]:
     """Prompt user for server settings."""
+    # Check if user wants to import from file
+    import_choice = Prompt.ask(
+        "How would you like to add the server?",
+        choices=["interactive", "from-mcp-json", "from-dxt"],
+        default="interactive"
+    )
+    
+    if import_choice == "from-mcp-json":
+        mcp_json_path = Prompt.ask("Path to mcp.json file")
+        try:
+            import_result = import_servers_from_json(Path(mcp_json_path))
+            if import_result.success:
+                imported_new: Dict[str, MCPServerConfig] = {}
+                for name, cfg in import_result.servers.items():
+                    imported_new[name] = MCPServerConfig(**cfg)
+                console.print(f"[green]Found {len(imported_new)} servers[/green]")
+                if imported_new:
+                    server_names = list(imported_new.keys())
+                    chosen = Prompt.ask(
+                        "Server to add", choices=server_names, default=server_names[0]
+                    )
+                    return chosen, imported_new[chosen]
+        except Exception as e:
+            console.print(f"[red]Error importing from mcp.json: {e}[/red]")
+            console.print("Falling back to interactive entry...")
+    
+    elif import_choice == "from-dxt":
+        dxt_path = Prompt.ask("Path to .dxt file")
+        try:
+            import_result = import_servers_from_dxt(Path(dxt_path))
+            if import_result.success:
+                imported_new: Dict[str, MCPServerConfig] = {}
+                for name, cfg in import_result.servers.items():
+                    imported_new[name] = MCPServerConfig(**cfg)
+                console.print(f"[green]Found {len(imported_new)} servers[/green]")
+                if imported_new:
+                    server_names = list(imported_new.keys())
+                    chosen = Prompt.ask(
+                        "Server to add", choices=server_names, default=server_names[0]
+                    )
+                    return chosen, imported_new[chosen]
+        except Exception as e:
+            console.print(f"[red]Error importing from .dxt: {e}[/red]")
+            console.print("Falling back to interactive entry...")
+    
+    # Manual entry or if imports failed
     if imported:
         console.print("[cyan]Available servers:[/cyan]")
         for n in imported.keys():
             console.print(f" - {n}")
 
-    server_name = Prompt.ask("Server name (e.g., fetch)")
+    # If server_name was already provided, use it; otherwise prompt
+    if not server_name:
+        server_name = Prompt.ask("Server name (e.g., fetch)")
     if server_name in imported:
         return server_name, imported[server_name]
 
@@ -269,9 +424,20 @@ def _prompt_server_settings(
     server = MCPServerConfig(name=server_name, transport=transport)
 
     if transport == "stdio":
-        server.command = Prompt.ask("Command (e.g., npx, uvx, python)")
-        args = Prompt.ask("Args (space-separated, blank for none)", default="").strip()
-        server.args = [a for a in args.split(" ") if a]
+        # Allow user to enter full command or separate command/args
+        command_input = Prompt.ask(
+            "Command (full command like 'uvx mcp-server-fetch' or just 'uvx')")
+        
+        # Check if this looks like a full command with args
+        if ' ' in command_input:
+            command, args = _parse_command_string(command_input)
+            console.print(f"[dim]Parsed as: command='{command}' args={args}[/dim]")
+            server.command = command
+            server.args = args
+        else:
+            server.command = command_input
+            args = Prompt.ask("Args (space-separated, blank for none)", default="").strip()
+            server.args = [a for a in args.split(" ") if a]
 
         if Confirm.ask("Add environment variables?", default=False):
             kv = Prompt.ask("KEY=VALUE pairs (comma-separated)", default="").strip()
@@ -302,7 +468,18 @@ async def _discover_tools(server_name: str) -> List[ToolSchema]:
     """Connect to the server and return typed tool specs."""
     tools: List[ToolSchema] = []
     try:
-        mcp_app = MCPApp()
+        # Load settings from config (includes secrets)
+        settings = load_config()
+        
+        # Show which config file we're using
+        config_path = find_eval_config()
+        if config_path:
+            console.print(f"[dim]Using config: {config_path}[/dim]")
+        
+        # Set logger to errors only to reduce noise
+        settings.logger = LoggerSettings(type="console", level="error")
+        
+        mcp_app = MCPApp(settings=settings)
         async with mcp_app.run() as running:
             async with gen_client(
                 server_name, server_registry=running.context.server_registry
@@ -462,10 +639,10 @@ def init_project(
 
     # Provider + API key
     console.print("[cyan]Configuring LLM provider and secrets...[/cyan]")
-    existing_provider, existing_key = _load_existing_provider(project)
-    provider, api_key, model = _prompt_provider(existing_provider, existing_key)
+    existing_provider, existing_key, available_providers, settings = _load_existing_provider()
+    provider, api_key, model = _prompt_provider(existing_provider, existing_key, available_providers)
     if api_key:
-        _write_mcpeval_configs(project, provider, api_key, model)
+        settings = _write_mcpeval_configs(project, settings, provider, api_key, model)
     else:
         console.print("[green]Using existing secrets[/green]")
 
@@ -506,7 +683,7 @@ def init_project(
     else:
         console.print("[yellow]No servers found; let's add one[/yellow]")
 
-    server_name, server_config = _prompt_server_settings(merged_servers)
+    server_name, server_config = _prompt_server_settings(merged_servers, server_name=None)
     write_server_to_mcpeval(project, server_config)
 
     # Default AgentSpec
@@ -558,15 +735,15 @@ def run_generator(
         "[cyan]Checking credentials and writing mcpeval configs if needed...[/cyan]"
     )
     # Provider + API key (load existing when re-running)
-    existing_provider, existing_key = _load_existing_provider(project)
+    existing_provider, existing_key, available_providers, settings = _load_existing_provider()
     # Get provider, api_key, and optional model from prompt
     provider, api_key, prompted_model = _prompt_provider(
-        existing_provider, existing_key
+        existing_provider, existing_key, available_providers
     )
     # Use CLI model if provided, otherwise use prompted model
     final_model = model or prompted_model
     if api_key:
-        _write_mcpeval_configs(project, provider, api_key, final_model)
+        settings = _write_mcpeval_configs(project, settings, provider, api_key, final_model)
     else:
         console.print("[green]Using existing secrets[/green]")
 
@@ -586,12 +763,12 @@ def run_generator(
             server_name = chosen
             server_config = existing_servers[chosen]
         else:
-            # Add new server via prompt
-            server_name, server_config = _prompt_server_settings({})
+            # Add new server via prompt - pass the server name user already typed
+            server_name, server_config = _prompt_server_settings({}, server_name=chosen)
     else:
         # No servers known yet; prompt fresh
         console.print("[yellow]No servers configured yet[/yellow]")
-        server_name, server_config = _prompt_server_settings({})
+        server_name, server_config = _prompt_server_settings({}, server_name=None)
 
     # Persist to mcpeval.yaml (source of truth for this tool)
     write_server_to_mcpeval(project, server_config)
@@ -632,11 +809,17 @@ def run_generator(
             raise typer.Exit(1)
 
     if tools:
-        console.print(
-            f"[green]Discovered {len(tools)} tools:[/green] "
-            + ", ".join([t.name for t in tools[:10]])
-            + (" ..." if len(tools) > 10 else "")
-        )
+        console.print(f"[green]Discovered {len(tools)} tools:[/green]")
+        for i, tool in enumerate(tools):
+            # Truncate description if too long
+            desc = tool.description or "No description"
+            if len(desc) > 60:
+                desc = desc[:57] + "..."
+            console.print(f"  • [cyan]{tool.name}[/cyan]: {desc}")
+            # Show first 10 tools, then summarize
+            if i >= 9 and len(tools) > 10:
+                console.print(f"  ... and {len(tools) - 10} more tools")
+                break
     else:
         console.print("[yellow]No tools discovered[/yellow]")
 
@@ -742,13 +925,13 @@ def update_tests(
         )
 
     # Provider + key (reuse flow)
-    existing_provider, existing_key = _load_existing_provider(project)
+    existing_provider, existing_key, available_providers, settings = _load_existing_provider()
     provider, api_key, prompted_model = _prompt_provider(
-        existing_provider, existing_key
+        existing_provider, existing_key, available_providers
     )
     final_model = model or prompted_model
     if api_key:
-        _write_mcpeval_configs(project, provider, api_key, final_model)
+        settings = _write_mcpeval_configs(project, settings, provider, api_key, final_model)
 
     console.print(f"[cyan]Listing tools for '{server_name}'...[/cyan]")
     try:
@@ -874,7 +1057,7 @@ def add_server(
             return
 
     # Interactive add
-    server_name, server_config = _prompt_server_settings({})
+    server_name, server_config = _prompt_server_settings({}, server_name=None)
     write_server_to_mcpeval(project, server_config)
     console.print(f"[green]✓ Added server '{server_name}'[/green]")
 
@@ -932,7 +1115,7 @@ def add_agent(
                 console.print(f"\n[cyan]Adding server '{s}'...[/cyan]")
                 # Pre-fill the name
                 console.print(f"Server name: {s}")
-                _, server_config = _prompt_server_settings({})
+                _, server_config = _prompt_server_settings({}, server_name=s)
                 server_config.name = s  # Ensure name matches
                 write_server_to_mcpeval(project, server_config)
 

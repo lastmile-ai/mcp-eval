@@ -1,0 +1,34 @@
+reporting:
+  formats:
+  - json
+  - markdown
+  output_dir: ./test-reports
+judge:
+  min_score: 0.8
+  model: claude-sonnet-4-20250514
+mcp:
+  servers:
+    fetch:
+      transport: stdio
+      command: uvx
+      args:
+      - mcp-server-fetch
+      env:
+        UV_NO_PROGRESS: '1'
+    Elicitation & Notification Demo:
+      transport: stdio
+      command: /Users/saqadri/lm/mcp-agent/.venv/bin/uv
+      args:
+      - run
+      - --with
+      - mcp[cli]
+      - mcp
+      - run
+      - /Users/saqadri/lm/mcp-agent/examples/elicitation/demo_server.py
+    fetch2:
+      transport: stdio
+      command: uvx
+      args:
+      - mcp-server-fetch
+      env:
+        UV_NO_PROGRESS: '1'

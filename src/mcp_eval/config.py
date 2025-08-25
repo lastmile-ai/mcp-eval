@@ -87,8 +87,8 @@ class MCPEvalSettings(AgentSettings):
     )
 
     # Evaluation metadata
-    eval_name: str = "MCP-Eval Test Suite"
-    eval_description: str = "Comprehensive evaluation of MCP servers"
+    name: str = "MCP-Eval Test Suite"
+    description: str = "Comprehensive evaluation of MCP servers"
 
     # Evaluation components
     judge: JudgeConfig = Field(default_factory=JudgeConfig)
@@ -126,15 +126,15 @@ _programmatic_default_agent_factory: ContextVar[
 ] = ContextVar("programmatic_default_agent_factory", default=None)
 
 
-def _search_upwards_for(paths: List[str]) -> Path | None:
+def _search_upwards_for(paths: List[str], start_dir: Path | None = None) -> Path | None:
     """Search current and parent directories (including .mcp-eval subdir) for first matching path.
 
     Supports both direct filenames and subdir patterns like '.mcp-eval/config.yaml'.
     Also checks home-level fallback under '~/.mcp-eval/'.
     """
-    cwd = Path.cwd()
+    start = start_dir or Path.cwd()
     # Walk up
-    cur = cwd
+    cur = start
     while True:
         for p in paths:
             candidate = cur / p
@@ -161,10 +161,13 @@ def _search_upwards_for(paths: List[str]) -> Path | None:
     return None
 
 
-def _find_eval_config() -> Path | None:
+def find_eval_config(project_dir: Path | None = None) -> Path | None:
     """Locate an mcp-eval config file.
 
-    Looks for (in current dir upwards and ~/.mcp-eval):
+    Args:
+        project_dir: Optional starting directory for search. If None, uses current directory.
+
+    Looks for (in project_dir upwards and ~/.mcp-eval):
     - mcpeval.yaml | mcpeval.yml
     - mcpeval.config.yaml | mcpeval.config.yml
     - .mcp-eval/config.yaml | .mcp-eval/config.yml
@@ -180,13 +183,16 @@ def _find_eval_config() -> Path | None:
         ".mcp-eval.config.yaml",
         ".mcp-eval.config.yml",
     ]
-    return _search_upwards_for(candidates)
+    return _search_upwards_for(candidates, project_dir)
 
 
-def _find_eval_secrets() -> Path | None:
+def find_eval_secrets(project_dir: Path | None = None) -> Path | None:
     """Locate an mcp-eval secrets file.
 
-    Looks for (in current dir upwards and ~/.mcp-eval):
+    Args:
+        project_dir: Optional starting directory for search. If None, uses current directory.
+
+    Looks for (in project_dir upwards and ~/.mcp-eval):
     - mcpeval.secrets.yaml | mcpeval.secrets.yml
     - .mcp-eval/secrets.yaml | .mcp-eval/secrets.yml
     - .mcp-eval.secrets.yaml | .mcp-eval.secrets.yml
@@ -199,7 +205,7 @@ def _find_eval_secrets() -> Path | None:
         ".mcp-eval.secrets.yaml",
         ".mcp-eval.secrets.yml",
     ]
-    return _search_upwards_for(candidates)
+    return _search_upwards_for(candidates, project_dir)
 
 
 def load_config(config_path: str | Path | None = None) -> MCPEvalSettings:
@@ -252,7 +258,7 @@ def load_config(config_path: str | Path | None = None) -> MCPEvalSettings:
         if p.exists():
             eval_cfg = p
     if not eval_cfg:
-        eval_cfg = _find_eval_config()
+        eval_cfg = find_eval_config()
     if eval_cfg and eval_cfg.exists():
         with open(eval_cfg, "r", encoding="utf-8") as f:
             eval_data = yaml.safe_load(f) or {}
@@ -260,7 +266,7 @@ def load_config(config_path: str | Path | None = None) -> MCPEvalSettings:
         # Merge mcp-eval secrets
         try:
             # Prefer a sibling secrets file if found
-            eval_secrets = _find_eval_secrets()
+            eval_secrets = find_eval_secrets()
             if eval_secrets and eval_secrets.exists():
                 with open(eval_secrets, "r", encoding="utf-8") as sf:
                     secrets_data = yaml.safe_load(sf) or {}

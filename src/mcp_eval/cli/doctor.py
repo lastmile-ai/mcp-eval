@@ -11,7 +11,8 @@ import typer
 from rich.console import Console
 
 from mcp_eval.cli.validate import ValidationResult
-from mcp_eval.cli.utils import find_config_files, load_yaml, find_mcpeval_config
+from mcp_eval.cli.utils import find_config_files, load_yaml
+from mcp_eval.config import find_eval_config
 
 app = typer.Typer(help="Diagnose MCP-Eval setup")
 console = Console()
@@ -318,7 +319,9 @@ def doctor(
     console.print("\n[bold cyan]🩺 Running MCP-Eval Doctor[/bold cyan]\n")
 
     # Find config file once
-    config_path = find_mcpeval_config(project)
+    config_path = find_eval_config(project)
+    if config_path:
+        console.print(f"[dim]Using config: {config_path}[/dim]")
 
     results: List[ValidationResult] = []
 

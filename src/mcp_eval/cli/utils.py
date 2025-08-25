@@ -13,6 +13,7 @@ from mcp_eval.cli.models import (
     AgentConfig,
     MCPEvalConfig,
 )
+from mcp_eval.config import find_eval_config, find_eval_secrets
 
 console = Console()
 
@@ -60,58 +61,6 @@ def find_mcp_json() -> Path | None:
     return None
 
 
-def find_mcpeval_config(project_dir: Path | None = None) -> Path | None:
-    """Find mcpeval config file using the same logic as config.py.
-
-    Searches for config files in this order:
-    - mcpeval.yaml | mcpeval.yml
-    - mcpeval.config.yaml | mcpeval.config.yml
-    - .mcp-eval/config.yaml | .mcp-eval/config.yml
-    - .mcp-eval.config.yaml | .mcp-eval.config.yml
-
-    Returns the first one found, or None if none exist.
-    """
-    start_dir = project_dir or Path.cwd()
-    candidates = [
-        "mcpeval.yaml",
-        "mcpeval.yml",
-        "mcpeval.config.yaml",
-        "mcpeval.config.yml",
-        ".mcp-eval/config.yaml",
-        ".mcp-eval/config.yml",
-        ".mcp-eval.config.yaml",
-        ".mcp-eval.config.yml",
-    ]
-
-    # Search upwards from start_dir
-    cur = start_dir
-    while True:
-        for candidate in candidates:
-            path = cur / candidate
-            if path.exists():
-                return path
-        if cur == cur.parent:
-            break
-        cur = cur.parent
-
-    # Check home directory for .mcp-eval/* patterns
-    try:
-        home = Path.home()
-        for candidate in candidates:
-            if candidate.startswith(".mcp-eval/"):
-                path = home / candidate
-                if path.exists():
-                    return path
-            elif candidate.startswith(".mcp-eval"):
-                path = home / ".mcp-eval" / candidate.replace(".mcp-eval.", "")
-                if path.exists():
-                    return path
-    except Exception:
-        pass
-
-    return None
-
-
 def get_default_mcpeval_config_name() -> str:
     """Get the default name for new mcpeval config files."""
     return "mcpeval.yaml"
@@ -120,7 +69,7 @@ def get_default_mcpeval_config_name() -> str:
 def find_config_files(project_dir: Path) -> ConfigPaths:
     """Find all relevant configuration files."""
     # Use the new utility to find mcpeval config
-    mcpeval_config = find_mcpeval_config(project_dir)
+    mcpeval_config = find_eval_config(project_dir)
 
     # For backwards compatibility, if no config found, use default location
     if mcpeval_config is None:
@@ -329,7 +278,7 @@ def ensure_mcpeval_yaml(project_dir: Path) -> Path:
     If none found, creates a new one with the default name.
     """
     # Try to find existing config
-    config_path = find_mcpeval_config(project_dir)
+    config_path = find_eval_config(project_dir)
 
     if config_path is None:
         # No existing config, create with default name
