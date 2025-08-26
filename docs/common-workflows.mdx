@@ -321,7 +321,9 @@ Ensure your agent follows the optimal execution path:
         
         - name: Install dependencies
           run: |
-            pip install mcp-eval
+            pip install mcpevals
+            # Or using uv (faster!):
+            # uv add mcpevals
             # Or from your repo:
             # pip install -e .
         
