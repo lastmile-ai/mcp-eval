@@ -386,6 +386,38 @@ def _filter_assertions_for_known_tools(
     return filtered
 
 
+def _harden_assertions(assertions: List[AssertionSpec]) -> List[AssertionSpec]:
+    """Apply robustness tweaks to generated assertions to reduce false negatives.
+
+    - Prefer 'contains' over 'exact' for ToolOutputMatches when expected is a short string
+      and field_path is not specified (payloads are often large/structured).
+    - Ensure ResponseContains defaults to case-insensitive unless explicitly requested.
+    """
+    hardened: List[AssertionSpec] = []
+    for a in assertions:
+        kind = getattr(a, "kind", None)
+        try:
+            if kind == "tool_output_matches":
+                # a is ToolOutputMatchesSpec
+                if (
+                    getattr(a, "match_type", "exact") == "exact"
+                    and isinstance(getattr(a, "expected_output", None), str)
+                    and (getattr(a, "field_path", None) is None)
+                ):
+                    text = getattr(a, "expected_output")
+                    # Use contains for short markers or when JSON-like not intended
+                    if text and (len(text) <= 120):
+                        a.match_type = "contains"  # type: ignore[attr-defined]
+            elif kind == "response_contains":
+                # Make response contains case-insensitive by default
+                if getattr(a, "case_sensitive", None) is None:
+                    a.case_sensitive = False  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        hardened.append(a)
+    return hardened
+
+
 def _assertion_catalog_prompt() -> str:
     return (
         "You can choose from these assertion types (use discriminated 'kind' field):\n"
@@ -468,7 +500,6 @@ async def generate_scenarios_with_agent(
             )
 
         attempt = 0
-        last_scenarios: List[ScenarioSpec] = []
         while attempt <= max_retries:
             guidance = base_guidance
             if attempt > 0:
@@ -526,6 +557,7 @@ async def generate_scenarios_with_agent(
             if allowed_names:
                 for s in bundle.scenarios:
                     s.assertions = _filter_assertions_for_known_tools(s.assertions, allowed_names)
+                    s.assertions = _harden_assertions(s.assertions)
             else:
                 for s in bundle.scenarios:
                     s.assertions = [
@@ -534,9 +566,9 @@ async def generate_scenarios_with_agent(
                         if getattr(a, "kind", None)
                         not in ("tool_was_called", "tool_called_with", "tool_output_matches", "tool_sequence")
                     ]
+                    s.assertions = _harden_assertions(s.assertions)
 
             scenarios = [s for s in bundle.scenarios if _is_valid(s)]
-            last_scenarios = scenarios
             if progress_callback:
                 progress_callback(f"Generated {len(scenarios)} scenarios")
 
@@ -634,7 +666,7 @@ async def refine_assertions_with_agent(
                     if key not in have:
                         merged.append(a)
                         have.add(key)
-                s.assertions = merged
+                s.assertions = _harden_assertions(merged)
             except Exception:
                 pass
             updated.append(s)

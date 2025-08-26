@@ -25,4 +25,56 @@ MCP-Eval is a developer-first testing framework for Model Context Protocol (MCP)
 Install `mcp_eval` and its dependencies. Make sure `mcp-agent` is also installed in your environment.
 
 ```bash
-pip install "typer[all]" rich pydantic jinja2
+pip install -e .
+# or with uv
+uv pip install -e .
+```
+
+## CI/CD with GitHub Actions (uv)
+
+This repo includes ready-to-use GitHub Actions to run MCP‑Eval in CI, publish reports, and comment on pull requests.
+
+- Run action: `.github/actions/mcp-eval/run` (uv-based install + run + reports)
+- Upload action: `.github/actions/mcpeval-upload` (artifact, PR comment, optional commit)
+- General CI workflow: `.github/workflows/mcpeval.yml`
+- Reusable workflow: `.github/workflows/mcpeval-reusable.yml`
+- Example workflow: `.github/workflows/mcpeval-example-fetch.yml`
+
+Quick start:
+
+```yaml
+name: MCP-Eval CI
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/mcp-eval/run
+        with:
+          python-version: '3.11'
+          tests: tests/
+          run-args: '-v --max-concurrency 4'
+          pr-comment: 'true'
+          set-summary: 'true'
+          upload-artifacts: 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
+
+Options:
+
+- To publish HTML report, keep the Pages job enabled in `.github/workflows/mcpeval.yml`.
+- To commit reports back to the repo, set `commit-report: 'true'` and configure `commit-path`, `commit-branch`, `commit-message`.
+- To pass additional environment, use `env`, `env-file`, or `extra-env` inputs.
+
+Troubleshooting in CI:
+
+```bash
+uv run mcp-eval doctor --full
+```

@@ -251,8 +251,32 @@ def pytest_runtest_teardown(item):
 def event_loop():
     """Create an instance of the default event loop for the test session."""
     loop = asyncio.get_event_loop_policy().new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+    except Exception:
+        pass
     yield loop
-    loop.close()
+    # Graceful shutdown to avoid 'Event loop is closed' during async client cleanup
+    try:
+        loop.run_until_complete(asyncio.sleep(0))
+    except Exception:
+        pass
+    try:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+    except Exception:
+        pass
+    try:
+        loop.run_until_complete(asyncio.sleep(0))
+    except Exception:
+        pass
+    try:
+        loop.close()
+    except Exception:
+        pass
+    try:
+        asyncio.set_event_loop(None)
+    except Exception:
+        pass
 
 
 # Accumulate results for a richer terminal summary

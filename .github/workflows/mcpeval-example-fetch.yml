@@ -1,0 +1,42 @@
+name: MCP-Eval Example (Fetch tests)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run fetch example tests via composite action
+        id: mcpeval
+        uses: ./.github/actions/mcp-eval/run
+        with:
+          python-version: "3.11"
+          working-directory: examples/mcp_server_fetch
+          tests: tests/
+          run-args: "-v"
+          reports-dir: mcpeval-reports
+          json-report: fetch-results.json
+          markdown-report: fetch-results.md
+          html-report: fetch-results.html
+          artifact-name: mcpeval-fetch-artifacts
+          pr-comment: "false"
+          set-summary: "true"
+          upload-artifacts: "true"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Print artifact paths
+        run: |
+          echo "JSON: ${{ steps.mcpeval.outputs.results-json-path }}"
+          echo "MD:   ${{ steps.mcpeval.outputs.results-md-path }}"
+          echo "HTML: ${{ steps.mcpeval.outputs.results-html-path }}"
+
+

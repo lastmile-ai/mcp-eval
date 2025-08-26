@@ -1,0 +1,123 @@
+name: MCP-Eval CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master, trunk ]
+  workflow_dispatch:
+
+# Cancel redundant runs on the same ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  tests:
+    name: Run MCP-Eval
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Tip: set your LLM provider keys in repo/org secrets
+      # Settings discovery follows mcp-agent/mcpeval configs in your repo.
+      - name: Run MCP-Eval (uv)
+        id: mcpeval
+        uses: ./.github/actions/mcp-eval/run
+        with:
+          python-version: "3.11"
+          working-directory: .
+          tests: tests/
+          run-args: "-v"
+          reports-dir: mcpeval-reports
+          json-report: mcpeval-results.json
+          markdown-report: mcpeval-results.md
+          html-report: mcpeval-results.html
+          artifact-name: mcpeval-artifacts
+          pr-comment: "true"
+          set-summary: "true"
+          upload-artifacts: "true"
+        env:
+          # Provide at least one provider key; both are supported
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      # Post the Markdown report as a sticky PR comment for easy review
+      - name: Comment PR with MCP-Eval report
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        env:
+          REPORT_PATH: ${{ steps.mcpeval.outputs.results-md-path }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = process.env.REPORT_PATH;
+            let body = '<!-- mcpeval-report -->\n';
+            body += '## MCP-Eval Report\n\n';
+            try {
+              const content = fs.readFileSync(path, 'utf8');
+              body += content;
+            } catch (e) {
+              body += '_No report found at ' + path + '_\n';
+            }
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            // Find existing sticky comment
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+            const previous = comments.find(c => c.user.type === 'Bot' && c.body.startsWith('<!-- mcpeval-report -->'));
+            if (previous) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+  # Optional: Publish the HTML report to GitHub Pages on main/master pushes
+  pages:
+    name: Publish Report to Pages
+    needs: tests
+    if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mcpeval-artifacts
+          path: ./mcpeval-artifacts
+
+      - name: Prepare site
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          # Prefer the configured HTML filename; fallback to first HTML we find
+          if [[ -f "mcpeval-artifacts/mcpeval-reports/mcpeval-results.html" ]]; then
+            cp mcpeval-artifacts/mcpeval-reports/mcpeval-results.html site/index.html
+          else
+            file=$(find mcpeval-artifacts -name "*.html" | head -n 1 || true)
+            if [[ -n "$file" ]]; then cp "$file" site/index.html; else echo '<h1>No report available</h1>' > site/index.html; fi
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+

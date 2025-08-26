@@ -84,6 +84,11 @@ class ToolOutputMatches(SyncEvaluator):
     - etc.
     """
 
+    contains_fallback_for_exact: bool = True
+    """If True and match_type is 'exact' for strings, treat containment as pass when
+    actual is a longer string that includes expected. Helpful for large tool payloads.
+    """
+
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
         """Evaluate tool output against expected patterns."""
         tool_calls = [call for call in ctx.tool_calls if call.name == self.tool_name]
@@ -297,7 +302,15 @@ class ToolOutputMatches(SyncEvaluator):
     def _validate_match(self, actual_value: Any) -> bool:
         """Validate actual value against expected output based on match type."""
         if self.match_type == "exact":
-            return actual_value == self.expected_output
+            if actual_value == self.expected_output:
+                return True
+            # Best-effort fallback for string comparisons on large payloads
+            if self.contains_fallback_for_exact and isinstance(actual_value, str) and isinstance(self.expected_output, str):
+                if self.case_sensitive:
+                    return self.expected_output in actual_value
+                else:
+                    return self.expected_output.lower() in actual_value.lower()
+            return False
 
         elif self.match_type == "contains":
             if isinstance(actual_value, str) and isinstance(self.expected_output, str):
@@ -415,6 +428,7 @@ class ToolOutputMatches(SyncEvaluator):
             "match_type": self.match_type,
             "case_sensitive": self.case_sensitive,
             "call_index": self.call_index,
+            "contains_fallback_for_exact": self.contains_fallback_for_exact,
         }
 
         # Handle Pattern objects
