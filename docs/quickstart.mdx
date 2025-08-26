@@ -1,0 +1,133 @@
+---
+title: "Quickstart"
+description: "Install, initialize, add servers/agents, and run your first MCP‑Eval tests."
+sidebarTitle: "Quickstart"
+icon: "rocket"
+keywords: ["install","init","getting started","mcp.json","dxt"]
+---
+
+This guide gets you evaluating in minutes.
+
+### 1) Install
+
+```bash
+uv pip install -e .
+# or
+pip install -e .
+```
+
+Set provider keys:
+
+```bash
+export ANTHROPIC_API_KEY=...   # recommended for generation/judging
+export OPENAI_API_KEY=...
+```
+
+### 2) Initialize a project
+
+```bash
+mcp-eval init
+```
+
+- Captures provider/model (uses ModelSelector if not given)
+- Writes `mcpeval.yaml` and `mcpeval.secrets.yaml`
+- Lets you add/import a server and define a default agent
+
+Source: [Generator CLI](../src/mcp_eval/cli/generator.py)
+
+### 3) Add a server
+
+Interactive:
+
+```bash
+mcp-eval add server
+```
+
+From `mcp.json` (Cursor/VS Code integrations):
+
+```bash
+mcp-eval add server --from-mcp-json .cursor/mcp.json
+```
+
+From DXT manifest (Anthropic Desktop):
+
+```bash
+mcp-eval add server --from-dxt path/to/manifest.dxt
+```
+
+References:
+- `mcp.json` format: [mcp.json guide](https://gofastmcp.com/integrations/mcp-json-configuration)
+- DXT: [DXT README](https://github.com/anthropics/dxt/blob/main/README.md)
+
+### 4) Define an agent
+
+During init you set a default agent (AgentSpec). You can add more:
+
+```bash
+mcp-eval add agent
+```
+
+Source: [Generator CLI](../src/mcp_eval/cli/generator.py), [CLI utils](../src/mcp_eval/cli/utils.py)
+
+### 5) Run tests
+
+- Decorator tests:
+
+```bash
+mcp-eval run examples/mcp_server_fetch/tests/test_decorator_style.py -v --markdown out.md --html out.html
+```
+
+- Pytest style:
+
+```bash
+pytest examples/mcp_server_fetch/tests/test_pytest_style.py -v
+```
+
+- Dataset file:
+
+```bash
+mcp-eval run dataset --file examples/mcp_server_fetch/datasets/basic_fetch_dataset.yaml
+```
+
+Runner source: [Runner](../src/mcp_eval/runner.py)
+
+### 6) Generate tests with an LLM (optional)
+
+We recommend Anthropic Sonnet/Opus for better generation quality.
+
+```bash
+mcp-eval generate --style pytest --n-examples 8 --provider anthropic
+```
+
+This discovers tools, drafts scenarios, refines assertions, and writes tests.
+
+Source: [Generator CLI](../src/mcp_eval/cli/generator.py)
+
+### Reports and traces
+
+- JSON/Markdown/HTML combined reports
+- Per‑test JSON and OTEL `.jsonl` traces under `./test-reports`
+
+Configure in `mcpeval.yaml` ([schema](../schema/mcpeval.config.schema.json)), see [Configuration](../src/mcp_eval/config.py).
+
+#### Files created by init
+
+- `mcpeval.yaml` for eval knobs and agents
+- `mcpeval.secrets.yaml` for API keys
+- Updates to your mcp‑agent settings if needed
+
+#### Minimal test (decorator)
+
+```python
+from mcp_eval import task, Expect
+
+@task("Fetch and verify")
+async def test_fetch(agent, session):
+  resp = await agent.generate_str("Fetch https://example.com")
+  await session.assert_that(Expect.tools.was_called("fetch"), response=resp)
+  await session.assert_that(Expect.content.contains("Example Domain"), response=resp)
+```
+
+<!-- TODO: Add screenshot of init prompts; add screenshot of first run summary; add screenshot of reports directory contents. -->
+
+

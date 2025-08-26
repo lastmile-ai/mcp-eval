@@ -1,0 +1,52 @@
+---
+title: "CI/CD"
+description: "Run MCP‑Eval in GitHub Actions, publish artifacts, post PR comments, and add badges."
+sidebarTitle: "CI/CD"
+icon: "truck-fast"
+keywords: ["github actions","artifacts","pages","badges"]
+---
+
+### Run action
+
+Use the uv‑based action to install, run, and upload artifacts.
+
+```yaml
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/mcp-eval/run
+        with:
+          python-version: '3.11'
+          tests: tests/
+          run-args: '-v --max-concurrency 4'
+          pr-comment: 'true'
+          set-summary: 'true'
+          upload-artifacts: 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
+
+Sources:
+- Action: [action.yaml](../.github/actions/mcp-eval/run/action.yaml)
+- README: [run/README.md](../.github/actions/mcp-eval/run/README.md)
+- Workflows: [mcpeval.yml](../.github/workflows/mcpeval.yml), [mcpeval-reusable.yml](../.github/workflows/mcpeval-reusable.yml)
+
+### Publish HTML via Pages
+
+Enable the Pages deploy job in the provided workflow.
+
+### Badges
+
+Artifacts include badges under `mcpeval-reports/badges`. Embed in README:
+
+```markdown
+![MCP Tests](mcpeval-reports/badges/tests.svg)
+![MCP Tool Coverage](mcpeval-reports/badges/coverage.svg)
+```
+
+<!-- TODO: Add screenshots of the PR comment, the summary, and the published HTML report on Pages. -->
+
+

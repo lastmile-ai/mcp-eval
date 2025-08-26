@@ -1,0 +1,25 @@
+{
+  "title": "MCP‑Eval Docs",
+  "icon": "book",
+  "pages": [
+    { "href": "/overview", "title": "Overview", "icon": "book" },
+    { "href": "/quickstart", "title": "Quickstart", "icon": "rocket" },
+    { "href": "/concepts", "title": "Concepts", "icon": "diagram-project" },
+    { "href": "/detailed_guide", "title": "Detailed Guide", "icon": "book-open" },
+    { "href": "/agent-evaluation", "title": "Agent Evaluation", "icon": "user-ninja" },
+    { "href": "/server-evaluation", "title": "MCP Server Evaluation", "icon": "server" },
+    { "href": "/pytest", "title": "Pytest", "icon": "flask" },
+    { "href": "/datasets", "title": "Datasets", "icon": "table" },
+    { "href": "/assertions", "title": "Assertions", "icon": "check-double" },
+    { "href": "/agents", "title": "Agents", "icon": "user-gear" },
+    { "href": "/configuration", "title": "Configuration", "icon": "sliders" },
+    { "href": "/cli-reference", "title": "CLI Reference", "icon": "terminal" },
+    { "href": "/metrics-tracing", "title": "Metrics & Tracing", "icon": "chart-line" },
+    { "href": "/test-generation", "title": "Test Generation", "icon": "magic" },
+    { "href": "/ci-cd", "title": "CI/CD", "icon": "truck-fast" },
+    { "href": "/troubleshooting", "title": "Troubleshooting", "icon": "wrench" },
+    { "href": "/faq", "title": "FAQ", "icon": "circle-question" },
+    { "href": "/changelog", "title": "Changelog", "icon": "clock-rotate-left" }
+  ]
+}
+

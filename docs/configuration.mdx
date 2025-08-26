@@ -1,0 +1,60 @@
+---
+title: "Configuration"
+description: "Files, precedence, and programmatic APIs for configuring MCP‑Eval and mcp‑agent."
+sidebarTitle: "Configuration"
+icon: "sliders"
+keywords: ["mcpeval.yaml","secrets","mcp-agent","settings","providers"]
+---
+
+### Files & precedence
+
+1. `mcp-agent.config.yaml` (+ `mcp-agent.secrets.yaml`) — servers, providers, subagents
+2. `mcpeval.yaml` (+ `mcpeval.secrets.yaml`) — judge, metrics, reporting, execution, default_agent; optionally override defaults
+3. Explicit path passed to loader
+
+Discovery helpers: [find_eval_config](../src/mcp_eval/config.py), [find_eval_secrets](../src/mcp_eval/config.py)
+
+Schema: [mcpeval.config.schema.json](../schema/mcpeval.config.schema.json)
+
+### MCPEvalSettings
+
+Typed settings extending mcp‑agent `Settings`:
+
+- judge, metrics, reporting, execution
+- default_agent (AgentSpec or name)
+- provider/model defaults
+
+Source: [config.py](../src/mcp_eval/config.py)
+
+#### Example mcpeval.yaml
+
+```yaml
+$schema: ./schema/mcpeval.config.schema.json
+provider: anthropic
+model: claude-sonnet-4-0
+default_agent: "default"
+mcp:
+  servers:
+    fetch:
+      command: "uvx"
+      args: ["mcp-server-fetch"]
+reporting:
+  formats: ["json","markdown"]
+  output_dir: "./test-reports"
+```
+
+<!-- TODO: Add a screenshot of `mcp-eval list servers --verbose` and `mcp-eval list agents --verbose`. -->
+
+### Programmatic APIs
+
+- `use_config(settings_or_path)`
+- `set_settings(dict_or_MCPEvalSettings)`
+- `use_agent(Agent|AugmentedLLM|AgentSpec|name)`
+- `use_agent_factory(callable)`
+
+### Best practices
+
+- Put server definitions in mcp‑agent config
+- Use `mcpeval.yaml` for eval knobs (reports dir, judge min score, concurrency, etc.)
+
+

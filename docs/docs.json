@@ -1,0 +1,29 @@
+{
+  "navigation": {
+    "pages": [
+      "index",
+      "overview",
+      "quickstart",
+      "detailed_guide",
+      "concepts",
+      "metrics-tracing",
+      "agent-evaluation",
+      "server-evaluation",
+      "assertions",
+      "pytest",
+      "datasets",
+      "agents",
+      "configuration",
+      "cli-reference",
+      "test-generation",
+      "ci-cd",
+      "troubleshooting",
+      "faq",
+      "changelog"
+    ]
+  },
+  "styling": {
+    "eyebrows": "breadcrumbs"
+  }
+}
+

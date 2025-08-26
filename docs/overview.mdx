@@ -1,0 +1,72 @@
+---
+title: "Overview"
+description: "What MCP‑Eval is, why it exists, and how it evaluates MCP servers and agents via real tool use and OTEL-backed metrics."
+sidebarTitle: "Overview"
+icon: "book"
+keywords: ["overview","mcp-eval","evals","agents","mcp","otel","testing"]
+---
+
+MCP‑Eval is a developer‑first evaluation framework for Model Context Protocol (MCP) servers and tool‑using agents. It drives an agent to perform realistic tasks against actual MCP tools, captures OpenTelemetry (OTEL) traces as the single source of truth, and turns those traces into high‑signal metrics and expressive assertions.
+
+Key idea: evaluate behavior in the environment the system actually runs in — an LLM/agent calling MCP tools — instead of only unit testing isolated functions.
+
+<!-- TODO: Add a high-level architecture diagram showing User → Agent → MCP Servers, with OTEL tracing and Reports. -->
+
+### Highlights
+
+- Unified async assertion API with an IntelliSense‑friendly catalog (`Expect.*`) for content, tools, performance, judges, and path efficiency
+- OTEL‑backed metrics and span tree analysis (tool calls, latency, token/cost estimates, iteration counts, path efficiency, error recovery)
+- Multiple authoring styles: Decorator tests, Pytest integration, Dataset suites
+- Rich CLI: init, add server/agent, generate/update tests with an LLM, run, list, validate, doctor, issue
+- Reports: Console, JSON, Markdown, HTML, and saved traces in `./test-reports`
+
+#### Example: a minimal decorator test
+
+```python
+from mcp_eval import task, Expect
+
+@task("Fetch and verify example.com")
+async def test_fetch(agent, session):
+    response = await agent.generate_str("Fetch https://example.com and summarize")
+    await session.assert_that(Expect.tools.was_called("fetch"), response=response, name="fetch_called")
+    await session.assert_that(Expect.content.contains("Example Domain"), response=response, name="contains_text")
+```
+
+### Philosophy
+
+Connect your server(s) to an agent and run realistic flows. Measure: Did it call the right tools? Was the path efficient? Was the content good? Did it recover from errors? See also [GUIDE.md](../GUIDE.md).
+
+### Where to look in the repo
+
+- Session, unified assertions, dataset APIs
+  - [TestSession](../src/mcp_eval/session.py), [TestAgent](../src/mcp_eval/session.py)
+  - [Decorators and task runner](../src/mcp_eval/core.py)
+  - [Dataset, Case](../src/mcp_eval/datasets.py)
+  - [Expect (catalog)](../src/mcp_eval/catalog.py)
+- Evaluators and metrics
+  - [Evaluators](../src/mcp_eval/evaluators/)
+  - [Metrics](../src/mcp_eval/metrics.py)
+  - [SpanTree](../src/mcp_eval/otel/span_tree.py)
+- CLI and runner
+  - [CLI commands](../src/mcp_eval/cli/)
+  - [Runner](../src/mcp_eval/runner.py)
+- Examples
+  - [mcp_server_fetch](../examples/mcp_server_fetch/)
+  - [sample](../sample/)
+
+### Related reading
+
+- Pydantic Evals (inspiration on positioning and concepts): [Pydantic Evals docs](https://ai.pydantic.dev/evals/)
+
+### How it works (execution flow)
+
+1) You configure an agent (via config or code) that lists the MCP servers (tools) it can use.
+2) You write tests (decorators/pytest/datasets) that call the agent with tasks.
+3) During execution, OTEL traces are emitted; the session writes them to a JSONL trace file.
+4) After the run, traces are processed into metrics and a span tree.
+5) Assertions evaluate content, tool behavior, performance, and path efficiency.
+6) Reports (JSON/Markdown/HTML) and traces are saved to `./test-reports`.
+
+<!-- TODO: Add a short animated GIF of running `mcp-eval run` and showing the summary. -->
+
+

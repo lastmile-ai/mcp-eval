@@ -1,0 +1,60 @@
+---
+title: "MCP Server Evaluation"
+description: "Connect your server to an agent and validate correctness, robustness, performance, and path efficiency."
+sidebarTitle: "Server Evaluation"
+icon: "server"
+keywords: ["server","mcp","evaluation","golden path","sequence"]
+---
+
+The best way to test an MCP server is to connect it to an agent and exercise realistic flows.
+
+### Typical assertions
+
+- Correctness: `Expect.content.contains`, `Expect.tools.output_matches`
+- Tool usage: `Expect.tools.was_called`, `called_with`, `count`, `success_rate`, `failed`
+- Efficiency: `Expect.performance.max_iterations`, `Expect.path.efficiency`, `Expect.tools.sequence`
+- Quality: `Expect.judge.llm` (rubric‑based)
+
+```python
+resp = await agent.generate_str("Fetch https://httpbin.org/html and summarize")
+await session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called", response=resp)
+await session.assert_that(Expect.content.contains("html", case_sensitive=False), name="mentions_html", response=resp)
+judge = Expect.judge.llm("Provides a meaningful summary of the HTML page", min_score=0.8)
+await session.assert_that(judge, name="quality_summary", response=resp)
+```
+
+### Examples
+
+- Decorators: [test_decorator_style.py](../examples/mcp_server_fetch/tests/test_decorator_style.py)
+- Pytest: [test_pytest_style.py](../examples/mcp_server_fetch/tests/test_pytest_style.py)
+- Dataset: [test_dataset_style.py](../examples/mcp_server_fetch/tests/test_dataset_style.py), [datasets/](../examples/mcp_server_fetch/datasets/)
+
+### Golden paths & sequences
+
+Use `Expect.path.efficiency` and `Expect.tools.sequence` to encode expected tool paths and detect backtracking/repeats.
+
+```python
+await session.assert_that(
+  Expect.path.efficiency(
+    expected_tool_sequence=["fetch"],
+    allow_extra_steps=1,
+    tool_usage_limits={"fetch": 1},
+  ),
+  name="fetch_path_efficiency",
+)
+
+await session.assert_that(Expect.tools.sequence(["fetch"], allow_other_calls=True))
+```
+
+### Artifacts
+
+- Per‑test JSON and OTEL `.jsonl` traces in `./test-reports`
+- Combined JSON/Markdown/HTML via runner options
+
+Sources:
+- Unified assertions: [catalog.py](../src/mcp_eval/catalog.py)
+- Session/metrics: [session.py](../src/mcp_eval/session.py), [metrics.py](../src/mcp_eval/metrics.py), [span_tree.py](../src/mcp_eval/otel/span_tree.py)
+
+<!-- TODO: Add a diagram illustrating golden path vs actual path, highlighting backtracking or repeated tools. -->
+
+

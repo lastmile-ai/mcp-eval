@@ -1,0 +1,28 @@
+---
+title: "Troubleshooting"
+description: "Diagnose configuration and runtime issues with doctor, validate, and issue. Common problems and fixes."
+sidebarTitle: "Troubleshooting"
+icon: "wrench"
+keywords: ["doctor","validate","issue","keys","servers","network"]
+---
+
+### Commands
+
+- Doctor: `mcp-eval doctor [--full]` — system/config/env checks, test reports, suggestions
+  - [doctor.py](../src/mcp_eval/cli/doctor.py)
+- Validate: `mcp-eval validate [--quick]` — API keys, judge config, servers, agents
+  - [validate.py](../src/mcp_eval/cli/validate.py)
+- Issue: `mcp-eval issue` — prepares a GitHub issue with diagnostics
+  - [issue.py](../src/mcp_eval/cli/issue.py)
+
+### Common issues
+
+- MCP server not found: ensure command/URL is correct; try `mcp-eval validate --servers`
+- Missing API keys: set `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` or add `mcpeval.secrets.yaml`
+- No tools recorded: ensure agent `server_names` include your server and that it is reachable
+- Timeouts/slow tests: use performance assertions; run with markers to skip slow/network
+- Inconsistent outputs: tighten prompts, reduce creativity, prefer objective evaluators
+
+<!-- TODO: Add screenshots: doctor summary output, validate success + failure, and the generated issue preview. -->
+
+

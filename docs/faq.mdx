@@ -1,0 +1,39 @@
+---
+title: "FAQ"
+description: "Frequently asked questions about MCP‑Eval, servers, agents, and configuration."
+sidebarTitle: "FAQ"
+icon: "circle-question"
+keywords: ["faq","servers","agents","decorators","datasets","pytest"]
+---
+
+### Does server language matter?
+
+No. Any language works as long as your server implements MCP. MCP‑Eval drives it via the agent and MCP transport.
+
+### How do I add servers quickly?
+
+Use `mcp-eval add server` or import from `mcp.json` / DXT. See [Quickstart](./quickstart.mdx) and [CLI Reference](./cli-reference.mdx).
+
+### Decorator order?
+
+Place `@with_agent(...)` above `@task(...)` when used together.
+
+### Can I run without an LLM?
+
+Yes for tool/structural checks that don’t require generation. LLM judge assertions need an LLM.
+
+### How do I run a specific test or dataset?
+
+`mcp-eval run tests/test_file.py::test_func` or `mcp-eval run dataset --file path.yaml`.
+
+### Where are configs discovered?
+
+[config.py](../src/mcp_eval/config.py) documents discovery for `mcpeval.yaml` and secrets.
+
+<!-- TODO: Add a short video/GIF explaining the high-level workflow and where each file lives. -->
+
+### Parallel datasets?
+
+`Dataset.evaluate(..., max_concurrency=N)` enables parallel case execution.
+
+

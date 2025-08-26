@@ -1,0 +1,50 @@
+---
+title: "Concepts"
+description: "Core concepts: TestSession, TestAgent, unified assertions, metrics, styles, and judges."
+sidebarTitle: "Concepts"
+icon: "diagram-project"
+keywords: ["session","agent","assertions","metrics","otel","judges"]
+---
+
+### TestSession (single source of truth)
+
+`TestSession` configures OTEL tracing, runs the agent, collects spans, computes metrics, and saves artifacts.
+
+- Source: [TestSession/TestAgent](../src/mcp_eval/session.py)
+- Traces → metrics: tool calls, iteration count, latency, token/cost estimates, tool coverage
+- Span tree: rephrasing loop detection, path efficiency, error recovery sequences
+
+### TestAgent
+
+`TestAgent` wraps the runtime agent with convenience helpers and connects assertions to the session.
+
+- Source: [TestSession/TestAgent](../src/mcp_eval/session.py)
+
+### Unified assertion API
+
+Use one entrypoint: `await session.assert_that(Expect.…, response=?, when=?)`.
+
+- Immediate vs deferred: content/judges can run immediately; tool/perf/path assertions need final metrics
+- Catalog source: [Expect (catalog)](../src/mcp_eval/catalog.py)
+
+### Styles
+
+- Decorators: `@task`, optional `@setup`/`@teardown`, `@parametrize`
+- Pytest: fixtures (`mcp_session`, `mcp_agent`), markers (`@pytest.mark.mcp_agent`)
+- Datasets: `Case` and `Dataset` for systematic suites
+
+Sources:
+- Decorators/core: [Core/test decorators](../src/mcp_eval/core.py)
+- Pytest plugin: [pytest_plugin.py](../src/mcp_eval/pytest_plugin.py)
+- Datasets: [Dataset API](../src/mcp_eval/datasets.py)
+
+### Judges (LLM based)
+
+Use `Expect.judge.llm` or `Expect.judge.multi_criteria` to score quality.
+
+- Judge/provider/model defaults from `MCPEvalSettings`
+- Source: [LLMJudge](../src/mcp_eval/evaluators/llm_judge.py), [MultiCriteriaJudge](../src/mcp_eval/evaluators/multi_criteria_judge.py), [Settings](../src/mcp_eval/config.py)
+
+<!-- TODO: Add an annotated diagram of immediate vs deferred assertions timeline. -->
+
+

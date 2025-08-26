@@ -1,0 +1,90 @@
+---
+title: "Agent Evaluation"
+description: "Treat your agent as the system under test. Define scenarios, assert behavior, and measure efficiency and quality."
+sidebarTitle: "Agent Evaluation"
+icon: "user-ninja"
+keywords: ["agent","evaluation","with_agent","factory","spec","judge"]
+---
+
+Evaluate your agent’s reasoning, tool use, recovery, and quality by driving it through realistic tasks.
+
+### Define the test agent
+
+- Global default:
+
+```python
+import mcp_eval
+from mcp_agent.agents.agent_spec import AgentSpec
+
+mcp_eval.use_agent(
+    AgentSpec(name="Fetcher", instruction="You fetch.", server_names=["fetch"])  # see [Settings](../src/mcp_eval/config.py)
+)
+```
+
+- Per‑test override with `with_agent` (place above `@task`):
+
+```python
+from mcp_eval.core import with_agent, task
+from mcp_agent.agents.agent import Agent
+
+@with_agent(Agent(name="Custom", instruction="Custom", server_names=["fetch"]))  # see [Core](../src/mcp_eval/core.py)
+@task("Custom agent test")
+async def test_custom(agent, session):
+    resp = await agent.generate_str("Fetch https://example.com")
+```
+
+- Factory for parallel safety:
+
+```python
+from mcp_eval.config import use_agent_factory
+from mcp_agent.agents.agent import Agent
+
+def make_agent():
+    return Agent(name="Isolated", instruction="...", server_names=["fetch"])  # see [Settings](../src/mcp_eval/config.py)
+
+use_agent_factory(make_agent)
+```
+
+More patterns: [agent_definition_examples.py](../examples/mcp_server_fetch/agent_definition_examples.py).
+
+### What to measure
+
+- Tool behavior: `Expect.tools.was_called`, `called_with`, `sequence`, `output_matches`
+- Efficiency and iterations: `Expect.performance.max_iterations`, `Expect.path.efficiency`
+- Quality: `Expect.judge.llm`, `Expect.judge.multi_criteria`
+- Performance: response times, concurrency (see metrics)
+
+```python
+# Efficiency and iteration bounds
+await session.assert_that(Expect.performance.max_iterations(3))
+
+# Tool behavior and outputs
+await session.assert_that(Expect.tools.was_called("fetch"))
+await session.assert_that(Expect.tools.output_matches("fetch", {"isError": False}, match_type="partial"))
+
+# Path and sequence
+await session.assert_that(Expect.tools.sequence(["fetch"], allow_other_calls=True))
+await session.assert_that(Expect.path.efficiency(expected_tool_sequence=["fetch"], allow_extra_steps=1))
+```
+
+### Styles for agent evals
+
+- Decorator tests: [test_decorator_style.py](../examples/mcp_server_fetch/tests/test_decorator_style.py)
+- Pytest style: [test_pytest_style.py](../examples/mcp_server_fetch/tests/test_pytest_style.py)
+- Datasets: [test_dataset_style.py](../examples/mcp_server_fetch/tests/test_dataset_style.py)
+
+### Inspecting spans and metrics
+
+```python
+metrics = session.get_metrics()
+span_tree = session.get_span_tree()
+```
+
+Sources:
+- Session/agent: [session.py](../src/mcp_eval/session.py)
+- Catalog: [catalog.py](../src/mcp_eval/catalog.py)
+- Evaluators: [evaluators/](../src/mcp_eval/evaluators/)
+
+<!-- TODO: Add example screenshots of an agent’s failed vs passed run with metrics breakdown and tool coverage. -->
+
+

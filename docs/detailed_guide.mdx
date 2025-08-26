@@ -1,0 +1,115 @@
+---
+title: "Detailed Guide"
+description: "A comprehensive, single-page guide to MCP‑Eval: concepts, setup, styles, assertions, metrics, CLI, and best practices."
+sidebarTitle: "Detailed Guide"
+icon: "book-open"
+mode: "wide"
+keywords: ["guide","deep dive","how it works","best practices"]
+---
+
+This is a long-form guide adapted from and expanding on [GUIDE.md](../GUIDE.md). It’s organized for readers who prefer a single page.
+
+## What is MCP‑Eval?
+
+Think of MCP‑Eval as your “flight simulator” for tool‑using LLMs. You plug in an agent, connect it to real MCP servers (tools), and run realistic scenarios. The framework captures OTEL traces as the single source of truth, turns them into metrics, and gives you expressive assertions for both content and behavior.
+
+### Core pieces
+
+- [TestSession and TestAgent](../src/mcp_eval/session.py)
+- [Decorators and task runner](../src/mcp_eval/core.py)
+- [Dataset and Case](../src/mcp_eval/datasets.py)
+- [Expect (assertion catalog)](../src/mcp_eval/catalog.py)
+- [Evaluators](../src/mcp_eval/evaluators/) and [Metrics](../src/mcp_eval/metrics.py)
+- [Runner](../src/mcp_eval/runner.py) and [CLI](../src/mcp_eval/cli/__init__.py)
+
+## Getting Started
+
+Install (uv or pip), set API keys, then `mcp-eval init` to configure provider, secrets, servers, and a default agent. See the [Quickstart](./quickstart.mdx) page.
+
+<!-- TODO: Insert screenshots of init prompts and the first run summary. -->
+
+## Styles of Tests
+
+### Decorator style
+
+```python
+from mcp_eval import Expect
+from mcp_eval import task, setup, teardown, parametrize
+
+@task("Test basic URL fetching functionality")
+async def test_basic_fetch(agent, session):
+    response = await agent.generate_str("Fetch the content from https://example.com")
+    await session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called", response=response)
+    await session.assert_that(Expect.content.contains("Example Domain"), name="contains_domain", response=response)
+```
+
+Full example: [test_decorator_style.py](../examples/mcp_server_fetch/tests/test_decorator_style.py)
+
+### Pytest style
+
+```python
+import pytest
+from mcp_eval import Expect
+
+@pytest.mark.asyncio
+async def test_basic_fetch_with_pytest(mcp_agent):
+    response = await mcp_agent.generate_str("Fetch the content from https://example.com")
+    await mcp_agent.session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called", response=response)
+    await mcp_agent.session.assert_that(Expect.content.contains("Example Domain"), name="contains_text", response=response)
+```
+
+Full example: [test_pytest_style.py](../examples/mcp_server_fetch/tests/test_pytest_style.py)
+
+### Dataset style
+
+```python
+from mcp_eval import Case, Dataset, ToolWasCalled, ResponseContains
+
+cases = [
+  Case(name="fetch_example", inputs="Fetch https://example.com", evaluators=[ToolWasCalled("fetch"), ResponseContains("Example Domain")])
+]
+dataset = Dataset(name="Fetch Suite", cases=cases)
+report = await dataset.evaluate(lambda inputs, agent, session: agent.generate_str(inputs))
+report.print(include_input=True, include_output=True)
+```
+
+Full example: [test_dataset_style.py](../examples/mcp_server_fetch/tests/test_dataset_style.py) and [basic_fetch_dataset.yaml](../examples/mcp_server_fetch/datasets/basic_fetch_dataset.yaml)
+
+## Assertions and Timing
+
+Immediate vs deferred execution of evaluators is handled automatically based on whether final metrics are required. See [Assertions](./assertions.mdx).
+
+## Agent Evaluation
+
+Define your agent as the system under test via [use_agent and with_agent](../src/mcp_eval/config.py). See [Agent Evaluation](./agent-evaluation.mdx) for patterns and metrics to watch.
+
+## Server Evaluation
+
+Connect an MCP server, then write scenarios that exercise it through an agent. Use tool/path/efficiency assertions. See [Server Evaluation](./server-evaluation.mdx).
+
+## Metrics & Tracing
+
+OTEL is the source of truth. After a run, explore metrics and the span tree for loops, path inefficiency, and recovery. See [Metrics & Tracing](./metrics-tracing.mdx).
+
+## Test Generation with LLMs
+
+Use `mcp-eval generate` to bootstrap comprehensive tests. We recommend Anthropic Sonnet/Opus. See [Test Generation](./test-generation.mdx).
+
+## CI/CD
+
+Run in GitHub Actions and publish artifacts/badges. See [CI/CD](./ci-cd.mdx).
+
+## Troubleshooting
+
+Use `mcp-eval doctor`, `validate`, and `issue` for diagnosis. See [Troubleshooting](./troubleshooting.mdx).
+
+## Best Practices
+
+- Prefer objective, structural checks alongside LLM judges
+- Keep prompts clear and deterministic; gate performance separately (nightly)
+- Use parametrization to widen coverage
+- Keep servers in mcp‑agent config; use `mcpeval.yaml` for eval knobs
+
+<!-- TODO: Add a closing diagram summarizing the MCP‑Eval lifecycle (init → write tests → run → metrics → reports). -->
+
+
