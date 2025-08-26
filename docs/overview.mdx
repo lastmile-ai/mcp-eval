@@ -1,72 +1,351 @@
 ---
-title: "Overview"
-description: "What MCP‑Eval is, why it exists, and how it evaluates MCP servers and agents via real tool use and OTEL-backed metrics."
+title: "MCP‑Eval Overview"
+description: "Learn about MCP‑Eval, the comprehensive framework for testing MCP servers and tool-using agents in production-like environments."
 sidebarTitle: "Overview"
-icon: "book"
-keywords: ["overview","mcp-eval","evals","agents","mcp","otel","testing"]
+icon: "book-open"
+keywords: ["overview","mcp-eval","testing framework","agents","mcp servers","otel","evaluation"]
 ---
 
-MCP‑Eval is a developer‑first evaluation framework for Model Context Protocol (MCP) servers and tool‑using agents. It drives an agent to perform realistic tasks against actual MCP tools, captures OpenTelemetry (OTEL) traces as the single source of truth, and turns those traces into high‑signal metrics and expressive assertions.
+> MCP‑Eval is your "flight simulator" for tool-using LLMs. Connect agents to real MCP servers, run realistic scenarios, and get production-grade insights into behavior and performance.
 
-Key idea: evaluate behavior in the environment the system actually runs in — an LLM/agent calling MCP tools — instead of only unit testing isolated functions.
+## What is MCP‑Eval?
 
-<!-- TODO: Add a high-level architecture diagram showing User → Agent → MCP Servers, with OTEL tracing and Reports. -->
+MCP‑Eval is a developer-first evaluation framework designed specifically for testing Model Context Protocol (MCP) servers and the agents that use them. Unlike traditional testing approaches that mock interactions or test components in isolation, MCP‑Eval exercises your complete system in the environment it actually runs in: an LLM/agent calling real MCP tools.
 
-### Highlights
+<Note>
+  **Think of it this way**: If unit tests are like testing car parts on a bench, MCP‑Eval is like taking the whole car to a test track. You see how everything works together under realistic conditions.
+</Note>
 
-- Unified async assertion API with an IntelliSense‑friendly catalog (`Expect.*`) for content, tools, performance, judges, and path efficiency
-- OTEL‑backed metrics and span tree analysis (tool calls, latency, token/cost estimates, iteration counts, path efficiency, error recovery)
-- Multiple authoring styles: Decorator tests, Pytest integration, Dataset suites
-- Rich CLI: init, add server/agent, generate/update tests with an LLM, run, list, validate, doctor, issue
-- Reports: Console, JSON, Markdown, HTML, and saved traces in `./test-reports`
+## Why MCP‑Eval exists
 
-#### Example: a minimal decorator test
+### The challenge
 
-```python
-from mcp_eval import task, Expect
+As AI agents become more sophisticated and MCP servers proliferate, teams face critical questions:
 
-@task("Fetch and verify example.com")
-async def test_fetch(agent, session):
-    response = await agent.generate_str("Fetch https://example.com and summarize")
-    await session.assert_that(Expect.tools.was_called("fetch"), response=response, name="fetch_called")
-    await session.assert_that(Expect.content.contains("Example Domain"), response=response, name="contains_text")
+* **For MCP server developers**: "Will my server handle real agent requests correctly? What about edge cases?"
+* **For agent developers**: "Is my agent using tools effectively? Does it recover from errors?"
+* **For both**: "How do we measure quality, performance, and reliability before production?"
+
+### The solution
+
+MCP‑Eval addresses these challenges by providing:
+
+1. **Real environment testing** - No mocks, actual agent-to-server communication
+2. **Production-grade observability** - OpenTelemetry traces capture everything
+3. **Rich assertion library** - From simple content checks to sophisticated path analysis
+4. **Multiple test styles** - Choose what fits your workflow
+5. **Language agnostic** - Test servers written in any language
+
+## Core capabilities
+
+<CardGroup cols={2}>
+  <Card title="🧪 Comprehensive Assertions" icon="check-circle">
+    **Content validation**: Pattern matching, regex, contains/not-contains
+    
+    **Tool verification**: Was called, call counts, arguments, outputs
+    
+    **Performance gates**: Response time, iteration limits, token usage
+    
+    **Quality judges**: LLM-based evaluation with custom rubrics
+    
+    **Path analysis**: Efficiency, backtracking, optimal sequences
+  </Card>
+  
+  <Card title="📊 OpenTelemetry Metrics" icon="chart-line">
+    **Automatic capture**: Every tool call, LLM interaction, timing
+    
+    **Span tree analysis**: Visualize execution flow and bottlenecks
+    
+    **Cost tracking**: Token usage and estimated costs per test
+    
+    **Performance breakdown**: LLM time vs tool time vs overhead
+    
+    **Error recovery**: Track retry patterns and failure handling
+  </Card>
+  
+  <Card title="🎨 Flexible Test Authoring" icon="code">
+    **Decorator style**: Simple `@task` decorators for quick tests
+    
+    **Pytest integration**: Use familiar pytest fixtures and markers
+    
+    **Dataset driven**: Systematic evaluation with test matrices
+    
+    **AI generation**: Let Claude/GPT generate test scenarios
+    
+    **Parameterization**: Test variations with minimal code
+  </Card>
+  
+  <Card title="🚀 Developer Experience" icon="terminal">
+    **Quick start**: `mcp-eval init` sets up everything
+    
+    **Smart CLI**: Discover servers, generate tests, validate config
+    
+    **Rich reports**: Console, JSON, Markdown, interactive HTML
+    
+    **CI/CD ready**: GitHub Actions, exit codes, artifact uploads
+    
+    **Helpful diagnostics**: `doctor` and `validate` commands
+  </Card>
+</CardGroup>
+
+## How MCP‑Eval works
+
+### Architecture overview
+
+```mermaid
+graph LR
+    A[Test Suite] --> B[MCP-Eval]
+    B --> C[Agent]
+    C --> D[MCP Servers]
+    D --> C
+    C --> B
+    B --> E[OTEL Traces]
+    E --> F[Metrics]
+    E --> G[Reports]
+    F --> H[Assertions]
+    G --> I[CI/CD]
 ```
 
-### Philosophy
+### Execution flow
 
-Connect your server(s) to an agent and run realistic flows. Measure: Did it call the right tools? Was the path efficient? Was the content good? Did it recover from errors? See also [GUIDE.md](../GUIDE.md).
+<Steps>
+  <Step title="Configure your environment">
+    Define which MCP servers are available and configure your agent with appropriate tools and instructions.
+  </Step>
+  
+  <Step title="Write test scenarios">
+    Create tests that give your agent realistic tasks requiring tool use.
+  </Step>
+  
+  <Step title="Execute tests">
+    MCP‑Eval orchestrates the agent, captures all interactions via OpenTelemetry, and records comprehensive traces.
+  </Step>
+  
+  <Step title="Process traces into metrics">
+    OTEL traces are parsed to extract tool calls, timings, token usage, error patterns, and execution paths.
+  </Step>
+  
+  <Step title="Apply assertions">
+    Your assertions run against the response content and extracted metrics to verify behavior.
+  </Step>
+  
+  <Step title="Generate reports">
+    Results are compiled into multiple formats for different audiences and use cases.
+  </Step>
+</Steps>
 
-### Where to look in the repo
+## A complete example
 
-- Session, unified assertions, dataset APIs
-  - [TestSession](../src/mcp_eval/session.py), [TestAgent](../src/mcp_eval/session.py)
-  - [Decorators and task runner](../src/mcp_eval/core.py)
-  - [Dataset, Case](../src/mcp_eval/datasets.py)
-  - [Expect (catalog)](../src/mcp_eval/catalog.py)
-- Evaluators and metrics
-  - [Evaluators](../src/mcp_eval/evaluators/)
-  - [Metrics](../src/mcp_eval/metrics.py)
-  - [SpanTree](../src/mcp_eval/otel/span_tree.py)
-- CLI and runner
-  - [CLI commands](../src/mcp_eval/cli/)
-  - [Runner](../src/mcp_eval/runner.py)
-- Examples
-  - [mcp_server_fetch](../examples/mcp_server_fetch/)
-  - [sample](../sample/)
+Here's a real-world test that showcases MCP‑Eval's capabilities:
 
-### Related reading
+```python
+from mcp_eval import task, setup, Expect
+from mcp_eval.evaluators import EvaluationCriterion
 
-- Pydantic Evals (inspiration on positioning and concepts): [Pydantic Evals docs](https://ai.pydantic.dev/evals/)
+@setup
+def configure():
+    # Define the agent and servers it can use
+    mcp_eval.use_agent(
+        AgentSpec(
+            name="weather_assistant",
+            instruction="You help users with weather information.",
+            server_names=["weather_api", "location_service"],
+            model="claude-3-5-haiku-20241022"
+        )
+    )
 
-### How it works (execution flow)
+@task("Get weather for user's location")
+async def test_weather_flow(agent, session):
+    # Execute the task
+    response = await agent.generate_str(
+        "What's the weather like in San Francisco tomorrow?"
+    )
+    
+    # Verify tool usage - immediate checks
+    await session.assert_that(
+        Expect.tools.was_called("get_location"),
+        name="location_service_called"
+    )
+    await session.assert_that(
+        Expect.tools.was_called("get_weather_forecast"),
+        name="weather_api_called"
+    )
+    
+    # Check content quality
+    await session.assert_that(
+        Expect.content.contains("San Francisco"),
+        response=response,
+        name="mentions_city"
+    )
+    await session.assert_that(
+        Expect.content.regex(r"\d+\s*°[CF]"),  # Temperature pattern
+        response=response,
+        name="includes_temperature"
+    )
+    
+    # Verify execution efficiency
+    await session.assert_that(
+        Expect.tools.sequence(
+            ["get_location", "get_weather_forecast"],
+            allow_other_calls=False
+        ),
+        name="optimal_tool_sequence"
+    )
+    
+    # Apply quality judge
+    await session.assert_that(
+        Expect.judge.multi_criteria([
+            EvaluationCriterion(
+                name="accuracy",
+                description="Weather info is plausible and specific",
+                weight=2.0,
+                min_score=0.8
+            ),
+            EvaluationCriterion(
+                name="helpfulness",
+                description="Response is clear and actionable",
+                weight=1.5,
+                min_score=0.7
+            )
+        ]),
+        response=response,
+        name="quality_assessment"
+    )
+    
+    # Performance requirements
+    await session.assert_that(
+        Expect.performance.response_time_under(10000),  # 10 seconds
+        name="response_time_check"
+    )
+```
 
-1) You configure an agent (via config or code) that lists the MCP servers (tools) it can use.
-2) You write tests (decorators/pytest/datasets) that call the agent with tasks.
-3) During execution, OTEL traces are emitted; the session writes them to a JSONL trace file.
-4) After the run, traces are processed into metrics and a span tree.
-5) Assertions evaluate content, tool behavior, performance, and path efficiency.
-6) Reports (JSON/Markdown/HTML) and traces are saved to `./test-reports`.
+## Key features in depth
 
-<!-- TODO: Add a short animated GIF of running `mcp-eval run` and showing the summary. -->
+### 🎯 Unified assertion API
+
+All assertions use a single, discoverable API pattern:
+
+```python
+await session.assert_that(Expect.category.specific_check(...))
+```
+
+This provides IDE autocomplete and makes the API easy to explore.
+
+### 📡 OpenTelemetry integration
+
+Every interaction generates detailed traces:
+
+* Tool invocations with arguments and results
+* LLM calls with token counts
+* Timing breakdowns for each operation
+* Error and retry patterns
+* Nested span relationships
+
+These traces become your single source of truth for debugging and analysis.
+
+### 🤖 Multiple test styles
+
+Choose the approach that fits your team:
+
+<Tabs>
+  <Tab title="Decorator Style">
+    ```python
+    @task("Simple and expressive")
+    async def test_something(agent, session):
+        response = await agent.generate_str("Do something")
+        await session.assert_that(Expect.content.contains("done"))
+    ```
+  </Tab>
+  
+  <Tab title="Pytest Style">
+    ```python
+    @pytest.mark.asyncio
+    async def test_with_pytest(mcp_agent):
+        response = await mcp_agent.generate_str("Do something")
+        assert "done" in response
+    ```
+  </Tab>
+  
+  <Tab title="Dataset Style">
+    ```python
+    dataset = Dataset(
+        name="Comprehensive suite",
+        cases=[
+            Case("test_1", inputs="Do X", evaluators=[...]),
+            Case("test_2", inputs="Do Y", evaluators=[...])
+        ]
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### 📈 Production-ready reporting
+
+Generate reports in multiple formats:
+
+* **Console**: Real-time progress and summaries
+* **JSON**: Machine-readable for CI/CD pipelines  
+* **Markdown**: PR comments and documentation
+* **HTML**: Interactive exploration with filtering
+
+All reports include links to detailed OTEL traces for debugging.
+
+## When to use MCP‑Eval
+
+### Perfect for
+
+✅ **MCP server development** - Ensure your server handles agent requests correctly
+
+✅ **Agent development** - Verify your agent uses tools effectively
+
+✅ **Integration testing** - Test agent + server combinations before deployment
+
+✅ **Regression testing** - Catch breaking changes in CI/CD
+
+✅ **Performance optimization** - Identify bottlenecks and inefficiencies
+
+✅ **Quality gating** - Enforce standards before merging code
+
+### Not designed for
+
+❌ **Unit testing** - Use standard testing frameworks for isolated functions
+
+❌ **Load testing** - Consider specialized tools for high-volume testing
+
+❌ **Security testing** - Use dedicated security scanning tools
+
+## Next steps
+
+Ready to start testing? Here's your path:
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="./quickstart">
+    Get your first test running in 5 minutes
+  </Card>
+  
+  <Card title="Common Workflows" icon="graduation-cap" href="./common-workflows">
+    Learn testing patterns and best practices
+  </Card>
+  
+  <Card title="Example Tests" icon="code" href="./examples">
+    Browse real-world test implementations
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="./api-catalog">
+    Explore the complete assertion catalog
+  </Card>
+</CardGroup>
+
+## Technical foundations
+
+MCP‑Eval is built on solid technical foundations:
+
+* **Async-first Python** for performance and concurrency
+* **OpenTelemetry** for vendor-neutral observability
+* **Pydantic** for configuration and validation
+* **Rich CLI** powered by Click and Rich libraries
+* **Extensible architecture** for custom evaluators and reporters
+
+For implementation details, see our [GitHub repository](https://github.com/anthropics/mcp-eval).
 
 

@@ -1,83 +1,503 @@
 ---
-title: "Common workflows"
-description: "Step‑by‑step guides for frequent evaluation tasks."
-sidebarTitle: "Common workflows"
+title: "Common Workflows"
+description: "Step-by-step guides for typical MCP‑Eval tasks, from writing your first test to CI/CD integration."
+sidebarTitle: "Common Workflows"
 icon: "graduation-cap"
-keywords: ["workflows","golden path","judge","ci"]
+keywords: ["workflows","golden path","judge","ci","testing patterns","best practices"]
 ---
 
-## Create a golden path and enforce it
+> Learn proven patterns for testing MCP servers and agents. Each workflow includes practical examples and tips from real-world usage.
+
+## Write your first test
 
 <Steps>
-  <Step title="Define the happy path">
-    Write the expected tool sequence for a task (e.g., only `fetch`).
+  <Step title="Choose a test style">
+    Pick the style that fits your workflow:
+    
+    **Decorator** (simplest):
+    ```python
+    from mcp_eval import task, Expect
+    
+    @task("My first test")
+    async def test_basic(agent, session):
+        response = await agent.generate_str("Hello")
+        await session.assert_that(Expect.content.contains("Hi"))
+    ```
+    
+    **Pytest** (familiar):
+    ```python
+    @pytest.mark.asyncio
+    async def test_basic(mcp_agent):
+        response = await mcp_agent.generate_str("Hello")
+        assert "Hi" in response
+    ```
   </Step>
-  <Step title="Add a path assertion">
+  
+  <Step title="Add meaningful assertions">
+    Start simple, then add more specific checks:
+    
+    ```python
+    # Start with content
+    await session.assert_that(Expect.content.contains("success"))
+    
+    # Add tool verification
+    await session.assert_that(Expect.tools.was_called("my_tool"))
+    
+    # Include performance
+    await session.assert_that(Expect.performance.response_time_under(5000))
+    ```
+  </Step>
+  
+  <Step title="Run and iterate">
+    ```bash
+    # Run with verbose output
+    mcp-eval run test_basic.py -v
+    
+    # Generate reports
+    mcp-eval run test_basic.py --html report.html
+    ```
+    
+    Review failures, adjust assertions, and rerun.
+  </Step>
+</Steps>
+
+<Tip>
+  Start with simple content assertions, then gradually add tool and performance checks as you understand your system's behavior.
+</Tip>
+
+## Test an MCP server comprehensively
+
+<Steps>
+  <Step title="Identify server capabilities">
+    List all tools your server provides:
+    
+    ```bash
+    mcp-eval list servers --verbose
+    ```
+    
+    Note the available tools and their expected behaviors.
+  </Step>
+  
+  <Step title="Create test scenarios for each tool">
+    Write tests covering normal and edge cases:
+    
+    ```python
+    @task("Test calculator add - normal case")
+    async def test_add_normal(agent, session):
+        response = await agent.generate_str("Calculate 5 + 3")
+        await session.assert_that(Expect.tools.was_called("add"))
+        await session.assert_that(Expect.content.contains("8"))
+    
+    @task("Test calculator add - edge case")
+    async def test_add_overflow(agent, session):
+        response = await agent.generate_str("Calculate 999999999 + 999999999")
+        await session.assert_that(Expect.tools.was_called("add"))
+        # Check for appropriate handling
+        await session.assert_that(
+            Expect.content.regex(r"(overflow|large|error)", case_sensitive=False)
+        )
+    ```
+  </Step>
+  
+  <Step title="Test error handling">
+    Verify graceful failure:
+    
+    ```python
+    @task("Test invalid input handling")
+    async def test_error_handling(agent, session):
+        response = await agent.generate_str("Calculate abc + xyz")
+        
+        # Should either fail gracefully or explain the issue
+        await session.assert_that(
+            Expect.content.regex(r"(invalid|error|cannot|unable)")
+        )
+    ```
+  </Step>
+  
+  <Step title="Create a comprehensive dataset">
+    For systematic testing:
+    
+    ```python
+    from mcp_eval import Dataset, Case
+    
+    dataset = Dataset(
+        name="Calculator Server Tests",
+        cases=[
+            Case(
+                name="addition",
+                inputs="Calculate 10 + 20",
+                expected_output="30",
+                evaluators=[
+                    ToolWasCalled("add"),
+                    ResponseContains("30")
+                ]
+            ),
+            # Add more cases...
+        ]
+    )
+    ```
+  </Step>
+</Steps>
+
+## Create and enforce a golden path
+
+Ensure your agent follows the optimal execution path:
+
+<Steps>
+  <Step title="Define the ideal tool sequence">
+    Identify the minimal, correct sequence of tools:
+    
+    ```python
+    # Example: validate → process → format
+    golden_path = ["validate_input", "process_data", "format_output"]
+    ```
+  </Step>
+  
+  <Step title="Add path efficiency assertion">
     ```python
     await session.assert_that(
-      Expect.path.efficiency(
-        expected_tool_sequence=["fetch"],
-        tool_usage_limits={"fetch": 1},
-        allow_extra_steps=0,
-      )
+        Expect.path.efficiency(
+            expected_tool_sequence=golden_path,
+            tool_usage_limits={
+                "validate_input": 1,
+                "process_data": 1,
+                "format_output": 1
+            },
+            allow_extra_steps=0,
+            penalize_backtracking=True
+        ),
+        name="golden_path_check"
     )
     ```
   </Step>
-  <Step title="Run and refine">
-    If you see backtracking or repeated tools, adjust limits or agent prompts.
-    <!-- TODO(screenshot): failing path efficiency with tool call timeline. -->
+  
+  <Step title="Debug path violations">
+    When tests fail, examine the actual path:
+    
+    ```python
+    # In your test
+    metrics = session.get_metrics()
+    actual_sequence = [call.name for call in metrics.tool_calls]
+    print(f"Expected: {golden_path}")
+    print(f"Actual: {actual_sequence}")
+    ```
+  </Step>
+  
+  <Step title="Refine agent instructions">
+    If the agent deviates, improve its instructions:
+    
+    ```python
+    agent = Agent(
+        instruction="""
+        IMPORTANT: Follow this exact sequence:
+        1. First validate the input
+        2. Then process the validated data
+        3. Finally format the output
+        Never skip steps or backtrack.
+        """
+    )
+    ```
   </Step>
 </Steps>
 
-## Author a judge rubric and gate quality
+<Warning>
+  Golden paths work best for deterministic workflows. For creative tasks, consider using `allow_extra_steps` or checking only critical waypoints.
+</Warning>
+
+## Build quality gates with LLM judges
 
 <Steps>
-  <Step title="Start with a minimal rubric">
+  <Step title="Start with a simple rubric">
+    Define what "good" looks like:
+    
     ```python
     judge = Expect.judge.llm(
-      rubric="Summarize the key points of the fetched page",
-      min_score=0.8,
-      include_input=True,
+        rubric="""
+        The response should:
+        - Accurately summarize the main points
+        - Use clear, professional language
+        - Be 2-3 sentences long
+        """,
+        min_score=0.8,
+        include_input=True  # Give judge full context
     )
     ```
   </Step>
-  <Step title="Integrate with structural checks">
-    Combine with `output_matches` or `contains` to avoid over‑reliance on judges.
+  
+  <Step title="Combine with structural checks">
+    Don't rely solely on judges:
+    
+    ```python
+    # Structural check (deterministic)
+    await session.assert_that(
+        Expect.tools.output_matches(
+            tool_name="fetch",
+            expected_output="Example Domain",
+            match_type="contains"
+        )
+    )
+    
+    # Quality check (LLM judge)
+    await session.assert_that(judge, response=response)
+    ```
   </Step>
-  <Step title="Escalate to multi‑criteria (optional)">
+  
+  <Step title="Use multi-criteria for complex evaluation">
     ```python
     from mcp_eval.evaluators import EvaluationCriterion
+    
     criteria = [
-      EvaluationCriterion(name="accuracy", description="Correct facts", weight=2.0, min_score=0.8),
-      EvaluationCriterion(name="clarity", description="Clear summary", weight=1.0, min_score=0.7),
+        EvaluationCriterion(
+            name="accuracy",
+            description="All facts are correct and up-to-date",
+            weight=3.0,  # Most important
+            min_score=0.9
+        ),
+        EvaluationCriterion(
+            name="completeness",
+            description="Covers all requested information",
+            weight=2.0,
+            min_score=0.8
+        ),
+        EvaluationCriterion(
+            name="clarity",
+            description="Easy to understand, well-organized",
+            weight=1.0,
+            min_score=0.7
+        )
     ]
-    judge_mc = Expect.judge.multi_criteria(criteria, aggregate_method="weighted")
+    
+    judge = Expect.judge.multi_criteria(
+        criteria=criteria,
+        aggregate_method="weighted",  # or "min" for strictest
+        require_all_pass=False,  # Set True for strict gating
+        use_cot=True  # Chain-of-thought reasoning
+    )
     ```
   </Step>
-  <Step title="Tune thresholds over time">
-    Use report history to calibrate `min_score` and weights.
-    <!-- TODO(screenshot): judge result with criterion breakdown. -->
+  
+  <Step title="Calibrate thresholds">
+    Run tests, collect scores, adjust:
+    
+    ```python
+    # Start lenient
+    min_score=0.6
+    
+    # After collecting data, tighten to p50 or p75
+    min_score=0.8  # Based on historical performance
+    ```
   </Step>
 </Steps>
 
-## Integrate with CI
+<Note>
+  **Pro tip**: Use Anthropic Claude (Opus or Sonnet) for best judge quality. They provide more consistent and nuanced evaluations.
+</Note>
+
+## Integrate with CI/CD
 
 <Steps>
-  <Step title="Add a job to run tests">
+  <Step title="Add GitHub Actions workflow">
+    Create `.github/workflows/mcp-eval.yml`:
+    
     ```yaml
-    - name: Run mcp-eval
-      run: |
-        pip install -e .
-        mcp-eval run tests/ --markdown test-reports/results.md --html test-reports/index.html
+    name: MCP-Eval Tests
+    
+    on:
+      pull_request:
+      push:
+        branches: [main]
+    
+    jobs:
+      test:
+        runs-on: ubuntu-latest
+        
+        steps:
+        - uses: actions/checkout@v3
+        
+        - name: Set up Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: '3.10'
+        
+        - name: Install dependencies
+          run: |
+            pip install mcp-eval
+            # Or from your repo:
+            # pip install -e .
+        
+        - name: Run MCP-Eval tests
+          env:
+            ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          run: |
+            mcp-eval run tests/ \
+              --json test-reports/results.json \
+              --markdown test-reports/results.md \
+              --html test-reports/index.html
+        
+        - name: Upload test reports
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: mcp-eval-reports
+            path: test-reports/
+        
+        - name: Comment PR with results
+          if: github.event_name == 'pull_request'
+          uses: actions/github-script@v6
+          with:
+            script: |
+              const fs = require('fs');
+              const markdown = fs.readFileSync('test-reports/results.md', 'utf8');
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## MCP-Eval Test Results\n\n${markdown}`
+              });
     ```
   </Step>
-  <Step title="Upload artifacts and post a summary">
-    Upload `test-reports/` and post `results.md` to the PR.
-    <!-- TODO(screenshot): PR comment with report snippet. -->
+  
+  <Step title="Add test badges">
+    In your README.md:
+    
+    ```markdown
+    ![MCP-Eval Tests](https://github.com/YOUR_ORG/YOUR_REPO/actions/workflows/mcp-eval.yml/badge.svg)
+    ```
   </Step>
-  <Step title="Fail on regression">
-    Exit non‑zero when any test fails or when critical assertions fail (e.g., tool sequence).
+  
+  <Step title="Configure failure conditions">
+    Make tests fail the build appropriately:
+    
+    ```python
+    # In your test
+    critical_assertions = [
+        Expect.tools.success_rate(min_rate=0.95),
+        Expect.performance.response_time_under(10000)
+    ]
+    
+    for assertion in critical_assertions:
+        result = await session.assert_that(assertion)
+        if not result.passed:
+            sys.exit(1)  # Fail CI
+    ```
   </Step>
 </Steps>
+
+## Generate tests with AI
+
+<Steps>
+  <Step title="Use the generate command">
+    Let AI create test scenarios:
+    
+    ```bash
+    # Generate 10 pytest-style tests
+    mcp-eval generate \
+      --style pytest \
+      --n-examples 10 \
+      --provider anthropic \
+      --model claude-3-5-sonnet-20241022
+    ```
+  </Step>
+  
+  <Step title="Review and customize">
+    AI-generated tests are a starting point:
+    
+    ```python
+    # Generated test
+    @task("Test weather fetching")
+    async def test_weather(agent, session):
+        response = await agent.generate_str("Get weather for NYC")
+        await session.assert_that(Expect.tools.was_called("weather_api"))
+    
+    # Add your domain knowledge
+    @task("Test weather fetching with validation")
+    async def test_weather_enhanced(agent, session):
+        response = await agent.generate_str("Get weather for NYC")
+        await session.assert_that(Expect.tools.was_called("weather_api"))
+        # Add specific checks
+        await session.assert_that(Expect.content.regex(r"\d+°[CF]"))
+        await session.assert_that(Expect.content.contains("New York"))
+    ```
+  </Step>
+  
+  <Step title="Update existing tests">
+    Add new scenarios to existing files:
+    
+    ```bash
+    mcp-eval update \
+      --target-file tests/test_weather.py \
+      --style pytest \
+      --n-examples 5
+    ```
+  </Step>
+</Steps>
+
+## Debug failing tests
+
+<Steps>
+  <Step title="Enable verbose output">
+    ```bash
+    mcp-eval run test_file.py -v
+    ```
+    
+    Shows tool calls, responses, and assertion details.
+  </Step>
+  
+  <Step title="Examine OTEL traces">
+    Look in `test-reports/test_name_*/trace.jsonl`:
+    
+    ```python
+    import json
+    
+    with open("test-reports/test_abc123/trace.jsonl") as f:
+        for line in f:
+            span = json.loads(line)
+            if span["name"].startswith("tool:"):
+                print(f"Tool: {span['name']}")
+                print(f"Duration: {span['duration_ms']}ms")
+                print(f"Input: {span['attributes'].get('input')}")
+                print(f"Output: {span['attributes'].get('output')}")
+    ```
+  </Step>
+  
+  <Step title="Use doctor and validate commands">
+    ```bash
+    # Check system health
+    mcp-eval doctor --full
+    
+    # Validate configuration
+    mcp-eval validate
+    ```
+  </Step>
+  
+  <Step title="Add debug assertions">
+    ```python
+    # Temporarily add debug output
+    metrics = session.get_metrics()
+    print(f"Tool calls: {[c.name for c in metrics.tool_calls]}")
+    print(f"Total duration: {metrics.total_duration_ms}ms")
+    print(f"Token cost: ${metrics.total_cost_usd}")
+    ```
+  </Step>
+</Steps>
+
+## Next steps
+
+Master these advanced topics:
+
+<CardGroup cols={3}>
+  <Card title="Dataset Testing" icon="table" href="./datasets">
+    Systematic evaluation at scale
+  </Card>
+  
+  <Card title="Custom Evaluators" icon="code" href="./api-catalog">
+    Build domain-specific checks
+  </Card>
+  
+  <Card title="Performance Tuning" icon="gauge" href="./metrics-tracing">
+    Optimize test execution
+  </Card>
+</CardGroup>
 
 
