@@ -69,67 +69,74 @@ console = Console()
 
 
 async def _validate_and_fix_test_file(
-    test_file: Path, 
-    provider: str, 
-    model: str | None,
-    max_attempts: int = 3
+    test_file: Path, provider: str, model: str | None, max_attempts: int = 3
 ) -> bool:
     """Validate Python test file and fix compile errors.
-    
+
     Returns True if file is valid, False if unfixable after max attempts.
     """
-    
+
     for attempt in range(1, max_attempts + 1):
         # Try to compile the Python file using uv
         result = subprocess.run(
             ["uv", "run", "python", "-m", "py_compile", str(test_file)],
             capture_output=True,
-            text=True
+            text=True,
         )
-        
+
         if result.returncode == 0:
             console.print("[green]✓ Test file syntax is valid[/green]")
             return True
-        
+
         # Parse error
         error_msg = result.stderr
-        console.print(f"\n[yellow]Syntax error found (attempt {attempt}/{max_attempts}):[/yellow]")
+        console.print(
+            f"\n[yellow]Syntax error found (attempt {attempt}/{max_attempts}):[/yellow]"
+        )
         console.print(f"[red]{error_msg}[/red]")
-        
+
         if attempt >= max_attempts:
-            console.print("[red]Max fix attempts reached. Manual intervention required.[/red]")
+            console.print(
+                "[red]Max fix attempts reached. Manual intervention required.[/red]"
+            )
             return False
-        
+
         # First pass: sanitize common JSON tokens to Python to self-heal trivial issues
         try:
             text = test_file.read_text(encoding="utf-8")
             sanitized = (
                 text.replace("\nnull", "\nNone")
-                    .replace(": null", ": None")
-                    .replace("= null", "= None")
-                    .replace(" true,", " True,")
-                    .replace(" false,", " False,")
-                    .replace(" true)", " True)")
-                    .replace(" false)", " False)")
-                    .replace(" true\n", " True\n")
-                    .replace(" false\n", " False\n")
+                .replace(": null", ": None")
+                .replace("= null", "= None")
+                .replace(" true,", " True,")
+                .replace(" false,", " False,")
+                .replace(" true)", " True)")
+                .replace(" false)", " False)")
+                .replace(" true\n", " True\n")
+                .replace(" false\n", " False\n")
             )
             if sanitized != text:
                 test_file.write_text(sanitized, encoding="utf-8")
-                console.print("[cyan]Applied basic JSON->Python literal sanitization[/cyan]")
+                console.print(
+                    "[cyan]Applied basic JSON->Python literal sanitization[/cyan]"
+                )
                 continue  # re-validate on next loop
         except Exception:
             pass
 
         # Use an agent with filesystem access to fix the remaining error
-        console.print("[cyan]Attempting to fix the error with filesystem agent...[/cyan]")
-        
+        console.print(
+            "[cyan]Attempting to fix the error with filesystem agent...[/cyan]"
+        )
+
         # Load settings and configure filesystem server
         from mcp_eval.config import load_config
-        
+
         settings = load_config()
-        settings.logger = LoggerSettings(type="none", level="error", progress_display=False)
-        
+        settings.logger = LoggerSettings(
+            type="none", level="error", progress_display=False
+        )
+
         # Configure filesystem server with access to the test directory
         test_dir = test_file.parent
         settings.mcp = MCPSettings(
@@ -138,11 +145,15 @@ async def _validate_and_fix_test_file(
                     name="filesystem",
                     description="File system access for fixing test files",
                     command="npx",
-                    args=["-y", "@modelcontextprotocol/server-filesystem", str(test_dir)],
+                    args=[
+                        "-y",
+                        "@modelcontextprotocol/server-filesystem",
+                        str(test_dir),
+                    ],
                 )
             }
         )
-        
+
         mcp_app = MCPApp(settings=settings)
         async with mcp_app.run() as running:
             agent = Agent(
@@ -156,9 +167,9 @@ async def _validate_and_fix_test_file(
                 server_names=["filesystem"],
                 context=running.context,
             )
-            
+
             llm = _build_llm(agent, provider, model)
-            
+
             # Prepare the prompt with file path relative to the test directory
             relative_path = test_file.name
             prompt = f"""Fix the Python syntax error in the file '{relative_path}'.
@@ -177,16 +188,20 @@ Use the filesystem tools to read and write the file. Only fix the syntax error, 
  - Replace JSON literals with Python equivalents (true->True, false->False, null->None)
  - Ensure dicts/lists are valid Python (use repr/quotes correctly)
 """
-            
+
             try:
                 # Let the agent fix the file using filesystem tools
                 response = await llm.generate_str(prompt)
-                console.print(f"[dim]Agent response: {response[:200]}...[/dim]" if len(response) > 200 else f"[dim]Agent response: {response}[/dim]")
+                console.print(
+                    f"[dim]Agent response: {response[:200]}...[/dim]"
+                    if len(response) > 200
+                    else f"[dim]Agent response: {response}[/dim]"
+                )
                 console.print("[green]Fix attempted, re-validating...[/green]")
             except Exception as e:
                 console.print(f"[red]Failed to fix: {e}[/red]")
                 return False
-    
+
     return False
 
 
@@ -194,9 +209,9 @@ def _display_run_command(style: str, output_file: Path | None) -> None:
     """Display the command to run the generated tests."""
     if not output_file:
         return
-    
+
     console.print("\n[bold green]To run the generated tests:[/bold green]")
-    
+
     if style == "pytest":
         console.print(f"  [cyan]pytest {output_file}[/cyan]")
         console.print("\n  Or with verbose output:")
@@ -213,13 +228,14 @@ def _display_run_command(style: str, output_file: Path | None) -> None:
 
 def _parse_command_string(cmd: str) -> tuple[str, List[str]]:
     """Parse a command string into command and args.
-    
+
     Examples:
         "uvx mcp-server-fetch" -> ("uvx", ["mcp-server-fetch"])
         "npx -y @modelcontextprotocol/server-filesystem /path" -> ("npx", ["-y", "@modelcontextprotocol/server-filesystem", "/path"])
         "python -m server" -> ("python", ["-m", "server"])
     """
     import shlex
+
     parts = shlex.split(cmd.strip())
     if not parts:
         return "", []
@@ -285,10 +301,10 @@ async def _generate_llm_slug(
     try:
         # Load settings from config (includes secrets)
         settings = load_config()
-        
+
         # Set logger to errors only to reduce noise
         settings.logger = LoggerSettings(type="console", level="error")
-        
+
         mcp_app = MCPApp(settings=settings)
         async with mcp_app.run() as running:
             agent = Agent(
@@ -322,9 +338,11 @@ def _convert_servers_to_mcp_settings(
     return result
 
 
-def _load_existing_provider() -> tuple[str | None, str | None, Dict[str, str], MCPEvalSettings]:
+def _load_existing_provider() -> tuple[
+    str | None, str | None, Dict[str, str], MCPEvalSettings
+]:
     """Load existing provider configuration from environment and config files.
-    
+
     Returns:
         (selected_provider, selected_key, available_providers, settings)
         where available_providers is a dict of provider_name -> api_key
@@ -332,62 +350,66 @@ def _load_existing_provider() -> tuple[str | None, str | None, Dict[str, str], M
     available_providers = {}
     selected_provider = None
     selected_key = None
-    
+
     # Load settings - this handles all merging of env, configs, and secrets
     settings = load_config()
-    
+
     # Show which config file we're using
     config_path = find_eval_config()
     if config_path:
         console.print(f"[dim]Using config: {config_path}[/dim]")
-    
+
     # Check all providers for API keys
     if settings.anthropic and settings.anthropic.api_key:
         available_providers["anthropic"] = settings.anthropic.api_key
         if not selected_provider:
             selected_provider = "anthropic"
             selected_key = settings.anthropic.api_key
-    
+
     if settings.openai and settings.openai.api_key:
         available_providers["openai"] = settings.openai.api_key
         if not selected_provider:
             selected_provider = "openai"
             selected_key = settings.openai.api_key
-    
+
     if settings.google and settings.google.api_key:
         available_providers["google"] = settings.google.api_key
         if not selected_provider:
             selected_provider = "google"
             selected_key = settings.google.api_key
-    
+
     if settings.cohere and settings.cohere.api_key:
         available_providers["cohere"] = settings.cohere.api_key
         if not selected_provider:
             selected_provider = "cohere"
             selected_key = settings.cohere.api_key
-    
+
     if settings.azure and settings.azure.api_key:
         available_providers["azure"] = settings.azure.api_key
         if not selected_provider:
             selected_provider = "azure"
             selected_key = settings.azure.api_key
-    
+
     return selected_provider, selected_key, available_providers, settings
 
 
 def _prompt_provider(
-    existing_provider: str | None, 
-    existing_key: str | None, 
-    available_providers: Dict[str, str] | None = None
+    existing_provider: str | None,
+    existing_key: str | None,
+    available_providers: Dict[str, str] | None = None,
 ) -> tuple[str, str | None, str | None]:
     """Prompt for provider, API key, and optional model."""
     # If we have available providers from environment, show them to user
     if available_providers:
         console.print("\n[bold]🔍 Detected API keys from environment:[/bold]")
         for provider_name in available_providers:
-            key_preview = available_providers[provider_name][:8] + "..." if len(available_providers[provider_name]) > 8 else "***"
+            key_preview = (
+                available_providers[provider_name][:8] + "..."
+                if len(available_providers[provider_name]) > 8
+                else "***"
+            )
             console.print(f"  • {provider_name}: {key_preview}")
-        
+
         if existing_provider and existing_key:
             use_existing = Confirm.ask(f"\nUse {existing_provider}?", default=True)
             if use_existing:
@@ -400,7 +422,7 @@ def _prompt_provider(
                 # Respect user's choice to not use the detected provider
                 existing_provider = None
                 existing_key = None
-    
+
     if existing_provider:
         # If the user previously declined, existing_provider will be None and this block is skipped
         use_existing_provider = Confirm.ask(
@@ -419,14 +441,15 @@ def _prompt_provider(
             # Ask only for missing key
             api_key = Prompt.ask(f"Enter {existing_provider} API key", password=True)
             model = (
-                Prompt.ask("Model (press Enter to auto-select)", default="").strip() or None
+                Prompt.ask("Model (press Enter to auto-select)", default="").strip()
+                or None
             )
             return existing_provider, api_key, model
         else:
             # User declined using existing; fall through to fresh selection
             existing_provider = None
             existing_key = None
-    
+
     # No existing provider; prompt fresh
     # Build choices based on available providers
     choices = ["anthropic", "openai"]
@@ -435,34 +458,32 @@ def _prompt_provider(
         available_choices = list(available_providers.keys())
         other_choices = [c for c in choices if c not in available_choices]
         choices = available_choices + other_choices
-    
+
     provider = (
-        Prompt.ask("LLM provider", choices=choices, default=choices[0])
-        .strip()
-        .lower()
+        Prompt.ask("LLM provider", choices=choices, default=choices[0]).strip().lower()
     )
-    
+
     # If this provider has a key in environment, use it
     if available_providers and provider in available_providers:
         api_key = available_providers[provider]
         console.print(f"[green]Using API key from environment for {provider}[/green]")
     else:
         api_key = Prompt.ask(f"Enter {provider} API key", password=True)
-    
+
     model = Prompt.ask("Model (press Enter to auto-select)", default="").strip() or None
     return provider, api_key, model
 
 
 async def _write_mcpeval_configs(
-    project: Path, 
+    project: Path,
     settings: MCPEvalSettings,
-    provider: str, 
-    api_key: str, 
+    provider: str,
+    api_key: str,
     model: str | None = None,
-    context: Context | None = None
+    context: Context | None = None,
 ) -> MCPEvalSettings:
     """Update settings and write provider configuration to mcpeval.yaml and secrets.
-    
+
     Returns:
         Updated MCPEvalSettings object
     """
@@ -496,7 +517,7 @@ async def _write_mcpeval_configs(
     # Update settings object
     settings.judge.model = judge_model
     settings.judge.min_score = 0.8
-    
+
     cfg_overlay = {
         "judge": {"model": judge_model, "min_score": 0.8},
         "reporting": {"formats": ["json", "markdown"], "output_dir": "./test-reports"},
@@ -509,7 +530,7 @@ async def _write_mcpeval_configs(
     save_yaml(cfg_path, deep_merge(cfg, cfg_overlay))
     save_yaml(sec_path, deep_merge(sec, sec_overlay))
     console.print(f"[green]✓[/] Wrote {cfg_path} and {sec_path}")
-    
+
     # Reload settings to get the merged config
     return load_config()
 
@@ -526,9 +547,9 @@ def _prompt_server_settings(
     import_choice = Prompt.ask(
         "How would you like to add the server?",
         choices=["interactive", "from-mcp-json", "from-dxt"],
-        default="interactive"
+        default="interactive",
     )
-    
+
     if import_choice == "from-mcp-json":
         mcp_json_path = Prompt.ask("Path to mcp.json file")
         try:
@@ -547,7 +568,7 @@ def _prompt_server_settings(
         except Exception as e:
             console.print(f"[red]Error importing from mcp.json: {e}[/red]")
             console.print("Falling back to interactive entry...")
-    
+
     elif import_choice == "from-dxt":
         dxt_path = Prompt.ask("Path to .dxt file")
         try:
@@ -566,7 +587,7 @@ def _prompt_server_settings(
         except Exception as e:
             console.print(f"[red]Error importing from .dxt: {e}[/red]")
             console.print("Falling back to interactive entry...")
-    
+
     # Manual entry or if imports failed
     if imported:
         console.print("[cyan]Available servers:[/cyan]")
@@ -590,17 +611,20 @@ def _prompt_server_settings(
     if transport == "stdio":
         # Allow user to enter full command or separate command/args
         command_input = Prompt.ask(
-            "Command (full command like 'uvx mcp-server-fetch' or just 'uvx')")
-        
+            "Command (full command like 'uvx mcp-server-fetch' or just 'uvx')"
+        )
+
         # Check if this looks like a full command with args
-        if ' ' in command_input:
+        if " " in command_input:
             command, args = _parse_command_string(command_input)
             console.print(f"[dim]Parsed as: command='{command}' args={args}[/dim]")
             server.command = command
             server.args = args
         else:
             server.command = command_input
-            args = Prompt.ask("Args (space-separated, blank for none)", default="").strip()
+            args = Prompt.ask(
+                "Args (space-separated, blank for none)", default=""
+            ).strip()
             server.args = [a for a in args.split(" ") if a]
 
         if Confirm.ask("Add environment variables?", default=False):
@@ -634,15 +658,17 @@ async def _discover_tools(server_name: str) -> List[ToolSchema]:
     try:
         # Load settings from config (includes secrets)
         settings = load_config()
-        
+
         # Show which config file we're using
         config_path = find_eval_config()
         if config_path:
             console.print(f"[dim]Using config: {config_path}[/dim]")
-        
+
         # Set logger to errors only to reduce noise (disable transports entirely)
-        settings.logger = LoggerSettings(type="none", level="error", progress_display=False)
-        
+        settings.logger = LoggerSettings(
+            type="none", level="error", progress_display=False
+        )
+
         mcp_app = MCPApp(settings=settings)
         async with mcp_app.run() as running:
             async with gen_client(
@@ -718,7 +744,9 @@ async def _emit_tests(
         ds = dataset_from_scenarios(scenarios, server_name)
         # Resolve output path
         if output_path is not None:
-            out_file = output_path if output_path.is_absolute() else (project / output_path)
+            out_file = (
+                output_path if output_path.is_absolute() else (project / output_path)
+            )
             # Ensure .yaml suffix
             if out_file.suffix.lower() not in (".yaml", ".yml"):
                 out_file = out_file.with_suffix(".yaml")
@@ -782,7 +810,7 @@ async def _emit_tests(
         content = render_pytest_tests(scenarios, server_name)
     out_path.write_text(content, encoding="utf-8")
     console.print(f"[green]✓[/] Wrote tests {out_path}")
-    
+
     # Also print first few lines of generated test
     console.print("\n[bold]Generated test preview:[/bold]")
     lines = content.split("\n")[:30]  # Show first 30 lines
@@ -790,7 +818,7 @@ async def _emit_tests(
         console.print(f"[dim]{line}[/dim]")
     if len(content.split("\n")) > 30:
         console.print("[dim]... (truncated)[/dim]")
-    
+
     return out_path
 
 
@@ -824,13 +852,19 @@ async def init_project(
 
     # Create a lightweight context for ModelSelector to avoid global fallback
     context = Context()
-    
+
     # Provider + API key
     console.print("[cyan]Configuring LLM provider and secrets...[/cyan]")
-    existing_provider, existing_key, available_providers, settings = _load_existing_provider()
-    provider, api_key, model = _prompt_provider(existing_provider, existing_key, available_providers)
+    existing_provider, existing_key, available_providers, settings = (
+        _load_existing_provider()
+    )
+    provider, api_key, model = _prompt_provider(
+        existing_provider, existing_key, available_providers
+    )
     if api_key:
-        settings = await _write_mcpeval_configs(project, settings, provider, api_key, model, context=context)
+        settings = await _write_mcpeval_configs(
+            project, settings, provider, api_key, model, context=context
+        )
     else:
         console.print("[green]Using existing secrets[/green]")
 
@@ -871,7 +905,9 @@ async def init_project(
     else:
         console.print("[yellow]No servers found; let's add one[/yellow]")
 
-    server_name, server_config = _prompt_server_settings(merged_servers, server_name=None)
+    server_name, server_config = _prompt_server_settings(
+        merged_servers, server_name=None
+    )
     write_server_to_mcpeval(project, server_config)
 
     # Default AgentSpec
@@ -907,7 +943,9 @@ async def run_generator(
     provider: str | None = typer.Option(None, help="LLM provider (anthropic|openai)"),
     model: str | None = typer.Option(None, help="Model id (optional)"),
     verbose: bool = typer.Option(False, help="Show detailed error messages"),
-    output: str | None = typer.Option(None, help="Explicit output path for the generated file (.py or .yaml)"),
+    output: str | None = typer.Option(
+        None, help="Explicit output path for the generated file (.py or .yaml)"
+    ),
 ):
     """Generate scenarios and write a single test file.
 
@@ -916,7 +954,7 @@ async def run_generator(
     Quick start (prompt for style): $ mcp-eval generate
 
     Explicit pytest style and 10 scenarios: $ mcp-eval generate --style pytest --n-examples 10
-    
+
     With verbose output: $ mcp-eval generate --verbose
     """
     project = Path(out_dir)
@@ -924,12 +962,14 @@ async def run_generator(
 
     # Create a lightweight context for ModelSelector to avoid global fallback
     context = Context()
-    
+
     console.print(
         "[cyan]Checking credentials and writing mcpeval configs if needed...[/cyan]"
     )
     # Provider + API key (load existing when re-running)
-    existing_provider, existing_key, available_providers, settings = _load_existing_provider()
+    existing_provider, existing_key, available_providers, settings = (
+        _load_existing_provider()
+    )
     # Determine provider/api_key/model respecting CLI flags
     selected_provider: str
     api_key: str | None
@@ -939,7 +979,9 @@ async def run_generator(
         # Use env key if present; otherwise prompt
         if available_providers and selected_provider in available_providers:
             api_key = available_providers[selected_provider]
-            console.print(f"[green]Using API key from environment for {selected_provider}[/green]")
+            console.print(
+                f"[green]Using API key from environment for {selected_provider}[/green]"
+            )
         else:
             api_key = Prompt.ask(f"Enter {selected_provider} API key", password=True)
         if not model:
@@ -955,7 +997,9 @@ async def run_generator(
     # Use CLI model if provided, otherwise use prompted model
     final_model = model or prompted_model
     if api_key:
-        settings = await _write_mcpeval_configs(project, settings, selected_provider, api_key, final_model, context=context)
+        settings = await _write_mcpeval_configs(
+            project, settings, selected_provider, api_key, final_model, context=context
+        )
     else:
         console.print("[green]Using existing secrets[/green]")
 
@@ -1078,11 +1122,11 @@ async def run_generator(
 
     # Two-stage generation (first: scenarios; second: assertions refinement per scenario)
     console.print("[cyan]Generating test scenarios...[/cyan]")
-    
+
     def progress_reporter(message: str):
         """Report progress to console."""
         console.print(f"[dim]  {message}[/dim]")
-    
+
     try:
         from rich.progress import Progress, SpinnerColumn, TextColumn
 
@@ -1092,7 +1136,7 @@ async def run_generator(
             transient=False,  # Keep progress visible
         ) as progress:
             task = progress.add_task("Generating scenarios...", total=None)
-            
+
             scenarios = await generate_scenarios_with_agent(
                 tools=tools,
                 n_examples=n_examples,
@@ -1103,16 +1147,21 @@ async def run_generator(
                 max_retries=2,
             )
             progress.update(task, description=f"Generated {len(scenarios)} scenarios")
-            
+
             # Print generated scenarios immediately
             console.print("\n[bold green]Generated Scenarios:[/bold green]")
             for i, scenario in enumerate(scenarios, 1):
-                console.print(f"  {i}. [cyan]{scenario.name}[/cyan]: {scenario.description or scenario.prompt[:60]}...")
+                console.print(
+                    f"  {i}. [cyan]{scenario.name}[/cyan]: {scenario.description or scenario.prompt[:60]}..."
+                )
             console.print()
 
             progress.update(task, description="Refining assertions...")
             scenarios = await refine_assertions_with_agent(
-                scenarios, tools, provider=selected_provider, model=generation_model, 
+                scenarios,
+                tools,
+                provider=selected_provider,
+                model=generation_model,
                 progress_callback=progress_reporter,
                 debug=verbose,
             )
@@ -1122,18 +1171,29 @@ async def run_generator(
             allowed_tool_names = [t.name for t in tools if t.name]
             if allowed_tool_names:
                 before = len(scenarios)
+
                 def _has_tool_assertion(s):
                     return any(
-                        getattr(a, "kind", None) in (
-                            "tool_was_called", "tool_called_with", "tool_output_matches", "tool_sequence"
-                        ) for a in s.assertions
+                        getattr(a, "kind", None)
+                        in (
+                            "tool_was_called",
+                            "tool_called_with",
+                            "tool_output_matches",
+                            "tool_sequence",
+                        )
+                        for a in s.assertions
                     )
+
                 scenarios = [s for s in scenarios if _has_tool_assertion(s)]
                 dropped = before - len(scenarios)
                 if dropped > 0:
-                    console.print(f"[yellow]Dropped {dropped} scenarios without tool assertions[/yellow]")
+                    console.print(
+                        f"[yellow]Dropped {dropped} scenarios without tool assertions[/yellow]"
+                    )
 
-        console.print(f"[green]✓ Generated and refined {len(scenarios)} test scenarios[/green]")
+        console.print(
+            f"[green]✓ Generated and refined {len(scenarios)} test scenarios[/green]"
+        )
     except KeyboardInterrupt:
         console.print("\n[yellow]Generation cancelled by user[/yellow]")
         raise typer.Exit(1)
@@ -1141,6 +1201,7 @@ async def run_generator(
         console.print(f"[red]Failed to generate scenarios: {e}[/red]")
         if verbose:
             import traceback
+
             console.print("[dim]" + traceback.format_exc() + "[/dim]")
         raise typer.Exit(1)
 
@@ -1155,14 +1216,20 @@ async def run_generator(
     # Generate tests and validate syntax
     output_path = Path(output) if output else None
     output_file = await _emit_tests(
-        project, style, server_name, scenarios, provider=selected_provider, model=generation_model, output_path=output_path
+        project,
+        style,
+        server_name,
+        scenarios,
+        provider=selected_provider,
+        model=generation_model,
+        output_path=output_path,
     )
-    
+
     # Validate generated Python code if it's a Python test file
     if output_file and output_file.suffix == ".py":
         console.print("\n[cyan]Validating generated test file...[/cyan]")
         await _validate_and_fix_test_file(output_file, selected_provider, final_model)
-    
+
     # Display run command
     _display_run_command(style, output_file)
     # Summary of generated scenarios
@@ -1226,9 +1293,11 @@ async def update_tests(
 
     # Create a lightweight context for ModelSelector
     context = Context()
-    
+
     # Provider + key (reuse flow and respect CLI)
-    existing_provider, existing_key, available_providers, settings = _load_existing_provider()
+    existing_provider, existing_key, available_providers, settings = (
+        _load_existing_provider()
+    )
     selected_provider: str
     api_key: str | None
     prompted_model: str | None = None
@@ -1236,7 +1305,9 @@ async def update_tests(
         selected_provider = provider.strip().lower()
         if available_providers and selected_provider in available_providers:
             api_key = available_providers[selected_provider]
-            console.print(f"[green]Using API key from environment for {selected_provider}[/green]")
+            console.print(
+                f"[green]Using API key from environment for {selected_provider}[/green]"
+            )
         else:
             api_key = Prompt.ask(f"Enter {selected_provider} API key", password=True)
         if not model:
@@ -1250,7 +1321,9 @@ async def update_tests(
         )
     final_model = model or prompted_model
     if api_key:
-        settings = await _write_mcpeval_configs(project, settings, selected_provider, api_key, final_model, context=context)
+        settings = await _write_mcpeval_configs(
+            project, settings, selected_provider, api_key, final_model, context=context
+        )
 
     console.print(f"[cyan]Listing tools for '{server_name}'...[/cyan]")
     try:
@@ -1308,12 +1381,17 @@ async def update_tests(
             # Print generated scenarios immediately
             console.print("\n[bold green]Generated Scenarios:[/bold green]")
             for i, scenario in enumerate(scenarios, 1):
-                console.print(f"  {i}. [cyan]{scenario.name}[/cyan]: {scenario.description or scenario.prompt[:60]}...")
+                console.print(
+                    f"  {i}. [cyan]{scenario.name}[/cyan]: {scenario.description or scenario.prompt[:60]}..."
+                )
             console.print()
 
             progress.update(task, description="Refining assertions...")
             scenarios = await refine_assertions_with_agent(
-                scenarios, tools, provider=selected_provider, model=generation_model, 
+                scenarios,
+                tools,
+                provider=selected_provider,
+                model=generation_model,
                 progress_callback=progress_reporter,
             )
             progress.update(task, description="Completed generation")
@@ -1514,7 +1592,9 @@ def list_servers_command(
 @agent_app.command("list")
 def list_agents_command(
     project_dir: str = typer.Option(".", help="Project directory"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full instructions"),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show full instructions"
+    ),
     name: str | None = typer.Option(None, help="Show details for specific agent"),
 ):
     """List configured agents (alias of 'list agents')."""
@@ -1522,6 +1602,7 @@ def list_agents_command(
 
 
 # ---- Sync wrappers for Typer (Click) to execute async commands ----
+
 
 @app.command("init")
 def init_project_cli(
@@ -1540,7 +1621,9 @@ def run_generator_cli(
     provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
     model: str | None = typer.Option(None, help="Model id (optional)"),
     verbose: bool = typer.Option(False, help="Show detailed error messages"),
-    output: str | None = typer.Option(None, help="Explicit output path for the generated file (.py or .yaml)"),
+    output: str | None = typer.Option(
+        None, help="Explicit output path for the generated file (.py or .yaml)"
+    ),
 ):
     return asyncio.run(
         run_generator(

@@ -1,11 +1,11 @@
-import types
 from pathlib import Path
 
-import pytest
 
-from mcp_eval.runner import discover_tests_and_datasets, expand_parametrized_tests, group_tests_by_file
-from mcp_eval.core import task, parametrize
-from mcp_eval.datasets import Case, Dataset
+from mcp_eval.runner import (
+    discover_tests_and_datasets,
+    expand_parametrized_tests,
+    group_tests_by_file,
+)
 
 
 def _write_tmp_module(tmp_path: Path, content: str) -> Path:
@@ -15,8 +15,7 @@ def _write_tmp_module(tmp_path: Path, content: str) -> Path:
 
 
 def test_discover_tests_and_datasets(tmp_path, monkeypatch):
-    content = (
-        """
+    content = """
 from mcp_eval.core import task, parametrize
 from mcp_eval.datasets import Dataset, Case
 
@@ -31,7 +30,6 @@ async def t2(agent, session, x):
 
 ds = Dataset(name="D", cases=[Case(name="c", inputs="i")])
         """
-    )
     mod_path = _write_tmp_module(tmp_path, content)
 
     found = discover_tests_and_datasets(str(mod_path))
@@ -45,5 +43,3 @@ ds = Dataset(name="D", cases=[Case(name="c", inputs="i")])
     grouped = group_tests_by_file(expanded)
     # single module key present
     assert list(grouped.keys()) == [mod_path]
-
-

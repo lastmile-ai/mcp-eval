@@ -1,4 +1,3 @@
-import asyncio
 import pytest
 
 from mcp_eval.core import task, with_agent, TestResult
@@ -9,7 +8,9 @@ from mcp_eval.catalog import Expect
 async def test_task_decorator_runs_and_collects_results(tmp_path):
     @task("desc")
     async def my_test(agent, session):
-        await session.assert_that(Expect.content.contains("hello"), response="hello world")
+        await session.assert_that(
+            Expect.content.contains("hello"), response="hello world"
+        )
 
     result: TestResult = await my_test()
     assert isinstance(result, TestResult)
@@ -31,5 +32,3 @@ async def test_with_agent_marker_is_attached():
     # The with_agent decorator attaches override to the undecorated function, but after composition
     # wrapper used by @task consumes the attribute; presence indicates flow setup
     assert hasattr(my_test, "_description")
-
-

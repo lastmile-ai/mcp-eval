@@ -29,5 +29,3 @@ mcp:
     res2 = runner.invoke(list_app, ["servers", "--verbose"])
     assert res2.exit_code == 0
     assert "demo" in res2.stdout
-
-

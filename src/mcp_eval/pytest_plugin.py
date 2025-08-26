@@ -210,7 +210,10 @@ def pytest_collection_modifyitems(config, items):
         if hasattr(item, "function"):
             # Check if test function uses mcp fixtures
             sig = inspect.signature(item.function)
-            if any(param in sig.parameters for param in ["mcp_session", "mcp_agent", "agent"]):
+            if any(
+                param in sig.parameters
+                for param in ["mcp_session", "mcp_agent", "agent"]
+            ):
                 item.add_marker(pytest.mark.mcpeval)
 
 

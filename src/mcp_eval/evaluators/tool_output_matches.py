@@ -305,7 +305,11 @@ class ToolOutputMatches(SyncEvaluator):
             if actual_value == self.expected_output:
                 return True
             # Best-effort fallback for string comparisons on large payloads
-            if self.contains_fallback_for_exact and isinstance(actual_value, str) and isinstance(self.expected_output, str):
+            if (
+                self.contains_fallback_for_exact
+                and isinstance(actual_value, str)
+                and isinstance(self.expected_output, str)
+            ):
                 if self.case_sensitive:
                     return self.expected_output in actual_value
                 else:

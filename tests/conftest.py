@@ -1,5 +1,3 @@
-import os
-from pathlib import Path
 import pytest
 
 
@@ -90,9 +88,7 @@ def stub_judge_client(monkeypatch):
 
         async def generate_str(self, prompt: str) -> str:
             # Return a valid JSON payload for LLMJudge
-            return (
-                '{"score": 0.9, "reasoning": "Good", "passed": true, "confidence": 0.88}'
-            )
+            return '{"score": 0.9, "reasoning": "Good", "passed": true, "confidence": 0.88}'
 
         async def generate_structured(self, prompt: str, response_model):
             # Return a reasonable default instance for MultiCriteriaJudge
@@ -103,8 +99,12 @@ def stub_judge_client(monkeypatch):
 
     # Patch both the factory and the imports used inside evaluators
     monkeypatch.setattr("mcp_eval.llm_client.get_judge_client", _get_client)
-    monkeypatch.setattr("mcp_eval.evaluators.llm_judge.get_judge_client", _get_client, raising=False)
-    monkeypatch.setattr("mcp_eval.evaluators.multi_criteria_judge.get_judge_client", _get_client, raising=False)
+    monkeypatch.setattr(
+        "mcp_eval.evaluators.llm_judge.get_judge_client", _get_client, raising=False
+    )
+    monkeypatch.setattr(
+        "mcp_eval.evaluators.multi_criteria_judge.get_judge_client",
+        _get_client,
+        raising=False,
+    )
     return _get_client
-
-

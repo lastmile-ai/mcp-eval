@@ -13,7 +13,7 @@ from mcp_eval.cli.models import (
     AgentConfig,
     MCPEvalConfig,
 )
-from mcp_eval.config import find_eval_config, find_eval_secrets
+from mcp_eval.config import find_eval_config
 
 console = Console()
 

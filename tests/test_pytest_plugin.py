@@ -71,10 +71,10 @@ def test_event_loop_fixture(event_loop):
     # The plugin's session-scoped event loop should be usable
     assert hasattr(event_loop, "call_soon")
     called = {"v": False}
+
     def _set():
         called["v"] = True
+
     event_loop.call_soon(_set)
     event_loop.run_until_complete(asyncio.sleep(0))
     assert called["v"] is True
-
-

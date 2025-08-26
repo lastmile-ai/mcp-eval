@@ -39,5 +39,3 @@ def test_evaluation_report_properties_and_serialization():
     d = report.to_dict()
     assert d["summary"]["total_cases"] == 1
     assert d["results"][0]["metrics"]["iteration_count"] == 2
-
-

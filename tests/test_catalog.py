@@ -17,5 +17,3 @@ def test_catalog_factories_create_evaluators():
 
     e5 = Expect.path.efficiency(optimal_steps=2)
     assert e5.optimal_steps == 2
-
-

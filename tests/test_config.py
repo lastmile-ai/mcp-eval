@@ -1,7 +1,11 @@
-from pathlib import Path
-import pytest
-
-from mcp_eval.config import load_config, get_current_config, set_settings, MCPEvalSettings, use_agent, ProgrammaticDefaults
+from mcp_eval.config import (
+    load_config,
+    get_current_config,
+    set_settings,
+    MCPEvalSettings,
+    use_agent,
+    ProgrammaticDefaults,
+)
 
 
 def test_load_config_from_temp(tmp_path, monkeypatch):
@@ -32,5 +36,3 @@ def test_programmatic_set_settings_and_use_agent(monkeypatch):
     use_agent("default")
     # Programmatic default agent object path: ensure setter stores without error
     assert ProgrammaticDefaults.get_default_agent() is None
-
-

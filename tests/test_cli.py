@@ -1,6 +1,3 @@
-import json
-from pathlib import Path
-
 import pytest
 from typer.testing import CliRunner
 
@@ -41,5 +38,3 @@ def test_cli_doctor_basic(runner, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     res = runner.invoke(cli_app, ["doctor"])  # basic checks
     assert res.exit_code == 0
-
-

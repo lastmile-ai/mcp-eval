@@ -4,7 +4,9 @@ from mcp_eval.metrics import (
 )
 
 
-def _span(name: str, start: int, end: int, attrs=None, events=None, context=None, parent=None):
+def _span(
+    name: str, start: int, end: int, attrs=None, events=None, context=None, parent=None
+):
     return TraceSpan(
         name=name,
         context=context or {"span_id": name, "trace_id": "t"},
@@ -68,5 +70,3 @@ def test_process_spans_extracts_tool_and_llm_metrics():
     assert metrics.llm_metrics.total_tokens == 25
     assert metrics.iteration_count >= 2
     assert metrics.llm_time_ms > 0
-
-

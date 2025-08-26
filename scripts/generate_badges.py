@@ -24,10 +24,9 @@ Coverage heuristic:
 
 from __future__ import annotations
 
-import base64
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, Tuple
 import typer
 
 
@@ -129,10 +128,10 @@ def make_badge(label: str, value: str, color: str) -> str:
     <path fill="url(#b)" d="M0 0h{total_w}v20H0z"/>
   </g>
   <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11">
-    <text x="{left_w/2:.0f}" y="15" fill="#010101" fill-opacity=".3">{label}</text>
-    <text x="{left_w/2:.0f}" y="14">{label}</text>
-    <text x="{left_w + right_w/2:.0f}" y="15" fill="#010101" fill-opacity=".3">{value}</text>
-    <text x="{left_w + right_w/2:.0f}" y="14">{value}</text>
+    <text x="{left_w / 2:.0f}" y="15" fill="#010101" fill-opacity=".3">{label}</text>
+    <text x="{left_w / 2:.0f}" y="14">{label}</text>
+    <text x="{left_w + right_w / 2:.0f}" y="15" fill="#010101" fill-opacity=".3">{value}</text>
+    <text x="{left_w + right_w / 2:.0f}" y="14">{value}</text>
   </g>
 </svg>'''
     return svg
@@ -144,10 +143,22 @@ def write_text(path: Path, text: str) -> None:
 
 
 def cli(
-    report: str = typer.Option(..., "--report", help="Path to combined JSON report produced by mcp-eval run --json"),
-    outdir: str = typer.Option("mcpeval-reports/badges", "--outdir", help="Output directory for generated SVG badges"),
-    label_tests: str = typer.Option("mcp-tests", "--label-tests", help="Label for tests badge"),
-    label_cov: str = typer.Option("mcp-cov", "--label-cov", help="Label for coverage badge"),
+    report: str = typer.Option(
+        ...,
+        "--report",
+        help="Path to combined JSON report produced by mcp-eval run --json",
+    ),
+    outdir: str = typer.Option(
+        "mcpeval-reports/badges",
+        "--outdir",
+        help="Output directory for generated SVG badges",
+    ),
+    label_tests: str = typer.Option(
+        "mcp-tests", "--label-tests", help="Label for tests badge"
+    ),
+    label_cov: str = typer.Option(
+        "mcp-cov", "--label-cov", help="Label for coverage badge"
+    ),
 ):
     report_path = Path(report)
     outdir_path = Path(outdir)
@@ -168,11 +179,13 @@ def cli(
     cov_value = f"{int(round(cov_pct))}%"
     cov_color = _color_for_percentage(cov_pct)
 
-    write_text(outdir_path / "tests.svg", make_badge(label_tests, tests_value, tests_color))
-    write_text(outdir_path / "coverage.svg", make_badge(label_cov, cov_value, cov_color))
+    write_text(
+        outdir_path / "tests.svg", make_badge(label_tests, tests_value, tests_color)
+    )
+    write_text(
+        outdir_path / "coverage.svg", make_badge(label_cov, cov_value, cov_color)
+    )
 
 
 if __name__ == "__main__":
     typer.run(cli)
-
-

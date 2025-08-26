@@ -446,11 +446,12 @@ async def generate_scenarios_with_agent(
     """Use an mcp-agent Agent to generate structured scenarios and assertion specs."""
     # Load settings to get API keys
     from mcp_eval.config import load_config
+
     settings = load_config()
-    
+
     # Reduce logging noise (or enable info logs if debug)
     settings.logger = LoggerSettings(type="console", level="info" if debug else "error")
-    
+
     app = MCPApp(settings=settings)
     async with app.run() as running:
         # Minimal agent just for content generation
@@ -495,7 +496,12 @@ async def generate_scenarios_with_agent(
             # Must include at least one tool-related assertion if tools exist
             return any(
                 getattr(a, "kind", None)
-                in ("tool_was_called", "tool_called_with", "tool_output_matches", "tool_sequence")
+                in (
+                    "tool_was_called",
+                    "tool_called_with",
+                    "tool_output_matches",
+                    "tool_sequence",
+                )
                 for a in s.assertions
             )
 
@@ -521,11 +527,27 @@ async def generate_scenarios_with_agent(
                         "name": "basic_url_fetch",
                         "prompt": "Fetch https://httpbin.org/html and summarize",
                         "assertions": [
-                            {"kind": "tool_was_called", "tool_name": "fetch", "min_times": 1},
-                            {"kind": "tool_called_with", "tool_name": "fetch", "arguments": {"url": "https://httpbin.org/html"}},
-                            {"kind": "response_contains", "text": "Herman Melville", "case_sensitive": False},
-                            {"kind": "llm_judge", "rubric": "Response shows content was fetched and summarized", "min_score": 0.8}
-                        ]
+                            {
+                                "kind": "tool_was_called",
+                                "tool_name": "fetch",
+                                "min_times": 1,
+                            },
+                            {
+                                "kind": "tool_called_with",
+                                "tool_name": "fetch",
+                                "arguments": {"url": "https://httpbin.org/html"},
+                            },
+                            {
+                                "kind": "response_contains",
+                                "text": "Herman Melville",
+                                "case_sensitive": False,
+                            },
+                            {
+                                "kind": "llm_judge",
+                                "rubric": "Response shows content was fetched and summarized",
+                                "min_score": 0.8,
+                            },
+                        ],
                     }
                 ],
                 "allowed_tools": allowed_names,
@@ -546,17 +568,24 @@ async def generate_scenarios_with_agent(
                     try:
                         log_dir = Path("test-reports")
                         log_dir.mkdir(parents=True, exist_ok=True)
-                        fp = log_dir / f"prompt_scenarios_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+                        fp = (
+                            log_dir
+                            / f"prompt_scenarios_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+                        )
                         fp.write_text(prompt, encoding="utf-8")
                         progress_callback(f"DEBUG prompt saved to: {fp}")
                     except Exception:
                         pass
 
-            bundle = await llm.generate_structured(prompt, response_model=ScenarioBundle)
+            bundle = await llm.generate_structured(
+                prompt, response_model=ScenarioBundle
+            )
             # Filter out any assertions that reference unknown tools
             if allowed_names:
                 for s in bundle.scenarios:
-                    s.assertions = _filter_assertions_for_known_tools(s.assertions, allowed_names)
+                    s.assertions = _filter_assertions_for_known_tools(
+                        s.assertions, allowed_names
+                    )
                     s.assertions = _harden_assertions(s.assertions)
             else:
                 for s in bundle.scenarios:
@@ -564,7 +593,12 @@ async def generate_scenarios_with_agent(
                         a
                         for a in s.assertions
                         if getattr(a, "kind", None)
-                        not in ("tool_was_called", "tool_called_with", "tool_output_matches", "tool_sequence")
+                        not in (
+                            "tool_was_called",
+                            "tool_called_with",
+                            "tool_output_matches",
+                            "tool_sequence",
+                        )
                     ]
                     s.assertions = _harden_assertions(s.assertions)
 
@@ -591,14 +625,15 @@ async def refine_assertions_with_agent(
     """For each scenario, ask an agent to propose additional assertions using available tool schemas and the assertion catalog."""
     if not scenarios:
         return scenarios
-    
+
     # Load settings to get API keys
     from mcp_eval.config import load_config
+
     settings = load_config()
-    
+
     # Reduce logging noise (or enable info logs if debug)
     settings.logger = LoggerSettings(type="console", level="info" if debug else "error")
-    
+
     app = MCPApp(settings=settings)
     async with app.run() as running:
         agent = Agent(
@@ -623,7 +658,9 @@ async def refine_assertions_with_agent(
         updated: List[ScenarioSpec] = []
         for i, s in enumerate(scenarios, 1):
             if progress_callback:
-                progress_callback(f"Refining assertions for scenario {i}/{len(scenarios)}: {s.name}")
+                progress_callback(
+                    f"Refining assertions for scenario {i}/{len(scenarios)}: {s.name}"
+                )
             payload = {
                 "scenario": {
                     "name": s.name,
@@ -652,7 +689,9 @@ async def refine_assertions_with_agent(
                 for a in bundle.assertions:
                     # Drop any references to unknown tools
                     if allowed_names and getattr(a, "kind", None) in (
-                        "tool_was_called", "tool_called_with", "tool_output_matches"
+                        "tool_was_called",
+                        "tool_called_with",
+                        "tool_output_matches",
                     ):
                         if getattr(a, "tool_name", None) not in allowed_names:
                             continue
@@ -670,10 +709,10 @@ async def refine_assertions_with_agent(
             except Exception:
                 pass
             updated.append(s)
-            
+
         if progress_callback:
             progress_callback(f"Completed refining {len(updated)} scenarios")
-            
+
         return updated
 
 
