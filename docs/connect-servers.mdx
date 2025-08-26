@@ -20,7 +20,7 @@ keywords: ["mcp","servers","dxt","mcp.json","configuration"]
 If your project already defines servers in a `mcp.json` file (or a path you specify), you can import them:
 
 ```bash
-mcp-eval add server --from-mcp-json .cursor/mcp.json
+mcp-eval server add --from-mcp-json .cursor/mcp.json
 ```
 
 Reference: `mcp.json` format and conventions at `https://gofastmcp.com/integrations/mcp-json-configuration`.
@@ -30,7 +30,7 @@ Reference: `mcp.json` format and conventions at `https://gofastmcp.com/integrati
 DXT manifests describe an MCP server (command/args/env or URL). Import directly:
 
 ```bash
-mcp-eval add server --from-dxt ~/Desktop/manifest.dxt
+mcp-eval server add --from-dxt ~/Desktop/manifest.dxt
 ```
 
 Reference: DXT documentation at `https://github.com/anthropics/dxt/blob/main/README.md`.
@@ -87,7 +87,7 @@ mcp-eval validate --quick
 mcp-eval validate
 
 # List discovered servers and available tools
-mcp-eval list servers -v | cat
+mcp-eval server list -v | cat
 ```
 
 ### Tips

@@ -25,7 +25,7 @@ await session.assert_that(Expect.path.efficiency(expected_tool_sequence=["search
 
 ### Server discovery and drift
 
-- Use `mcp-eval list servers -v` in CI to detect missing tools.
+- Use `mcp-eval server list -v` in CI to detect missing tools.
 - Add an `Expect.tools.count(tool, >=1)` guard to ensure expected calls happen.
 
 ### Security

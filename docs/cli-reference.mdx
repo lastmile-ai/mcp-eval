@@ -40,16 +40,16 @@ Source: [runner.py](../src/mcp_eval/runner.py)
 ## list
 
 ```bash
-mcp-eval list servers [-v]
-mcp-eval list agents [-v] [--name <agent>]
+mcp-eval server list [-v]
+mcp-eval agent list [-v] [--name <agent>]
 mcp-eval list all [-v]
 ```
 
 Examples:
 
 ```bash
-mcp-eval list servers --verbose | cat
-mcp-eval list agents --name default
+mcp-eval server list --verbose | cat
+mcp-eval agent list --name default
 ```
 
 Source: [list_command.py](../src/mcp_eval/cli/list_command.py)
@@ -98,19 +98,19 @@ Appends new generated tests to an existing file.
 
 Source: [generator.py](../src/mcp_eval/cli/generator.py)
 
-## add
+## server / agent
 
 ```bash
-mcp-eval add server [--from-mcp-json path] [--from-dxt path]
-mcp-eval add agent
+mcp-eval server add [--from-mcp-json path] [--from-dxt path]
+mcp-eval agent add
 ```
 
 Examples:
 
 ```bash
-mcp-eval add server --from-mcp-json .cursor/mcp.json
-mcp-eval add server --from-dxt ~/Desktop/manifest.dxt
-mcp-eval add agent
+mcp-eval server add --from-mcp-json .cursor/mcp.json
+mcp-eval server add --from-dxt ~/Desktop/manifest.dxt
+mcp-eval agent add
 ```
 
 Source: [generator.py](../src/mcp_eval/cli/generator.py), [utils.py](../src/mcp_eval/cli/utils.py)
@@ -168,6 +168,6 @@ mcp-eval issue --title "Server connection fails" --no-open-browser
 
 Source: [issue.py](../src/mcp_eval/cli/issue.py)
 
-<!-- TODO: Add screen captures of `mcp-eval list servers`, `mcp-eval run` summaries, and a PR comment with embedded report. -->
+<!-- TODO: Add screen captures of `mcp-eval server list`, `mcp-eval run` summaries, and a PR comment with embedded report. -->
 
 
