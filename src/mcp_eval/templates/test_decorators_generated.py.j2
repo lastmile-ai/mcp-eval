@@ -1,4 +1,5 @@
 from mcp_eval import task, setup, Expect
+from mcp_eval.session import TestAgent
 
 @setup
 def _cfg():
@@ -6,7 +7,7 @@ def _cfg():
 
 {% for s in scenarios %}
 @task("{{ s.name }}")
-async def {{ s.name | py_ident }}(agent, session):
+async def {{ s.name | py_ident }}(agent: TestAgent, session):
     response = await agent.generate_str({{ s.prompt | tojson }})
     {% for a in s.assertions %}
     {% if a.kind == 'response_contains' %}
@@ -18,9 +19,9 @@ async def {{ s.name | py_ident }}(agent, session):
     {% elif a.kind == 'tool_sequence' %}
     await session.assert_that(Expect.tools.sequence({{ a.sequence | tojson }}, allow_other_calls={{ a.allow_other_calls|default(False) }}))
     {% elif a.kind == 'tool_called_with' %}
-    await session.assert_that(Expect.tools.called_with({{ a.tool_name | tojson }}, {{ a.arguments | tojson }}))
+    await session.assert_that(Expect.tools.called_with({{ a.tool_name | tojson }}, {{ a.arguments | py }}))
     {% elif a.kind == 'tool_output_matches' %}
-    await session.assert_that(Expect.tools.output_matches(tool_name={{ a.tool_name | tojson }}, expected_output={{ a.expected_output | tojson }}, field_path={{ a.field_path | tojson }}, match_type={{ a.match_type | tojson }}, case_sensitive={{ a.case_sensitive|default(True) }}, call_index={{ a.call_index|default(-1) }}))
+    await session.assert_that(Expect.tools.output_matches(tool_name={{ a.tool_name | tojson }}, expected_output={{ a.expected_output | py }}, field_path={{ a.field_path | py }}, match_type={{ a.match_type | tojson }}, case_sensitive={{ a.case_sensitive|default(True) }}, call_index={{ a.call_index|default(-1) }}))
     {% elif a.kind == 'max_iterations' %}
     await session.assert_that(Expect.performance.max_iterations({{ a.max_iterations }}))
     {% elif a.kind == 'response_time_under' %}

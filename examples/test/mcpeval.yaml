@@ -32,3 +32,12 @@ mcp:
       - mcp-server-fetch
       env:
         UV_NO_PROGRESS: '1'
+agents:
+  definitions:
+  - name: default
+    instruction: You are a helpful assistant that can use MCP servers effectively.
+    server_names:
+    - fetch
+    provider: anthropic
+    model: claude-sonnet-4-20250514
+default_agent: default

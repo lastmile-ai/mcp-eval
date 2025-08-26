@@ -9,6 +9,7 @@ import inspect
 from typing import AsyncGenerator
 from pathlib import Path
 import pytest
+import pytest_asyncio
 
 from mcp_eval import TestSession, TestAgent
 from mcp_eval.config import get_current_config
@@ -107,7 +108,7 @@ class MCPEvalPytestSession:
         return self._session
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def mcp_session(request) -> AsyncGenerator[MCPEvalPytestSession, None]:
     """Pytest fixture that provides an MCP test session.
 
@@ -150,7 +151,7 @@ async def mcp_session(request) -> AsyncGenerator[MCPEvalPytestSession, None]:
     pytest_session_wrapper.session.cleanup()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def mcp_agent(mcp_session: MCPEvalPytestSession) -> TestAgent | None:
     """Convenience fixture that provides just the agent.
 
@@ -162,9 +163,18 @@ async def mcp_agent(mcp_session: MCPEvalPytestSession) -> TestAgent | None:
     return mcp_session.agent
 
 
+# Alias fixture: prefer simple name `agent` to avoid confusion with mcp_agent package
+@pytest_asyncio.fixture
+async def agent(mcp_session: MCPEvalPytestSession) -> TestAgent | None:
+    return mcp_session.agent
+
+
 def pytest_configure(config):
     """Configure pytest to work with mcp-eval."""
     config.addinivalue_line("markers", "mcp-eval: mark test as an mcp-eval test")
+    # Also register common alias spellings used by this plugin
+    config.addinivalue_line("markers", "mcpeval: mark test as an mcp-eval test")
+    config.addinivalue_line("markers", "mcp_eval: mark test as an mcp-eval test")
     config.addinivalue_line(
         "markers", "mcp_agent(name_or_object): override agent for this test"
     )
@@ -200,7 +210,7 @@ def pytest_collection_modifyitems(config, items):
         if hasattr(item, "function"):
             # Check if test function uses mcp fixtures
             sig = inspect.signature(item.function)
-            if any(param in sig.parameters for param in ["mcp_session", "mcp_agent"]):
+            if any(param in sig.parameters for param in ["mcp_session", "mcp_agent", "agent"]):
                 item.add_marker(pytest.mark.mcpeval)
 
 

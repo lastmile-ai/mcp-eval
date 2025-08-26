@@ -5,11 +5,12 @@ This module provides two complementary approaches:
 - Backward-compatible simple dataset generation
 """
 
-from typing import List, Dict, Any, Annotated, Literal
+from typing import List, Dict, Any, Annotated, Literal, Callable, Optional
 from dataclasses import dataclass
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 import json
+from datetime import datetime
 
 from mcp_eval.datasets import Case, Dataset
 from mcp_eval.evaluators import (
@@ -295,7 +296,21 @@ class ResponseTimeUnderSpec(BaseModel):
 class LLMJudgeSpec(BaseModel):
     kind: Literal["llm_judge"] = "llm_judge"
     rubric: str
-    min_score: float = 0.8
+    min_score: float = Field(0.8, ge=0.0, le=1.0)
+
+    @field_validator("min_score", mode="before")
+    @classmethod
+    def _bound_min_score(cls, v):
+        try:
+            val = float(v)
+        except Exception:
+            return 0.8
+        if val < 0:
+            return 0.8
+        # Normalize common mistakes like 8 or 80 to 0.8
+        while val > 1.0:
+            val = val / 10.0
+        return min(1.0, max(0.0, val))
 
 
 class ToolSequenceSpec(BaseModel):
@@ -339,6 +354,38 @@ def _build_llm(agent: Agent, provider: str, model: str | None):
     return factory(agent)
 
 
+def _allowed_tool_names(tools: List["ToolSchema"]) -> List[str]:
+    names: List[str] = []
+    for t in tools:
+        if t.name:
+            names.append(t.name)
+    return names
+
+
+def _filter_assertions_for_known_tools(
+    assertions: List[AssertionSpec], allowed: List[str]
+) -> List[AssertionSpec]:
+    """Drop or adjust tool-related assertions that reference unknown tools."""
+    filtered: List[AssertionSpec] = []
+    for a in assertions:
+        kind = getattr(a, "kind", None)
+        if kind in ("tool_was_called", "tool_called_with", "tool_output_matches"):
+            tool_name = getattr(a, "tool_name", None)
+            if tool_name not in allowed:
+                continue
+            filtered.append(a)
+        elif kind == "tool_sequence":
+            seq = list(getattr(a, "sequence", []) or [])
+            seq = [s for s in seq if s in allowed]
+            if not seq:
+                continue
+            a.sequence = seq  # type: ignore[attr-defined]
+            filtered.append(a)
+        else:
+            filtered.append(a)
+    return filtered
+
+
 def _assertion_catalog_prompt() -> str:
     return (
         "You can choose from these assertion types (use discriminated 'kind' field):\n"
@@ -349,7 +396,7 @@ def _assertion_catalog_prompt() -> str:
         "- tool_output_matches: {tool_name, expected_output, field_path?, match_type?, case_sensitive?, call_index?}\n"
         "- max_iterations: {max_iterations} -> iteration budget\n"
         "- response_time_under: {ms} -> latency budget\n"
-        "- llm_judge: {rubric, min_score?} -> LLM evaluation\n"
+        "- llm_judge: {rubric, min_score? (0..1)} -> LLM evaluation\n"
         "- tool_sequence: {sequence: [..], allow_other_calls?} -> path\n"
     )
 
@@ -360,14 +407,17 @@ async def generate_scenarios_with_agent(
     n_examples: int = 8,
     provider: str = "anthropic",
     model: str | None = None,
+    progress_callback: Optional[Callable[[str], None]] = None,
+    debug: bool = False,
+    max_retries: int = 1,
 ) -> List[ScenarioSpec]:
     """Use an mcp-agent Agent to generate structured scenarios and assertion specs."""
     # Load settings to get API keys
     from mcp_eval.config import load_config
     settings = load_config()
     
-    # Reduce logging noise
-    settings.logger = LoggerSettings(type="console", level="error")
+    # Reduce logging noise (or enable info logs if debug)
+    settings.logger = LoggerSettings(type="console", level="info" if debug else "error")
     
     app = MCPApp(settings=settings)
     async with app.run() as running:
@@ -389,27 +439,112 @@ async def generate_scenarios_with_agent(
             tool_lines.append(
                 {"name": nm, "description": desc, "input_schema": input_schema}
             )
+        allowed_names = _allowed_tool_names(tools)
 
-        guidance = (
-            "You are generating test scenarios for an MCP server. Each scenario is a user-facing prompt to the agent.\n"
-            "For each, propose appropriate assertions using the available assertion catalog.\n"
-            "Include path/efficiency or judge assertions when beneficial.\n"
+        base_guidance = (
+            "You are generating pytest tests for an MCP server. Each scenario is a user-facing prompt to the agent.\n"
+            "STRICT SYNTAX REQUIREMENTS:\n"
+            "- Use valid Python literals only (True/False/None, not true/false/null).\n"
+            "- When providing argument dicts or lists, ensure they are valid Python (use single quotes or proper repr).\n"
+            "- Keep function names and identifiers valid Python (snake_case).\n"
+            "ASSERTION GUIDANCE:\n"
+            "- Prefer realistic tool arguments and paths.\n"
+            "- LLM judge min_score must be in [0.0, 1.0]. If you intend 80%, use 0.8.\n"
+            "- When asserting raw HTML or JSON, prefer 'contains' on distinctive substrings rather than full document equality.\n"
+            "- For tool_output_matches on large payloads, use match_type='contains' with small, unambiguous substrings.\n"
+            "TOOL CONSTRAINTS:\n"
+            f"- Allowed tool names: {allowed_names}. You MUST NOT reference any other tools.\n"
+            "- If no tools are allowed, do not emit any Expect.tools.* assertions.\n"
         )
 
-        payload = {
-            "tools": tool_lines,
-            "n_examples": n_examples,
-            "assertion_catalog": _assertion_catalog_prompt(),
-            "instructions": guidance,
-        }
+        def _is_valid(s: ScenarioSpec) -> bool:
+            if not allowed_names:
+                return True
+            # Must include at least one tool-related assertion if tools exist
+            return any(
+                getattr(a, "kind", None)
+                in ("tool_was_called", "tool_called_with", "tool_output_matches", "tool_sequence")
+                for a in s.assertions
+            )
 
-        prompt = (
-            "Design high-quality test scenarios for the tools below. Return a JSON object that adheres to the provided Pydantic schema.\n"
-            + json.dumps(payload, indent=2)
-        )
+        attempt = 0
+        last_scenarios: List[ScenarioSpec] = []
+        while attempt <= max_retries:
+            guidance = base_guidance
+            if attempt > 0:
+                # Harden constraints for retries
+                guidance += (
+                    "\nHARD REQUIREMENTS (RETRY):\n"
+                    f"- Produce exactly {n_examples} scenarios.\n"
+                    "- Each scenario MUST include at least one Expect.tools.* assertion referencing only allowed tools.\n"
+                    "- Do NOT reference any tools outside the allowed list.\n"
+                )
 
-        bundle = await llm.generate_structured(prompt, response_model=ScenarioBundle)
-        return bundle.scenarios
+            payload = {
+                "tools": tool_lines,
+                "n_examples": n_examples,
+                "assertion_catalog": _assertion_catalog_prompt(),
+                "instructions": guidance,
+                "few_shot_examples": [
+                    {
+                        "name": "basic_url_fetch",
+                        "prompt": "Fetch https://httpbin.org/html and summarize",
+                        "assertions": [
+                            {"kind": "tool_was_called", "tool_name": "fetch", "min_times": 1},
+                            {"kind": "tool_called_with", "tool_name": "fetch", "arguments": {"url": "https://httpbin.org/html"}},
+                            {"kind": "response_contains", "text": "Herman Melville", "case_sensitive": False},
+                            {"kind": "llm_judge", "rubric": "Response shows content was fetched and summarized", "min_score": 0.8}
+                        ]
+                    }
+                ],
+                "allowed_tools": allowed_names,
+            }
+
+            prompt = (
+                "Design high-quality test scenarios for the tools below. Return a JSON object that adheres to the provided Pydantic schema.\n"
+                + json.dumps(payload, indent=2)
+            )
+
+            if progress_callback:
+                progress_callback("Calling LLM to generate scenarios...")
+                if debug:
+                    progress_callback(f"DEBUG allowed_tools={allowed_names}")
+                    # Print full prompt (no truncation) and write to a file for inspection
+                    progress_callback("DEBUG prompt preview (full):")
+                    progress_callback(prompt)
+                    try:
+                        log_dir = Path("test-reports")
+                        log_dir.mkdir(parents=True, exist_ok=True)
+                        fp = log_dir / f"prompt_scenarios_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+                        fp.write_text(prompt, encoding="utf-8")
+                        progress_callback(f"DEBUG prompt saved to: {fp}")
+                    except Exception:
+                        pass
+
+            bundle = await llm.generate_structured(prompt, response_model=ScenarioBundle)
+            # Filter out any assertions that reference unknown tools
+            if allowed_names:
+                for s in bundle.scenarios:
+                    s.assertions = _filter_assertions_for_known_tools(s.assertions, allowed_names)
+            else:
+                for s in bundle.scenarios:
+                    s.assertions = [
+                        a
+                        for a in s.assertions
+                        if getattr(a, "kind", None)
+                        not in ("tool_was_called", "tool_called_with", "tool_output_matches", "tool_sequence")
+                    ]
+
+            scenarios = [s for s in bundle.scenarios if _is_valid(s)]
+            last_scenarios = scenarios
+            if progress_callback:
+                progress_callback(f"Generated {len(scenarios)} scenarios")
+
+            # Retry if we got zero valid scenarios and we have allowed tools
+            if allowed_names and len(scenarios) == 0 and attempt < max_retries:
+                attempt += 1
+                continue
+            return scenarios
 
 
 async def refine_assertions_with_agent(
@@ -418,6 +553,8 @@ async def refine_assertions_with_agent(
     *,
     provider: str = "anthropic",
     model: str | None = None,
+    progress_callback: Optional[Callable[[str], None]] = None,
+    debug: bool = False,
 ) -> List[ScenarioSpec]:
     """For each scenario, ask an agent to propose additional assertions using available tool schemas and the assertion catalog."""
     if not scenarios:
@@ -427,8 +564,8 @@ async def refine_assertions_with_agent(
     from mcp_eval.config import load_config
     settings = load_config()
     
-    # Reduce logging noise
-    settings.logger = LoggerSettings(type="console", level="error")
+    # Reduce logging noise (or enable info logs if debug)
+    settings.logger = LoggerSettings(type="console", level="info" if debug else "error")
     
     app = MCPApp(settings=settings)
     async with app.run() as running:
@@ -449,9 +586,12 @@ async def refine_assertions_with_agent(
                     "input_schema": t.input_schema or {},
                 }
             )
+        allowed_names = _allowed_tool_names(tools)
 
         updated: List[ScenarioSpec] = []
-        for s in scenarios:
+        for i, s in enumerate(scenarios, 1):
+            if progress_callback:
+                progress_callback(f"Refining assertions for scenario {i}/{len(scenarios)}: {s.name}")
             payload = {
                 "scenario": {
                     "name": s.name,
@@ -460,7 +600,11 @@ async def refine_assertions_with_agent(
                 },
                 "tools": tool_lines,
                 "assertion_catalog": _assertion_catalog_prompt(),
-                "guidance": "Propose additional assertions that increase coverage: argument checks, tool outputs, sequences, performance and judge where applicable.",
+                "guidance": (
+                    "Propose additional assertions that increase coverage: argument checks, tool outputs, sequences, performance and judge where applicable.\n"
+                    f"HARD CONSTRAINT: Only use these tool names: {allowed_names}. Do not invent other tools."
+                ),
+                "allowed_tools": allowed_names,
             }
             prompt = (
                 "Given the scenario and tool specs, return an AssertionBundle JSON following the schema.\n"
@@ -474,6 +618,18 @@ async def refine_assertions_with_agent(
                 have = {f"{a.kind}:{repr(a)}" for a in s.assertions}
                 merged = list(s.assertions)
                 for a in bundle.assertions:
+                    # Drop any references to unknown tools
+                    if allowed_names and getattr(a, "kind", None) in (
+                        "tool_was_called", "tool_called_with", "tool_output_matches"
+                    ):
+                        if getattr(a, "tool_name", None) not in allowed_names:
+                            continue
+                    if getattr(a, "kind", None) == "tool_sequence":
+                        seq = list(getattr(a, "sequence", []) or [])
+                        seq = [t for t in seq if t in allowed_names]
+                        if not seq:
+                            continue
+                        a.sequence = seq  # type: ignore[attr-defined]
                     key = f"{a.kind}:{repr(a)}"
                     if key not in have:
                         merged.append(a)
@@ -482,6 +638,10 @@ async def refine_assertions_with_agent(
             except Exception:
                 pass
             updated.append(s)
+            
+        if progress_callback:
+            progress_callback(f"Completed refining {len(updated)} scenarios")
+            
         return updated
 
 
@@ -558,6 +718,15 @@ def _create_jinja_env() -> Environment:
         return s
 
     env.filters["py_ident"] = py_ident
+
+    # Render values as valid Python literals (True/False/None, dict/list via repr)
+    def py_value(value: Any) -> str:
+        try:
+            return repr(value)
+        except Exception:
+            return repr(str(value))
+
+    env.filters["py"] = py_value
     return env
 
 

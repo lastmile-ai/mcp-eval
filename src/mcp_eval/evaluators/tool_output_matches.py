@@ -118,6 +118,13 @@ class ToolOutputMatches(SyncEvaluator):
                 error=f"Field extraction failed: {str(e)}",
             )
 
+        # Try to normalize common MCP tool result shapes into plain text for string comparisons
+        try:
+            actual_value = self._auto_normalize_actual(actual_value)
+        except Exception:
+            # Best-effort normalization; ignore if it fails
+            pass
+
         # Perform validation based on match type
         try:
             passed = self._validate_match(actual_value)
@@ -204,6 +211,88 @@ class ToolOutputMatches(SyncEvaluator):
             parts.append(current)
 
         return parts
+
+    # ---------------- helpers: normalization -----------------
+
+    def _auto_normalize_actual(self, value: Any) -> Any:
+        """Best-effort normalization of common tool result shapes.
+
+        - If the expected output is a string or regex and the actual value is a structured
+          dict/list with content items, flatten to a single text string.
+        - Otherwise return the value unchanged.
+        """
+        expected_is_string_like = isinstance(self.expected_output, (str, int, float))
+        if not expected_is_string_like and not hasattr(self.expected_output, "pattern"):
+            return value
+
+        # Attempt to extract human-readable text
+        flattened = self._extract_text(value)
+        return flattened if flattened is not None else value
+
+    def _extract_text(self, obj: Any) -> str | None:
+        """Recursively extract text from common MCP content/result shapes.
+
+        Recognized patterns:
+        - { "content": [ {"type": "text", "text": "..."}, ... ] }
+        - { "text": "..." }
+        - ["...", {"text": "..."}, ...]
+        - Arbitrary nested dict/list with string leaves -> join with newlines
+        """
+        try:
+            # Direct string
+            if isinstance(obj, str):
+                return obj
+
+            # List: join extracted text parts
+            if isinstance(obj, list):
+                parts: List[str] = []
+                for item in obj:
+                    t = self._extract_text(item)
+                    if t:
+                        parts.append(t)
+                return "\n".join(parts) if parts else None
+
+            # Dict: handle well-known keys first
+            if isinstance(obj, dict):
+                # Explicit text key
+                if isinstance(obj.get("text"), str):
+                    return obj.get("text")
+
+                # Content list shape
+                content = obj.get("content")
+                if isinstance(content, list):
+                    parts: List[str] = []
+                    for item in content:
+                        # Common item shape: {type: "text", text: "..."}
+                        if isinstance(item, dict) and isinstance(item.get("text"), str):
+                            parts.append(item["text"])
+                        else:
+                            t = self._extract_text(item)
+                            if t:
+                                parts.append(t)
+                    if parts:
+                        return "\n".join(parts)
+                elif isinstance(content, str):
+                    return content
+
+                # Some tools may return {"output": "..."} or nested payloads
+                output = obj.get("output")
+                if isinstance(output, (str, list, dict)):
+                    t = self._extract_text(output)
+                    if t:
+                        return t
+
+                # Fallback: join all string leaf values
+                parts: List[str] = []
+                for v in obj.values():
+                    t = self._extract_text(v)
+                    if t:
+                        parts.append(t)
+                return "\n".join(parts) if parts else None
+        except Exception:
+            return None
+
+        return None
 
     def _validate_match(self, actual_value: Any) -> bool:
         """Validate actual value against expected output based on match type."""
