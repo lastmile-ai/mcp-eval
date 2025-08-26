@@ -1,0 +1,23 @@
+---
+title: "API: Catalog"
+description: "`Expect` entrypoints for content, tools, performance, judges, and path."
+sidebarTitle: "API: Catalog"
+icon: "list"
+keywords: ["Expect","catalog","assertions"]
+---
+
+The `Expect` namespace aggregates evaluator factories:
+
+```python
+from mcp_eval.catalog import Expect
+
+Expect.content.contains("ok")
+Expect.tools.was_called("fetch")
+Expect.performance.max_iterations(3)
+Expect.judge.llm("Rubric text")
+Expect.path.efficiency(expected_tool_sequence=["fetch"]) 
+```
+
+See the complete reference in [Assertions](./assertions.mdx).
+
+

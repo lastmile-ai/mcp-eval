@@ -1,0 +1,59 @@
+---
+title: "API: Config"
+description: "`MCPEvalSettings` and programmatic helpers for providers, agents, servers, metrics, and reporting."
+sidebarTitle: "API: Config"
+icon: "gears"
+keywords: ["MCPEvalSettings","use_config","use_agent","ProgrammaticDefaults","settings"]
+---
+
+## Settings model
+
+Key fields (see `src/mcp_eval/config.py`):
+
+- `judge`: provider/model, min_score, system prompt, max_tokens
+- `metrics`: which metrics to collect
+- `reporting`: formats, output_dir, include_traces
+- `execution`: concurrency, timeouts, retries
+- `default_servers`: fallback server list
+- `provider`/`model`: LLM defaults for tests
+- `default_agent`: AgentSpec or name
+
+## Loading
+
+Config is discovered from project root upward. You can also load/update programmatically:
+
+```python
+from mcp_eval.config import load_config, update_config, use_config
+
+settings = load_config(None)
+update_config({"execution": {"max_concurrency": 8}})
+use_config(settings)
+```
+
+## Agent helpers
+
+```python
+from mcp_eval.config import use_agent, use_agent_factory, use_agent_object
+
+use_agent("default")
+use_agent_factory(lambda: my_agent())
+use_agent_object(existing_agent)
+```
+
+## Programmatic defaults
+
+```python
+from mcp_eval.config import ProgrammaticDefaults
+
+ProgrammaticDefaults.set_default_agent(my_agent())
+```
+
+## Environment variables
+
+- Provider selection and API keys
+- Timeouts, concurrency
+- Reporting outputs
+
+> Tip: keep provider credentials in your secrets file or CI secrets. Avoid committing keys.
+
+

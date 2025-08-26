@@ -1,0 +1,161 @@
+---
+title: "Example: mcp_server_fetch"
+description: "Walkthrough of the fetch server example: datasets, golden paths, and assertions."
+sidebarTitle: "Example: mcp_server_fetch"
+icon: "folder"
+keywords: ["examples","fetch","datasets","golden-paths"]
+---
+
+Source: `examples/mcp_server_fetch/`
+
+## Overview
+
+This example validates a simple MCP server that exposes a `fetch` tool to retrieve web content. The tests illustrate three styles (decorators, pytest, and legacy assertions) and demonstrate how to combine structural assertions, path constraints, and LLM judges.
+
+<CardGroup>
+  <Card title="Goals" icon="bullseye">
+    - Verify the agent calls the `fetch` tool when appropriate
+    - Check extracted content for known signals (e.g., "Example Domain")
+    - Ensure efficient paths (no unnecessary steps)
+    - Evaluate quality with rubric-based judges
+  </Card>
+  <Card title="What you’ll learn" icon="graduation-cap">
+    - Choosing assertions per outcome type (structural, tool, path, judge)
+    - Designing resilient tests using immediate vs deferred checks
+    - Reading metrics and span trees to diagnose behavior
+  </Card>
+</CardGroup>
+
+## Structure
+
+- `datasets/` – YAML and Python datasets
+- `tests/` – pytest style, decorators, assertions style
+- `golden_paths/` – expected sequences
+- `mcpeval.yaml` – config for provider, reports
+
+## Run
+
+```bash
+cd examples/mcp_server_fetch
+mcp-eval run tests/ --markdown test-reports/results.md --html test-reports/index.html
+```
+
+## Assertion design and rationale
+
+### 1) Prove the right tool was used
+
+When a prompt requires reading a URL, we assert the `fetch` tool was called:
+
+```python
+await session.assert_that(Expect.tools.was_called("fetch"), name="fetch_tool_called")
+```
+
+Why: catches regressions where the agent “hallucinates” content without making tool calls, or switches to an unintended tool.
+
+Tip: combine with `Expect.tools.count("fetch", 1)` to detect duplicate calls.
+
+### 2) Validate output structure rather than brittle text
+
+For tool outputs, prefer structural checks over raw substring matching:
+
+```python
+await session.assert_that(
+  Expect.tools.output_matches(
+    tool_name="fetch",
+    expected_output=r"use.*examples",
+    match_type="regex",
+    case_sensitive=False,
+    field_path="content[0].text",
+  ),
+  name="fetch_output_match",
+)
+```
+
+Why: tool responses are often nested structures. Field‑scoped, regex/partial checks are stable across formatting differences and small content changes.
+
+### 3) Check content cues in the assistant’s final message
+
+After tool use, assert the answer includes expected signals:
+
+```python
+resp = await agent.generate_str("Fetch https://example.com")
+await session.assert_that(
+  Expect.content.contains("Example Domain"), response=resp, name="contains_domain_text"
+)
+```
+
+Why: validates the final user‑visible output, not just tool logs.
+
+### 4) Constrain the path and efficiency
+
+For simple fetch tasks, we expect a single `fetch` and minimal steps:
+
+```python
+await session.assert_that(
+  Expect.path.efficiency(
+    expected_tool_sequence=["fetch"],
+    allow_extra_steps=1,
+    tool_usage_limits={"fetch": 1},
+  ),
+  name="fetch_path_efficiency",
+)
+```
+
+Why: detects backtracking, repeated tools, or detours. Combats “thrashing” behaviors.
+
+### 5) Enforce iteration and latency budgets
+
+```python
+await session.assert_that(Expect.performance.max_iterations(3), name="efficiency_check")
+await session.assert_that(Expect.performance.response_time_under(10_000))
+```
+
+Why: catches runaway loops and slow paths early. Pairs well with CI budgets.
+
+### 6) Use judges when “quality” is subjective
+
+Some checks need subjective evaluation (e.g., “good summary”). Use rubric‑based judges:
+
+```python
+judge = Expect.judge.llm(
+  rubric="Response should demonstrate successful content extraction and provide a meaningful summary",
+  min_score=0.8,
+  include_input=True,
+)
+await session.assert_that(judge, response=resp, name="extraction_quality_assessment")
+```
+
+Why: judges provide a tunable gate (min_score) for non‑deterministic tasks. In CI, keep them few and scoped.
+
+### 7) Multi‑criteria judges for richer rubrics
+
+```python
+from mcp_eval.evaluators import EvaluationCriterion
+
+criteria = [
+  EvaluationCriterion(name="accuracy", description="Factual correctness", weight=2.0, min_score=0.8),
+  EvaluationCriterion(name="completeness", description="Covers key points", weight=1.5, min_score=0.7),
+]
+judge_mc = Expect.judge.multi_criteria(criteria, aggregate_method="weighted", use_cot=True)
+await session.assert_that(judge_mc, response=resp, name="multi_criteria")
+```
+
+Why: breaks down quality into interpretable dimensions, enabling targeted improvements.
+
+## Immediate vs deferred: how these fit together
+
+- Immediate: content/judge checks that rely on `response`
+- Deferred: tools/path/performance checks that need session metrics
+
+Design tip: make immediate assertions small and concrete; keep most structural checks deferred for stability.
+
+## What it demonstrates
+
+- Fetch tool end‑to‑end scenarios
+- Dataset style configs and generated cases
+- Tool sequence and output matching
+- Judge rubric for quality checks
+
+> Placeholder: add screenshots of the HTML report for a passing run and for a failure showing a mismatched tool output.
+
+

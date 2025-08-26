@@ -1,0 +1,58 @@
+---
+title: "Reports"
+description: "Console, Markdown, and HTML reports with metrics, assertion outcomes, and traces."
+sidebarTitle: "Reports"
+icon: "file-lines"
+keywords: ["reports","html","markdown","console","artifacts"]
+---
+
+## Output formats
+
+- Console summary (always)
+- Markdown: portable report for PRs/wikis
+- HTML: rich, filterable report with per‑test detail
+
+```bash
+mcp-eval run tests/ --json test-reports/results.json --markdown test-reports/results.md --html test-reports/index.html
+```
+
+## What’s included
+
+- Test metadata: id, name, agent, servers
+- Assertions: pass/fail with messages and parameters
+- Judge scores: rubric, criterion scores, aggregate
+- Tool usage: sequence, counts, success rate
+- Performance: response time, iterations, duration
+- Metrics: coverage and OTEL identifiers
+
+## Artifacts directory
+
+Default directory: `./test-reports` (configurable via reporting settings)
+
+Artifacts may include:
+
+- `results.json` – full machine‑readable results
+- `results.md` – Markdown summary suitable for GitHub
+- `index.html` – rich HTML report
+- Per‑test trace files (if enabled)
+
+## Configuration
+
+In `mcpeval.yaml`:
+
+```yaml
+reporting:
+  formats: ["json", "markdown", "html"]
+  output_dir: "./test-reports"
+  include_traces: true
+```
+
+## In CI
+
+- Upload `test-reports/` as build artifacts.
+- Post `results.md` into PR comments.
+- Fail the job on `all_passed == false`.
+
+> Placeholder: add screenshots of the HTML report summary and a failed assertion detail view.
+
+

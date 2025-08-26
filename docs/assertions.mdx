@@ -6,6 +6,8 @@ icon: "check-double"
 keywords: ["assertions","Expect","tools","judge","path","performance"]
 ---
 
+> Assertions use a single entrypoint and an expressive catalog. Prefer structural checks for stability, and combine them with judges only when necessary.
+
 Use one entrypoint:
 
 ```python
@@ -14,12 +16,12 @@ await session.assert_that(Expect.content.contains("Example"), response=resp)
 
 Catalog source: [catalog.py](../src/mcp_eval/catalog.py)
 
-### Immediate vs deferred
+## Immediate vs deferred
 
 - Immediate: content and judge (given `response`)
 - Deferred (requires final metrics): tools, performance, path
 
-### Content
+## Content
 
 - `Expect.content.contains(text, case_sensitive=False)`
 - `Expect.content.not_contains(text, case_sensitive=False)`
@@ -34,7 +36,7 @@ await session.assert_that(Expect.content.not_contains("Stack trace"), response=r
 await session.assert_that(Expect.content.regex(r"Example\\s+Domain"), response=resp)
 ```
 
-### Tools
+## Tools
 
 - `Expect.tools.was_called(name, min_times=1)`
 - `Expect.tools.called_with(name, {args})`
@@ -68,7 +70,7 @@ await session.assert_that(Expect.tools.count("fetch", 1))
 await session.assert_that(Expect.tools.success_rate(1.0, tool_name="fetch"))
 ```
 
-### Performance
+## Performance
 
 - `Expect.performance.max_iterations(n)`
 - `Expect.performance.response_time_under(ms)`
@@ -80,7 +82,7 @@ await session.assert_that(Expect.performance.max_iterations(3))
 await session.assert_that(Expect.performance.response_time_under(10_000))
 ```
 
-### Judge
+## Judge
 
 - `Expect.judge.llm(rubric, min_score=0.8, include_input=False, require_reasoning=True)`
 - `Expect.judge.multi_criteria(criteria, aggregate_method="weighted", require_all_pass=False, include_confidence=True, use_cot=True, model=None)`
@@ -106,20 +108,24 @@ judge_mc = Expect.judge.multi_criteria(criteria, aggregate_method="weighted", us
 await session.assert_that(judge_mc, response=resp, name="multi_criteria")
 ```
 
-### Path
+## Path
 
 - `Expect.path.efficiency(optimal_steps?, expected_tool_sequence?, allow_extra_steps=0, penalize_backtracking=True, penalize_repeated_tools=True, tool_usage_limits?, default_tool_limit=1)`
 
 Evaluators source: [evaluators/](../src/mcp_eval/evaluators/)
 
-#### Tips
+### Tips
 
 - Prefer structural checks (`output_matches`) for tool outputs when possible for stability
 - Use `name` in `assert_that(..., name="...")` to label checks in reports
 - Combine judge + structural checks for high confidence
 
-<!-- TODO: Add a comparative example showing immediate vs deferred assertions in the same test with annotations. -->
+<Tip>
+Combine a minimal judge (e.g., rubric with `min_score=0.8`) with one or two structural checks (like `output_matches`) for resilient tests.
+</Tip>
 
-<!-- TODO: Add a screenshot of a failed assertion section in the combined Markdown report. -->
+<Note>
+Deferred assertions are evaluated when the session ends or when `when="end"` is used. If an assertion depends on final metrics (e.g., success rate), defer it.
+</Note>
 
 

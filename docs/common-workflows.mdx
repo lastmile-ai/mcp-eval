@@ -1,0 +1,83 @@
+---
+title: "Common workflows"
+description: "Step‑by‑step guides for frequent evaluation tasks."
+sidebarTitle: "Common workflows"
+icon: "graduation-cap"
+keywords: ["workflows","golden path","judge","ci"]
+---
+
+## Create a golden path and enforce it
+
+<Steps>
+  <Step title="Define the happy path">
+    Write the expected tool sequence for a task (e.g., only `fetch`).
+  </Step>
+  <Step title="Add a path assertion">
+    ```python
+    await session.assert_that(
+      Expect.path.efficiency(
+        expected_tool_sequence=["fetch"],
+        tool_usage_limits={"fetch": 1},
+        allow_extra_steps=0,
+      )
+    )
+    ```
+  </Step>
+  <Step title="Run and refine">
+    If you see backtracking or repeated tools, adjust limits or agent prompts.
+    <!-- TODO(screenshot): failing path efficiency with tool call timeline. -->
+  </Step>
+</Steps>
+
+## Author a judge rubric and gate quality
+
+<Steps>
+  <Step title="Start with a minimal rubric">
+    ```python
+    judge = Expect.judge.llm(
+      rubric="Summarize the key points of the fetched page",
+      min_score=0.8,
+      include_input=True,
+    )
+    ```
+  </Step>
+  <Step title="Integrate with structural checks">
+    Combine with `output_matches` or `contains` to avoid over‑reliance on judges.
+  </Step>
+  <Step title="Escalate to multi‑criteria (optional)">
+    ```python
+    from mcp_eval.evaluators import EvaluationCriterion
+    criteria = [
+      EvaluationCriterion(name="accuracy", description="Correct facts", weight=2.0, min_score=0.8),
+      EvaluationCriterion(name="clarity", description="Clear summary", weight=1.0, min_score=0.7),
+    ]
+    judge_mc = Expect.judge.multi_criteria(criteria, aggregate_method="weighted")
+    ```
+  </Step>
+  <Step title="Tune thresholds over time">
+    Use report history to calibrate `min_score` and weights.
+    <!-- TODO(screenshot): judge result with criterion breakdown. -->
+  </Step>
+</Steps>
+
+## Integrate with CI
+
+<Steps>
+  <Step title="Add a job to run tests">
+    ```yaml
+    - name: Run mcp-eval
+      run: |
+        pip install -e .
+        mcp-eval run tests/ --markdown test-reports/results.md --html test-reports/index.html
+    ```
+  </Step>
+  <Step title="Upload artifacts and post a summary">
+    Upload `test-reports/` and post `results.md` to the PR.
+    <!-- TODO(screenshot): PR comment with report snippet. -->
+  </Step>
+  <Step title="Fail on regression">
+    Exit non‑zero when any test fails or when critical assertions fail (e.g., tool sequence).
+  </Step>
+</Steps>
+
+

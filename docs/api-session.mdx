@@ -1,0 +1,58 @@
+---
+title: "API: Session"
+description: "`TestSession` and `TestAgent`: lifecycle, assertions, metrics, and results."
+sidebarTitle: "API: Session"
+icon: "cube"
+keywords: ["TestSession","TestAgent","assert_that","evaluate_now","results","metrics"]
+---
+
+```python
+from mcp_eval.session import test_session
+from mcp_eval.catalog import Expect
+
+async with test_session("fetch-basic") as agent:
+    resp = await agent.generate_str("Fetch https://example.com")
+    await agent.assert_that(Expect.content.contains("Example Domain"), response=resp)
+```
+
+## Key types
+
+- `TestSession`: orchestrates agent lifecycle, tool discovery, metrics, evaluators
+- `TestAgent`: a thin wrapper providing `generate(_str)` and `assert_that`
+
+## Assertions
+
+- Immediate: pass `response` for content/judge checks
+- Deferred: tools/performance/path evaluated at end or when `when="end"`
+
+```python
+await session.assert_that(Expect.performance.max_iterations(3))
+await session.assert_that(Expect.tools.sequence(["fetch"]))
+```
+
+## Evaluate now
+
+Use for explicit timing or when you need mid‑test results:
+
+```python
+await session.evaluate_now_async(Expect.performance.response_time_under(10_000), response=resp, name="latency")
+```
+
+## Results and metrics
+
+```python
+results = session.get_results()
+metrics = session.get_metrics()
+duration = session.get_duration_ms()
+all_passed = session.all_passed()
+```
+
+## Traces
+
+If OTEL is enabled, spans are captured and can be exported. Use `get_span_tree()` and ensure flush with `_ensure_traces_flushed()`.
+
+## Artifacts
+
+Session may persist artifacts (reports and traces) under the configured output directory; see [Reports](./reports.mdx).
+
+

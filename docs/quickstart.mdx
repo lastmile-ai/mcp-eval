@@ -8,6 +8,64 @@ keywords: ["install","init","getting started","mcp.json","dxt"]
 
 This guide gets you evaluating in minutes.
 
+## Get started in 5 steps (fetch example)
+
+<Steps>
+  <Step title="Install mcp-eval and set keys">
+    ```bash
+    pip install -e .
+    # or
+    uv pip install -e .
+    ```
+
+    Recommended judges/generation provider:
+
+    ```bash
+    export ANTHROPIC_API_KEY=...  # Claude Sonnet / Opus are ideal
+    ```
+  </Step>
+
+  <Step title="Initialize the project">
+    ```bash
+    mcp-eval init
+    ```
+
+    - Writes `mcpeval.yaml` and secrets
+    - Lets you import servers and set a default agent
+    <!-- TODO(screenshot): init prompts and resulting files. -->
+  </Step>
+
+  <Step title="Add the fetch server">
+    From `mcp.json`:
+    ```bash
+    mcp-eval add server --from-mcp-json .cursor/mcp.json
+    ```
+    Or from DXT:
+    ```bash
+    mcp-eval add server --from-dxt path/to/manifest.dxt
+    ```
+    See [Connect Servers](./connect-servers.mdx) for options.
+  </Step>
+
+  <Step title="Run the fetch tests">
+    ```bash
+    mcp-eval run examples/mcp_server_fetch/tests/test_decorator_style.py \
+      -v --markdown test-reports/results.md --html test-reports/index.html
+    ```
+    Expected: `fetch` tool is called, output contains "Example Domain", and path efficiency passes.
+    <!-- TODO(screenshot): terminal run summary and a passing HTML report section. -->
+  </Step>
+
+  <Step title="Inspect reports and iterate">
+    - Open `test-reports/index.html`
+    - Review assertion failures (e.g., output_matches), judge scores, and tool sequences
+    - Tweak assertions or prompts, rerun
+    <!-- TODO(screenshot): failed assertion detail view with diff. -->
+  </Step>
+</Steps>
+
+## Detailed setup
+
 ### 1) Install
 
 ```bash
@@ -16,7 +74,7 @@ uv pip install -e .
 pip install -e .
 ```
 
-Set provider keys:
+Set provider keys (recommended for judges/generation):
 
 ```bash
 export ANTHROPIC_API_KEY=...   # recommended for generation/judging

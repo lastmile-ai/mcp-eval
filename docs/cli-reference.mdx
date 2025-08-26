@@ -8,7 +8,7 @@ keywords: ["cli","init","generate","run","validate","doctor","issue","list","add
 
 Root CLI: [cli/__init__.py](../src/mcp_eval/cli/__init__.py)
 
-### run
+## run
 
 Run decorator tests and datasets; emit combined reports.
 
@@ -37,7 +37,7 @@ mcp-eval run dataset --file datasets/basic_fetch_dataset.yaml
 
 Source: [runner.py](../src/mcp_eval/runner.py)
 
-### list
+## list
 
 ```bash
 mcp-eval list servers [-v]
@@ -54,7 +54,7 @@ mcp-eval list agents --name default
 
 Source: [list_command.py](../src/mcp_eval/cli/list_command.py)
 
-### init
+## init
 
 Interactive setup for provider/keys, servers, and default agent.
 
@@ -66,7 +66,7 @@ Prompts for provider/API key, lets you import servers from mcp.json or DXT, and 
 
 Source: [generator.py](../src/mcp_eval/cli/generator.py)
 
-### generate
+## generate
 
 Discover tools, generate scenarios, refine assertions, emit tests/dataset.
 
@@ -86,7 +86,7 @@ mcp-eval generate --style decorators --output tests/test_fetch_generated.py
 
 Source: [generator.py](../src/mcp_eval/cli/generator.py)
 
-### update
+## update
 
 Append generated tests to an existing file.
 
@@ -98,7 +98,7 @@ Appends new generated tests to an existing file.
 
 Source: [generator.py](../src/mcp_eval/cli/generator.py)
 
-### add
+## add
 
 ```bash
 mcp-eval add server [--from-mcp-json path] [--from-dxt path]
@@ -115,7 +115,7 @@ mcp-eval add agent
 
 Source: [generator.py](../src/mcp_eval/cli/generator.py), [utils.py](../src/mcp_eval/cli/utils.py)
 
-### validate
+## validate
 
 Checks API keys, judge config, and optionally connects to servers and spins agents.
 
@@ -135,7 +135,7 @@ mcp-eval validate
 
 Source: [validate.py](../src/mcp_eval/cli/validate.py)
 
-### doctor
+## doctor
 
 System/config/env checks, test reports presence, suggested actions.
 
@@ -152,7 +152,7 @@ mcp-eval doctor --full
 
 Source: [doctor.py](../src/mcp_eval/cli/doctor.py)
 
-### issue
+## issue
 
 Prepares a GitHub issue URL prefilled with diagnostics and recent outputs.
 

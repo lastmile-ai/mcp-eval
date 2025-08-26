@@ -1,0 +1,54 @@
+---
+title: "API: Core"
+description: "Decorators and primitives: @task, @with_agent, @parametrize, setup/teardown, and TestResult."
+sidebarTitle: "API: Core"
+icon: "code"
+keywords: ["task","with_agent","parametrize","setup","teardown","TestResult"]
+---
+
+## Decorators
+
+```python
+from mcp_eval.core import task, with_agent, parametrize
+from mcp_eval.catalog import Expect
+
+@with_agent("default")
+@task("fetch-01: example.com")
+async def test_fetch(agent):
+    resp = await agent.generate_str("Fetch https://example.com")
+    await agent.assert_that(Expect.content.contains("Example Domain"), response=resp)
+```
+
+> Note: Decorator order matters. Apply `@with_agent` above `@task` to ensure the agent is available when the task runs.
+
+### `@parametrize`
+
+```python
+@with_agent("default")
+@parametrize("url", ["https://example.com", "https://example.org"]) 
+@task("fetch-multi")
+async def test_fetch_many(agent, url):
+    resp = await agent.generate_str(f"Fetch {url}")
+    await agent.assert_that(Expect.content.contains("Example"), response=resp)
+```
+
+### Setup/Teardown
+
+```python
+from mcp_eval.core import setup, teardown
+
+@setup
+def prepare():
+    # e.g., warm caches, check env
+    pass
+
+@teardown
+def cleanup():
+    pass
+```
+
+## TestResult
+
+Each executed task produces a `TestResult` with id, parameters, pass/fail, metrics, duration, and evaluation records. See [reports](./reports.mdx) for output formats.
+
+
