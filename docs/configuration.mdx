@@ -1,60 +1,891 @@
 ---
-title: "Configuration"
-description: "Files, precedence, and programmatic APIs for configuring MCP‑Eval and mcp‑agent."
+title: "Configuration Guide"
+description: "Master MCP‑Eval configuration. Learn file structures, precedence rules, environment variables, and programmatic APIs for complete control over your testing environment."
 sidebarTitle: "Configuration"
-icon: "sliders"
-keywords: ["mcpeval.yaml","secrets","mcp-agent","settings","providers"]
+icon: "gear"
+keywords: ["configuration","mcpeval.yaml","mcp-agent.config.yaml","secrets","settings","providers","environment"]
 ---
 
-### Files & precedence
+> ⚙️ **Configure with confidence!** This comprehensive guide covers every configuration option, from basic setup to advanced customization. You'll learn exactly how to tune MCP‑Eval for your specific needs.
 
-1. `mcp-agent.config.yaml` (+ `mcp-agent.secrets.yaml`) — servers, providers, subagents
-2. `mcpeval.yaml` (+ `mcpeval.secrets.yaml`) — judge, metrics, reporting, execution, default_agent; optionally override defaults
-3. Explicit path passed to loader
+## Quick configuration finder
 
-Discovery helpers: [find_eval_config](../src/mcp_eval/config.py), [find_eval_secrets](../src/mcp_eval/config.py)
+What do you need to configure?
 
-Schema: [mcpeval.config.schema.json](../schema/mcpeval.config.schema.json)
+<CardGroup cols={3}>
+  <Card title="Basic Setup" icon="play" href="#basic-configuration">
+    Essential settings to get started
+  </Card>
+  
+  <Card title="Servers" icon="server" href="#server-configuration">
+    MCP server connections
+  </Card>
+  
+  <Card title="Agents" icon="robot" href="#agent-configuration">
+    Agent behavior and models
+  </Card>
+  
+  <Card title="Providers" icon="cloud" href="#provider-configuration">
+    LLM providers and API keys
+  </Card>
+  
+  <Card title="Testing" icon="flask" href="#test-execution-configuration">
+    Test execution settings
+  </Card>
+  
+  <Card title="Reporting" icon="chart-bar" href="#reporting-configuration">
+    Output formats and locations
+  </Card>
+</CardGroup>
 
-### MCPEvalSettings
+## Configuration overview
 
-Typed settings extending mcp‑agent `Settings`:
+MCP‑Eval uses a layered configuration system that gives you flexibility and control:
 
-- judge, metrics, reporting, execution
-- default_agent (AgentSpec or name)
-- provider/model defaults
+<!-- TODO: Diagram showing configuration file hierarchy and precedence -->
 
-Source: [config.py](../src/mcp_eval/config.py)
+### File precedence (later overrides earlier)
 
-#### Example mcpeval.yaml
+1. **`mcp-agent.config.yaml`** - Base configuration for servers and providers
+2. **`mcp-agent.secrets.yaml`** - Secure API keys and credentials
+3. **`mcpeval.yaml`** - MCP‑Eval specific settings
+4. **`mcpeval.secrets.yaml`** - MCP‑Eval specific secrets
+5. **Environment variables** - Runtime overrides
+6. **Programmatic configuration** - Code-level settings
+
+### File discovery
+
+MCP‑Eval searches for configuration files in this order:
+
+```
+Current directory:
+  ├── mcpeval.yaml
+  ├── mcpeval.secrets.yaml
+  ├── mcp-agent.config.yaml
+  ├── mcp-agent.secrets.yaml
+  └── .mcp-eval/
+      ├── config.yaml
+      └── secrets.yaml
+
+Parent directories (recursive):
+  └── (same structure)
+
+Home directory:
+  └── ~/.mcp-eval/
+      ├── config.yaml
+      └── secrets.yaml
+```
+
+## Basic configuration
+
+Let's start with a complete, working configuration:
+
+### Complete mcpeval.yaml example
 
 ```yaml
+# mcpeval.yaml
 $schema: ./schema/mcpeval.config.schema.json
-provider: anthropic
-model: claude-sonnet-4-0
-default_agent: "default"
+
+# Metadata
+name: "My MCP Test Suite"
+description: "Comprehensive testing for our MCP servers"
+
+# Default LLM provider settings
+provider: "anthropic"
+model: "claude-3-5-sonnet-20241022"
+
+# Default agent for tests
+default_agent:
+  name: "test_agent"
+  instruction: "You are a helpful testing assistant. Be precise and thorough."
+  server_names: ["calculator", "weather"]
+  
+# Judge configuration
+judge:
+  provider: "anthropic"  # Can differ from main provider
+  model: "claude-3-5-sonnet-20241022"
+  min_score: 0.8
+  max_tokens: 1000
+  system_prompt: "You are an expert evaluator. Be fair but strict."
+
+# Metrics collection
+metrics:
+  collect:
+    - "response_time"
+    - "tool_coverage"
+    - "iteration_count"
+    - "token_usage"
+    - "cost_estimate"
+    - "error_rate"
+    - "path_efficiency"
+
+# Reporting configuration
+reporting:
+  formats: ["json", "markdown", "html"]
+  output_dir: "./test-reports"
+  include_traces: true
+  include_config: true
+  timestamp_format: "%Y%m%d_%H%M%S"
+
+# Test execution settings
+execution:
+  max_concurrency: 5
+  timeout_seconds: 300
+  retry_failed: true
+  retry_count: 3
+  retry_delay: 5
+  parallel: true
+  stop_on_first_failure: false
+  verbose: false
+  debug: false
+
+# Logging configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "test-reports/mcp-eval.log"
+  console: true
+  show_mcp_messages: false  # Set true for debugging
+
+# Cache configuration
+cache:
+  enabled: true
+  ttl: 3600  # 1 hour
+  directory: ".mcp-eval-cache"
+  
+# Development settings
+development:
+  mock_llm_responses: false
+  save_llm_calls: true
+  profile_performance: false
+```
+
+### Minimal configuration
+
+If you just want to get started quickly:
+
+```yaml
+# mcpeval.yaml (minimal)
+provider: "anthropic"
+model: "claude-3-haiku-20240307"
+
 mcp:
   servers:
+    my_server:
+      command: "python"
+      args: ["server.py"]
+```
+
+## Server configuration
+
+Configure your MCP servers for testing:
+
+### Basic server setup
+
+```yaml
+# In mcp-agent.config.yaml or mcpeval.yaml
+mcp:
+  servers:
+    # Simple Python server
+    calculator:
+      command: "python"
+      args: ["servers/calculator.py"]
+      env:
+        LOG_LEVEL: "DEBUG"
+    
+    # Node.js server with npm
+    weather:
+      command: "npm"
+      args: ["run", "start:weather"]
+      cwd: "./servers/weather"
+    
+    # Pre-built server from package
     fetch:
       command: "uvx"
       args: ["mcp-server-fetch"]
-reporting:
-  formats: ["json","markdown"]
-  output_dir: "./test-reports"
+      env:
+        UV_NO_PROGRESS: "1"
+    
+    # Docker container server
+    database:
+      command: "docker"
+      args: ["run", "--rm", "-i", "my-mcp-server:latest"]
+      startup_timeout: 30  # Wait for container to start
 ```
 
-<!-- TODO: Add a screenshot of `mcp-eval server list --verbose` and `mcp-eval agent list --verbose`. -->
+### Advanced server options
 
-### Programmatic APIs
+```yaml
+mcp:
+  servers:
+    advanced_server:
+      # Transport configuration
+      transport: "stdio"  # or "http" for HTTP transport
+      
+      # For HTTP transport
+      url: "http://localhost:8080"
+      headers:
+        Authorization: "Bearer ${SERVER_API_KEY}"
+      
+      # Command execution
+      command: "python"
+      args: ["server.py", "--port", "8080"]
+      cwd: "/path/to/server"
+      
+      # Environment variables
+      env:
+        DATABASE_URL: "${DATABASE_URL}"
+        API_KEY: "${API_KEY}"
+        DEBUG: "true"
+      
+      # Lifecycle management
+      startup_timeout: 10  # Seconds to wait for startup
+      shutdown_timeout: 5  # Seconds to wait for shutdown
+      restart_on_failure: true
+      max_restarts: 3
+      
+      # Health checks
+      health_check:
+        endpoint: "/health"
+        interval: 30
+        timeout: 5
+        
+      # Resource limits
+      resources:
+        max_memory: "512M"
+        max_cpu: "1.0"
+```
 
-- `use_config(settings_or_path)`
-- `set_settings(dict_or_MCPEvalSettings)`
-- `use_agent(Agent|AugmentedLLM|AgentSpec|name)`
-- `use_agent_factory(callable)`
+### Importing servers from other sources
 
-### Best practices
+```yaml
+# Import from mcp.json (Cursor/VS Code)
+mcp:
+  import:
+    - type: "mcp_json"
+      path: ".cursor/mcp.json"
+    
+    # Import from DXT manifest
+    - type: "dxt"
+      path: "~/Desktop/my-manifest.dxt"
+```
 
-- Put server definitions in mcp‑agent config
-- Use `mcpeval.yaml` for eval knobs (reports dir, judge min score, concurrency, etc.)
+## Agent configuration
 
+Define agents for different testing scenarios:
 
+### Agent specifications
+
+```yaml
+# In mcp-agent.config.yaml
+agents:
+  - name: "comprehensive_tester"
+    instruction: |
+      You are a thorough testing agent. Your job is to:
+      1. Test all available tools systematically
+      2. Verify outputs are correct
+      3. Handle errors gracefully
+      4. Report issues clearly
+    server_names: ["calculator", "weather", "database"]
+    model: "claude-3-5-sonnet-20241022"
+    temperature: 0  # Deterministic for testing
+    max_tokens: 4000
+    
+  - name: "minimal_tester"
+    instruction: "Test basic functionality quickly."
+    server_names: ["calculator"]
+    model: "claude-3-haiku-20240307"  # Cheaper for simple tests
+
+# Subagents for specific tasks
+subagents:
+  enabled: true
+  search_paths:
+    - ".claude/agents"
+    - ".mcp-agent/agents"
+  pattern: "**/*.yaml"
+  
+  inline:
+    - name: "error_specialist"
+      instruction: "Focus on finding and testing error conditions."
+      server_names: ["*"]  # Access to all servers
+      functions:
+        - name: "validate_error"
+          description: "Check if error is handled correctly"
+```
+
+### Agent selection strategies
+
+```yaml
+# Use specific agent for different test types
+test_strategies:
+  unit:
+    agent: "minimal_tester"
+    timeout: 60
+    
+  integration:
+    agent: "comprehensive_tester"
+    timeout: 300
+    
+  stress:
+    agent: "stress_tester"
+    timeout: 600
+    max_iterations: 100
+```
+
+## Provider configuration
+
+Configure LLM providers and authentication:
+
+### Anthropic configuration
+
+```yaml
+# In mcpeval.secrets.yaml (keep out of version control!)
+anthropic:
+  api_key: "sk-ant-api03-..."
+  base_url: "https://api.anthropic.com"  # Optional custom endpoint
+  default_model: "claude-3-5-sonnet-20241022"
+  
+  # Model-specific settings
+  models:
+    claude-3-5-sonnet-20241022:
+      max_tokens: 8192
+      temperature: 0.7
+      top_p: 0.95
+    
+    claude-3-haiku-20240307:
+      max_tokens: 4096
+      temperature: 0.3  # More deterministic for testing
+```
+
+### OpenAI configuration
+
+```yaml
+# In mcpeval.secrets.yaml
+openai:
+  api_key: "sk-..."
+  organization: "org-..."  # Optional
+  base_url: "https://api.openai.com/v1"
+  default_model: "gpt-4-turbo-preview"
+  
+  models:
+    gpt-4-turbo-preview:
+      max_tokens: 4096
+      temperature: 0.5
+      presence_penalty: 0.1
+      frequency_penalty: 0.1
+```
+
+### Environment variable overrides
+
+```bash
+# Override configuration via environment
+export ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."
+
+# Custom provider settings
+export MCP_EVAL_PROVIDER="anthropic"
+export MCP_EVAL_MODEL="claude-3-5-sonnet-20241022"
+export MCP_EVAL_TIMEOUT="600"
+```
+
+## Test execution configuration
+
+Fine-tune how tests are executed:
+
+### Execution strategies
+
+```yaml
+execution:
+  # Concurrency control
+  max_concurrency: 5  # Max parallel tests
+  max_workers: 10  # Max parallel tool calls
+  
+  # Timeout management
+  timeout_seconds: 300  # Global timeout
+  timeouts:
+    unit: 60
+    integration: 300
+    stress: 600
+  
+  # Retry logic
+  retry_failed: true
+  retry_count: 3
+  retry_delay: 5  # Seconds between retries
+  retry_backoff: "exponential"  # or "linear"
+  retry_on_errors:
+    - "RateLimitError"
+    - "NetworkError"
+    - "TimeoutError"
+  
+  # Execution control
+  parallel: true
+  randomize_order: false  # Run tests in random order
+  stop_on_first_failure: false
+  fail_fast_threshold: 0.5  # Stop if >50% fail
+  
+  # Resource management
+  max_memory_mb: 2048
+  kill_timeout: 10  # Force kill after this many seconds
+  
+  # Test selection
+  markers:
+    skip: ["slow", "flaky"]  # Skip these markers
+    only: []  # Only run these markers
+  
+  patterns:
+    include: ["test_*.py", "*_test.py"]
+    exclude: ["test_experimental_*.py"]
+```
+
+### Performance optimization
+
+```yaml
+performance:
+  # Caching
+  cache_llm_responses: true
+  cache_ttl: 3600
+  cache_size_mb: 100
+  
+  # Batching
+  batch_size: 10  # Process tests in batches
+  batch_timeout: 30
+  
+  # Rate limiting
+  requests_per_second: 10
+  burst_limit: 20
+  
+  # Connection pooling
+  max_connections: 20
+  connection_timeout: 10
+  
+  # Memory management
+  gc_threshold: 100  # Force garbage collection after N tests
+  clear_cache_after: 50  # Clear caches after N tests
+```
+
+## Reporting configuration
+
+Control how results are reported:
+
+### Output formats and locations
+
+```yaml
+reporting:
+  # Output formats
+  formats:
+    - "json"      # Machine-readable
+    - "markdown"  # Human-readable
+    - "html"      # Interactive
+    - "junit"     # CI integration
+    - "csv"       # Spreadsheet analysis
+  
+  # Output configuration
+  output_dir: "./test-reports"
+  create_subdirs: true  # Organize by date/time
+  
+  # Report naming
+  filename_template: "{suite}_{timestamp}_{status}"
+  timestamp_format: "%Y%m%d_%H%M%S"
+  
+  # Content options
+  include_traces: true
+  include_config: true
+  include_environment: true
+  include_git_info: true
+  include_system_info: true
+  
+  # Report detail levels
+  verbosity:
+    console: "summary"  # minimal, summary, detailed, verbose
+    file: "detailed"
+    html: "verbose"
+  
+  # Filtering
+  show_passed: true
+  show_failed: true
+  show_skipped: false
+  max_output_length: 10000  # Truncate long outputs
+  
+  # Metrics and analytics
+  calculate_statistics: true
+  generate_charts: true
+  trend_analysis: true
+  
+  # Notifications
+  notifications:
+    slack:
+      webhook_url: "${SLACK_WEBHOOK}"
+      on_failure: true
+      on_success: false
+    
+    email:
+      smtp_server: "smtp.gmail.com"
+      from: "tests@example.com"
+      to: ["team@example.com"]
+      on_failure: true
+```
+
+### Custom report templates
+
+```yaml
+reporting:
+  templates:
+    markdown: "templates/custom_report.md.jinja"
+    html: "templates/custom_report.html.jinja"
+  
+  custom_fields:
+    project_name: "My MCP Project"
+    team: "Platform Team"
+    environment: "staging"
+```
+
+## Judge configuration
+
+Configure LLM judges for quality evaluation:
+
+```yaml
+judge:
+  # Provider settings (can differ from main provider)
+  provider: "anthropic"
+  model: "claude-3-5-sonnet-20241022"
+  
+  # Scoring configuration
+  min_score: 0.8  # Global minimum score
+  score_thresholds:
+    critical: 0.95
+    high: 0.85
+    medium: 0.70
+    low: 0.50
+  
+  # Judge behavior
+  max_tokens: 2000
+  temperature: 0.3  # Lower for consistency
+  
+  # Judge prompts
+  system_prompt: |
+    You are an expert quality evaluator for AI responses.
+    Be thorough, fair, and consistent in your evaluations.
+    Provide clear reasoning for your scores.
+  
+  # Evaluation settings
+  require_reasoning: true
+  require_confidence: true
+  use_cot: true  # Chain-of-thought
+  
+  # Multi-criteria defaults
+  multi_criteria:
+    aggregate_method: "weighted"  # weighted, min, harmonic_mean
+    require_all_pass: false
+    min_criteria_score: 0.7
+  
+  # Calibration
+  calibration:
+    enabled: true
+    samples: 100
+    adjust_thresholds: true
+```
+
+## Environment-specific configuration
+
+Different settings for different environments:
+
+### Development configuration
+
+```yaml
+# mcpeval.dev.yaml
+$extends: "./mcpeval.yaml"  # Inherit base config
+
+provider: "anthropic"
+model: "claude-3-haiku-20240307"  # Cheaper for dev
+
+execution:
+  max_concurrency: 1  # Easier debugging
+  timeout_seconds: 600  # More time for debugging
+  debug: true
+
+development:
+  mock_llm_responses: true  # Use mocked responses
+  save_llm_calls: true
+  profile_performance: true
+  
+logging:
+  level: "DEBUG"
+  show_mcp_messages: true
+```
+
+### CI/CD configuration
+
+```yaml
+# mcpeval.ci.yaml
+$extends: "./mcpeval.yaml"
+
+execution:
+  max_concurrency: 10  # Maximize parallelism
+  timeout_seconds: 180  # Strict timeouts
+  retry_failed: false  # Don't hide flaky tests
+  stop_on_first_failure: true
+
+reporting:
+  formats: ["junit", "json"]  # CI-friendly formats
+  
+ci:
+  fail_on_quality_gate: true
+  min_pass_rate: 0.95
+  max_test_duration: 300
+```
+
+### Production configuration
+
+```yaml
+# mcpeval.prod.yaml
+$extends: "./mcpeval.yaml"
+
+provider: "anthropic"
+model: "claude-3-5-sonnet-20241022"  # Best model for production
+
+execution:
+  max_concurrency: 20
+  timeout_seconds: 120
+  retry_failed: true
+  retry_count: 5
+
+monitoring:
+  enabled: true
+  metrics_endpoint: "https://metrics.example.com"
+  
+alerting:
+  enabled: true
+  thresholds:
+    error_rate: 0.05
+    p95_latency: 5000
+```
+
+## Programmatic configuration
+
+Configure MCP‑Eval from code:
+
+### Basic programmatic setup
+
+```python
+from mcp_eval.config import set_settings, MCPEvalSettings, use_agent
+from mcp_agent.agents.agent import Agent
+
+# Configure via dictionary
+set_settings({
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
+    "reporting": {
+        "output_dir": "./my-reports",
+        "formats": ["html", "json"]
+    },
+    "execution": {
+        "timeout_seconds": 120,
+        "max_concurrency": 3
+    }
+})
+
+# Or use typed settings
+settings = MCPEvalSettings(
+    provider="anthropic",
+    model="claude-3-haiku-20240307",
+    judge={"min_score": 0.85},
+    reporting={"output_dir": "./test-output"}
+)
+set_settings(settings)
+
+# Configure agent
+agent = Agent(
+    name="my_test_agent",
+    instruction="Test thoroughly",
+    server_names=["my_server"]
+)
+use_agent(agent)
+```
+
+### Advanced programmatic control
+
+```python
+from mcp_eval.config import (
+    load_config,
+    get_settings,
+    use_config,
+    ProgrammaticDefaults
+)
+
+# Load specific config file
+config = load_config("configs/staging.yaml")
+use_config(config)
+
+# Modify settings at runtime
+current = get_settings()
+current.execution.timeout_seconds = 600
+current.reporting.formats.append("csv")
+
+# Set programmatic defaults
+defaults = ProgrammaticDefaults()
+defaults.set_agent_factory(lambda: create_custom_agent())
+defaults.set_default_servers(["server1", "server2"])
+
+# Context manager for temporary config
+from mcp_eval.config import config_context
+
+with config_context({"provider": "openai", "model": "gpt-4"}):
+    # Tests here use OpenAI
+    run_tests()
+# Back to original config
+```
+
+### Environment variable reference
+
+Complete list of environment variables:
+
+```bash
+# Provider settings
+ANTHROPIC_API_KEY="sk-ant-..."
+OPENAI_API_KEY="sk-..."
+MCP_EVAL_PROVIDER="anthropic"
+MCP_EVAL_MODEL="claude-3-5-sonnet-20241022"
+
+# Execution settings
+MCP_EVAL_TIMEOUT="300"
+MCP_EVAL_MAX_CONCURRENCY="5"
+MCP_EVAL_RETRY_COUNT="3"
+MCP_EVAL_DEBUG="true"
+
+# Reporting
+MCP_EVAL_OUTPUT_DIR="./reports"
+MCP_EVAL_REPORT_FORMATS="json,html,markdown"
+
+# Judge settings
+MCP_EVAL_JUDGE_MODEL="claude-3-5-sonnet-20241022"
+MCP_EVAL_JUDGE_MIN_SCORE="0.8"
+
+# Development
+MCP_EVAL_MOCK_LLM="false"
+MCP_EVAL_SAVE_TRACES="true"
+MCP_EVAL_PROFILE="false"
+
+# Logging
+MCP_EVAL_LOG_LEVEL="INFO"
+MCP_EVAL_LOG_FILE="mcp-eval.log"
+```
+
+## Configuration validation
+
+Ensure your configuration is correct:
+
+### Using the validate command
+
+```bash
+# Validate all configuration
+mcp-eval validate
+
+# Validate specific aspects
+mcp-eval validate --config
+mcp-eval validate --servers
+mcp-eval validate --agents
+mcp-eval validate --keys
+```
+
+### Programmatic validation
+
+```python
+from mcp_eval.config import validate_config
+
+# Validate configuration
+errors = validate_config("mcpeval.yaml")
+if errors:
+    print("Configuration errors:")
+    for error in errors:
+        print(f"  - {error}")
+    sys.exit(1)
+```
+
+### Schema validation
+
+```yaml
+# Add schema reference for IDE support
+$schema: "./schema/mcpeval.config.schema.json"
+
+# Your configuration here...
+```
+
+## Best practices
+
+Follow these guidelines for maintainable configuration:
+
+<CardGroup cols={2}>
+  <Card title="Keep secrets separate" icon="lock">
+    Never commit API keys. Use `.secrets.yaml` files and add to `.gitignore`
+  </Card>
+  
+  <Card title="Use environment layers" icon="layer-group">
+    Create dev, staging, and prod configs that extend a base configuration
+  </Card>
+  
+  <Card title="Document settings" icon="book">
+    Add comments explaining non-obvious configuration choices
+  </Card>
+  
+  <Card title="Validate regularly" icon="check">
+    Run `mcp-eval validate` in CI to catch configuration issues early
+  </Card>
+  
+  <Card title="Version control configs" icon="code-branch">
+    Track configuration changes except for secrets files
+  </Card>
+  
+  <Card title="Use defaults wisely" icon="sliders">
+    Set sensible defaults but allow overrides for flexibility
+  </Card>
+</CardGroup>
+
+## Troubleshooting configuration
+
+Common configuration issues and solutions:
+
+| Issue | Solution |
+|-------|----------|
+| Config not found | Check file name and location, use `--config` flag |
+| Invalid YAML | Validate syntax with `yamllint` or online validator |
+| Server won't start | Check command path, permissions, and dependencies |
+| API key errors | Verify key in secrets file or environment variable |
+| Wrong model used | Check precedence: code > env > config file |
+| Timeout too short | Increase `execution.timeout_seconds` |
+
+<!-- TODO: Screenshot of mcp-eval validate output showing successful configuration -->
+
+## Configuration examples
+
+### Minimal testing setup
+
+```yaml
+# Quick start configuration
+provider: "anthropic"
+model: "claude-3-haiku-20240307"
+mcp:
+  servers:
+    my_server:
+      command: "python"
+      args: ["server.py"]
+```
+
+### Comprehensive testing suite
+
+See the complete example at the beginning of this guide.
+
+### Multi-environment setup
+
+```bash
+# Directory structure
+configs/
+  ├── base.yaml       # Shared configuration
+  ├── dev.yaml        # Development overrides
+  ├── staging.yaml    # Staging overrides
+  ├── prod.yaml       # Production settings
+  └── secrets.yaml    # API keys (gitignored)
+```
+
+---
+
+**You're now a configuration expert!** With this knowledge, you can tune MCP‑Eval to work perfectly for your specific testing needs. Remember: start simple and add complexity as needed! 🎯

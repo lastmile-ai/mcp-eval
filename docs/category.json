@@ -2,34 +2,76 @@
   "title": "MCP‑Eval Docs",
   "icon": "book",
   "pages": [
-    { "href": "/overview", "title": "Overview", "icon": "book" },
-    { "href": "/quickstart", "title": "Quickstart", "icon": "rocket" },
-    { "href": "/common-workflows", "title": "Common workflows", "icon": "graduation-cap" },
-    { "href": "/concepts", "title": "Concepts", "icon": "diagram-project" },
-    { "href": "/detailed_guide", "title": "Detailed Guide", "icon": "book-open" },
-    { "href": "/connect-servers", "title": "Connect Servers", "icon": "plug" },
-    { "href": "/agent-evaluation", "title": "Agent Evaluation", "icon": "user-ninja" },
-    { "href": "/server-evaluation", "title": "MCP Server Evaluation", "icon": "server" },
-    { "href": "/pytest", "title": "Pytest", "icon": "flask" },
-    { "href": "/datasets", "title": "Datasets", "icon": "table" },
-    { "href": "/assertions", "title": "Assertions", "icon": "check-double" },
-    { "href": "/agents", "title": "Agents", "icon": "user-gear" },
-    { "href": "/configuration", "title": "Configuration", "icon": "sliders" },
-    { "href": "/api-session", "title": "API: Session", "icon": "cube" },
-    { "href": "/api-core", "title": "API: Core", "icon": "code" },
-    { "href": "/api-catalog", "title": "API: Catalog", "icon": "list" },
-    { "href": "/api-config", "title": "API: Config", "icon": "gears" },
-    { "href": "/cli-reference", "title": "CLI Reference", "icon": "terminal" },
-    { "href": "/reports", "title": "Reports", "icon": "file-lines" },
-    { "href": "/metrics-tracing", "title": "Metrics & Tracing", "icon": "chart-line" },
-    { "href": "/test-generation", "title": "Test Generation", "icon": "magic" },
-    { "href": "/integrations", "title": "Integrations", "icon": "diagram-project" },
-    { "href": "/examples", "title": "Examples", "icon": "image" },
-    { "href": "/examples-mcp-server-fetch", "title": "Example: mcp_server_fetch", "icon": "folder" },
+    {
+      "group": "Getting Started",
+      "pages": [
+        { "href": "/overview", "title": "Overview", "icon": "book" },
+        { "href": "/quickstart", "title": "Quickstart", "icon": "rocket" },
+        { "href": "/common-workflows", "title": "Common Workflows", "icon": "graduation-cap" },
+        { "href": "/examples", "title": "Examples", "icon": "code" }
+      ]
+    },
+    {
+      "group": "Core Concepts",
+      "pages": [
+        { "href": "/concepts", "title": "Concepts", "icon": "diagram-project" },
+        { "href": "/detailed_guide", "title": "Detailed Guide", "icon": "book-open" }
+      ]
+    },
+    {
+      "group": "Writing Tests",
+      "pages": [
+        { "href": "/assertions", "title": "Assertions", "icon": "check-double" },
+        { "href": "/datasets", "title": "Datasets", "icon": "table" },
+        { "href": "/pytest", "title": "Pytest Integration", "icon": "flask" },
+        { "href": "/test-generation", "title": "Generating Tests with LLMs", "icon": "magic" },
+        { "href": "/best-practices", "title": "Best Practices", "icon": "star" }
+      ]
+    },
+    {
+      "group": "Evaluation Guides",
+      "pages": [
+        { "href": "/server-evaluation", "title": "MCP Server Evaluation", "icon": "server" },
+        { "href": "/agent-evaluation", "title": "Agent Evaluation", "icon": "user-ninja" }
+      ]
+    },
+    {
+      "group": "Configuration",
+      "pages": [
+        { "href": "/configuration", "title": "Configuration", "icon": "sliders" },
+        { "href": "/connect-servers", "title": "Connect Servers", "icon": "plug" },
+        { "href": "/security", "title": "Security", "icon": "shield-halved" }
+      ]
+    },
     { "href": "/ci-cd", "title": "CI/CD", "icon": "truck-fast" },
-    { "href": "/troubleshooting", "title": "Troubleshooting", "icon": "wrench" },
-    { "href": "/faq", "title": "FAQ", "icon": "circle-question" },
-    { "href": "/changelog", "title": "Changelog", "icon": "clock-rotate-left" }
+    {
+      "group": "Test Reporting",
+      "pages": [
+        { "href": "/reports", "title": "Reports", "icon": "file-lines" },
+        { "href": "/metrics-tracing", "title": "Metrics & Tracing", "icon": "chart-line" },
+        { "href": "/integrations", "title": "Integrations", "icon": "puzzle-piece" }
+      ]
+    },
+    {
+      "group": "API Reference",
+      "pages": [
+        { "href": "/api-catalog", "title": "API: Catalog", "icon": "list" },
+        { "href": "/api-session", "title": "API: Session", "icon": "cube" },
+        { "href": "/api-core", "title": "API: Core", "icon": "code" },
+        { "href": "/api-config", "title": "API: Config", "icon": "gears" }
+      ]
+    },
+    { "href": "/cli-reference", "title": "CLI Reference", "icon": "terminal" },
+    {
+      "group": "Resources",
+      "pages": [
+        { "href": "/detailed_guide", "title": "Detailed Guide", "icon": "book-open" },
+        { "href": "/examples-mcp-server-fetch", "title": "Example: mcp_server_fetch", "icon": "folder" },
+        { "href": "/troubleshooting", "title": "Troubleshooting", "icon": "wrench" },
+        { "href": "/faq", "title": "FAQ", "icon": "circle-question" },
+        { "href": "/changelog", "title": "Changelog", "icon": "clock-rotate-left" }
+      ]
+    }
   ]
 }
 

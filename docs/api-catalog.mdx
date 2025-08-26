@@ -1,23 +1,380 @@
 ---
 title: "API: Catalog"
-description: "`Expect` entrypoints for content, tools, performance, judges, and path."
+description: "Master the Expect API for powerful assertions on content, tools, performance, and more."
 sidebarTitle: "API: Catalog"
 icon: "list"
-keywords: ["Expect","catalog","assertions"]
+keywords: ["Expect","catalog","assertions","evaluators","testing patterns"]
 ---
 
-The `Expect` namespace aggregates evaluator factories:
+> The `Expect` API is your Swiss Army knife for MCP testing. Use it to assert everything from simple content checks to complex path efficiency and LLM quality judgments.
+
+## Quick reference
+
+The `Expect` namespace provides intuitive access to all evaluator factories:
 
 ```python
 from mcp_eval.catalog import Expect
 
-Expect.content.contains("ok")
+# Content assertions
+Expect.content.contains("success")
+Expect.content.regex(r"\d+ results?")
+Expect.content.equals("exact match")
+
+# Tool assertions
 Expect.tools.was_called("fetch")
+Expect.tools.success_rate(min_rate=0.95)
+Expect.tools.sequence(["validate", "process", "format"])
+
+# Performance assertions
 Expect.performance.max_iterations(3)
-Expect.judge.llm("Rubric text")
-Expect.path.efficiency(expected_tool_sequence=["fetch"]) 
+Expect.performance.response_time_under(5000)
+Expect.performance.token_usage_under(10000)
+
+# LLM judge assertions
+Expect.judge.llm("Must be professional and accurate")
+Expect.judge.multi_criteria([criterion1, criterion2])
+
+# Path efficiency assertions
+Expect.path.efficiency(
+    expected_tool_sequence=["fetch", "parse"],
+    allow_extra_steps=1
+)
 ```
 
-See the complete reference in [Assertions](./assertions.mdx).
+## Content namespace
+
+Validate the actual text content returned by your agent:
+
+### Basic content checks
+
+```python
+# Check if content contains a substring
+await session.assert_that(
+    Expect.content.contains("Example Domain"),
+    response=response,
+    name="has_expected_text"
+)
+
+# Exact match
+await session.assert_that(
+    Expect.content.equals("The answer is 42"),
+    response=response
+)
+
+# Regular expression matching
+await session.assert_that(
+    Expect.content.regex(r"Temperature: \d+°[CF]"),
+    response=response,
+    name="has_temperature"
+)
+```
+
+### Advanced content patterns
+
+```python
+# Case-insensitive matching
+await session.assert_that(
+    Expect.content.contains("SUCCESS", case_sensitive=False)
+)
+
+# Multiple conditions (all must pass)
+for expected in ["result", "complete", "successful"]:
+    await session.assert_that(
+        Expect.content.contains(expected),
+        response=response
+    )
+```
+
+## Tools namespace
+
+Verify tool usage patterns and success rates:
+
+### Basic tool checks
+
+```python
+# Verify a specific tool was called
+await session.assert_that(
+    Expect.tools.was_called("calculator"),
+    name="used_calculator"
+)
+
+# Check tool wasn't called (negative assertion)
+await session.assert_that(
+    Expect.tools.was_not_called("dangerous_tool"),
+    name="safety_check"
+)
+```
+
+### Tool sequences and patterns
+
+```python
+# Verify exact sequence of tools
+await session.assert_that(
+    Expect.tools.sequence(["auth", "fetch", "parse"]),
+    name="correct_order"
+)
+
+# Check tool was called with specific arguments
+await session.assert_that(
+    Expect.tools.was_called_with(
+        tool_name="fetch",
+        expected_args={"url": "https://api.example.com"}
+    )
+)
+
+# Verify success rate across all tool calls
+await session.assert_that(
+    Expect.tools.success_rate(min_rate=0.95),
+    name="high_reliability"
+)
+```
+
+### Tool output validation
+
+```python
+# Check specific tool's output
+await session.assert_that(
+    Expect.tools.output_matches(
+        tool_name="weather_api",
+        expected_output="sunny",
+        match_type="contains"  # or "equals", "regex"
+    )
+)
+```
+
+## Performance namespace
+
+Ensure your agent meets performance requirements:
+
+### Response time and efficiency
+
+```python
+# Maximum response time in milliseconds
+await session.assert_that(
+    Expect.performance.response_time_under(5000),
+    name="fast_response"
+)
+
+# Limit conversation iterations
+await session.assert_that(
+    Expect.performance.max_iterations(3),
+    name="efficient_solution"
+)
+```
+
+### Resource usage
+
+```python
+# Token usage limits
+await session.assert_that(
+    Expect.performance.token_usage_under(10000),
+    name="token_efficiency"
+)
+
+# Combined performance criteria
+await session.assert_that(
+    Expect.performance.meets_sla(
+        max_response_time_ms=5000,
+        max_tokens=10000,
+        max_iterations=5,
+        min_success_rate=0.95
+    )
+)
+```
+
+## Judge namespace
+
+Use LLM judges for nuanced quality evaluation:
+
+### Simple rubric evaluation
+
+```python
+# Basic quality check
+await session.assert_that(
+    Expect.judge.llm(
+        rubric="""
+        The response should:
+        - Be professional and courteous
+        - Provide accurate information
+        - Be concise (under 100 words)
+        """,
+        min_score=0.8,
+        include_input=True  # Give judge full context
+    ),
+    response=response,
+    name="quality_check"
+)
+```
+
+### Multi-criteria evaluation
+
+```python
+from mcp_eval.evaluators import EvaluationCriterion
+
+# Define weighted criteria
+criteria = [
+    EvaluationCriterion(
+        name="accuracy",
+        description="All facts are correct",
+        weight=3.0,  # Most important
+        min_score=0.9
+    ),
+    EvaluationCriterion(
+        name="completeness",
+        description="Addresses all user requirements",
+        weight=2.0,
+        min_score=0.8
+    ),
+    EvaluationCriterion(
+        name="clarity",
+        description="Easy to understand",
+        weight=1.0,
+        min_score=0.7
+    )
+]
+
+# Apply multi-criteria judge
+await session.assert_that(
+    Expect.judge.multi_criteria(
+        criteria=criteria,
+        aggregate_method="weighted",  # or "min", "average"
+        require_all_pass=False,
+        use_cot=True  # Chain-of-thought reasoning
+    ),
+    response=response,
+    name="comprehensive_quality"
+)
+```
+
+### Custom judge configuration
+
+```python
+# Use specific model for judging
+judge = Expect.judge.llm(
+    rubric="Evaluate for technical accuracy",
+    min_score=0.85,
+    model="claude-3-opus-20240229",  # Use Opus for best quality
+    temperature=0.0,  # Deterministic judging
+    max_tokens=1000
+)
+
+await session.assert_that(judge, response=response)
+```
+
+## Path namespace
+
+Enforce optimal execution paths:
+
+### Golden path enforcement
+
+```python
+# Define the ideal execution path
+await session.assert_that(
+    Expect.path.efficiency(
+        expected_tool_sequence=["validate", "process", "save"],
+        tool_usage_limits={
+            "validate": 1,  # Should validate only once
+            "process": 1,   # Process only once
+            "save": 1       # Save only once
+        },
+        allow_extra_steps=0,  # No unnecessary steps
+        penalize_backtracking=True,  # Fail if agent goes backward
+        strict_order=True  # Tools must be called in exact order
+    ),
+    name="golden_path"
+)
+```
+
+### Flexible path checking
+
+```python
+# Allow some variation while ensuring key waypoints
+await session.assert_that(
+    Expect.path.includes_waypoints(
+        required_tools=["auth", "fetch", "logout"],
+        max_distance_between=3,  # Up to 3 steps between waypoints
+        allow_duplicates=False
+    )
+)
+
+# Check path doesn't include dangerous patterns
+await session.assert_that(
+    Expect.path.avoids_patterns(
+        forbidden_sequences=[
+            ["delete", "confirm"],  # Prevent accidental deletion
+            ["sudo", "*"],  # No sudo commands
+        ]
+    )
+)
+```
+
+## Combining assertions
+
+Create comprehensive test scenarios by combining multiple assertions:
+
+```python
+@task("Complete workflow test")
+async def test_full_workflow(agent, session):
+    """Test the entire user journey with multiple checkpoints."""
+    
+    response = await agent.generate_str(
+        "Fetch weather for NYC and format it nicely"
+    )
+    
+    # Content quality
+    await session.assert_that(
+        Expect.content.regex(r"\d+°[CF]"),
+        response=response,
+        name="has_temperature"
+    )
+    
+    # Tool usage
+    await session.assert_that(
+        Expect.tools.sequence(["weather_api", "format_tool"]),
+        name="correct_tools"
+    )
+    
+    # Performance
+    await session.assert_that(
+        Expect.performance.response_time_under(3000),
+        name="fast_enough"
+    )
+    
+    # Quality judgment
+    await session.assert_that(
+        Expect.judge.llm(
+            "Output should be well-formatted and user-friendly",
+            min_score=0.8
+        ),
+        response=response,
+        name="quality_output"
+    )
+```
+
+## Best practices
+
+<Tip>
+  **Start simple, then add complexity:** Begin with basic content assertions, then layer on tool checks, performance requirements, and quality judgments as needed.
+</Tip>
+
+<Warning>
+  **Avoid over-constraining:** Too many strict assertions can make tests brittle. Focus on what truly matters for your use case.
+</Warning>
+
+<Note>
+  **Use descriptive names:** Always provide a `name` parameter for your assertions. This makes debugging much easier when tests fail.
+</Note>
+
+## See also
+
+<CardGroup cols={2}>
+  <Card title="Complete Assertions Reference" href="./assertions" icon="check">
+    Every available assertion with examples
+  </Card>
+  
+  <Card title="Custom Evaluators" href="./custom-evaluators" icon="code">
+    Build your own domain-specific evaluators
+  </Card>
+</CardGroup>
 
 

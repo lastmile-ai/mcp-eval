@@ -1,0 +1,810 @@
+---
+title: "Best Practices"
+description: "Learn proven patterns and anti-patterns for testing MCP servers and agents. Write maintainable, reliable, and efficient tests that scale with your project."
+sidebarTitle: "Best Practices"
+icon: "star"
+keywords: ["best practices","testing patterns","maintainability","reliability","performance","anti-patterns"]
+---
+
+> 🌟 **Test like a pro!** These best practices come from real-world experience testing MCP servers and agents at scale. Follow these guidelines to build a robust, maintainable test suite.
+
+## Quick best practice finder
+
+Jump to what you need:
+
+<CardGroup cols={3}>
+  <Card title="Test Design" icon="pencil-ruler" href="#test-design-principles">
+    Writing effective tests
+  </Card>
+  
+  <Card title="Organization" icon="folder-tree" href="#test-organization">
+    Structuring test suites
+  </Card>
+  
+  <Card title="Assertions" icon="check-double" href="#assertion-strategies">
+    Choosing the right checks
+  </Card>
+  
+  <Card title="Performance" icon="gauge-high" href="#performance-optimization">
+    Fast and efficient testing
+  </Card>
+  
+  <Card title="Reliability" icon="shield-check" href="#reliability-patterns">
+    Reducing flakiness
+  </Card>
+  
+  <Card title="Maintenance" icon="wrench" href="#maintainability">
+    Keeping tests healthy
+  </Card>
+</CardGroup>
+
+## Test design principles
+
+### 1. Test one thing at a time
+
+**✅ Do:** Focus each test on a single behavior or feature
+
+```python
+@task("Test calculator addition")
+async def test_addition(agent, session):
+    """Test ONLY addition functionality."""
+    response = await agent.generate_str("Calculate 5 + 3")
+    
+    await session.assert_that(
+        Expect.tools.was_called("calculator"),
+        Expect.content.contains("8"),
+        response=response
+    )
+
+@task("Test calculator error handling")
+async def test_division_by_zero(agent, session):
+    """Test ONLY error handling."""
+    response = await agent.generate_str("Calculate 10 / 0")
+    
+    await session.assert_that(
+        Expect.judge.llm("Handles division by zero appropriately"),
+        response=response
+    )
+```
+
+**❌ Don't:** Mix multiple concerns in one test
+
+```python
+# BAD: Testing too many things at once
+@task("Test everything")
+async def test_calculator_everything(agent, session):
+    response = await agent.generate_str(
+        "Calculate 5+3, then 10/0, then fetch weather, "
+        "then validate JSON, then check performance"
+    )
+    # This test is hard to debug when it fails!
+```
+
+### 2. Use descriptive names
+
+**✅ Do:** Name tests to describe what they verify
+
+```python
+@task("Should return error message when dividing by zero")
+async def test_division_by_zero_returns_error(agent, session):
+    # Clear what this test checks
+    pass
+
+@task("Should complete simple calculation in under 2 seconds")
+async def test_simple_calculation_performance(agent, session):
+    # Performance expectation is clear
+    pass
+```
+
+**❌ Don't:** Use vague or generic names
+
+```python
+# BAD: What does this test?
+@task("Test 1")
+async def test_1(agent, session):
+    pass
+
+# BAD: Too generic
+@task("Calculator test")
+async def test_calc(agent, session):
+    pass
+```
+
+### 3. Make tests independent
+
+**✅ Do:** Each test should run in isolation
+
+```python
+@task("Test user creation")
+async def test_create_user(agent, session):
+    """Creates its own test data."""
+    user_id = f"test_user_{uuid.uuid4()}"
+    
+    response = await agent.generate_str(
+        f"Create user with ID {user_id}"
+    )
+    
+    # Clean up after ourselves
+    await agent.generate_str(f"Delete user {user_id}")
+```
+
+**❌ Don't:** Depend on other tests or shared state
+
+```python
+# BAD: Depends on previous test
+@task("Test user update")
+async def test_update_user(agent, session):
+    # Assumes user was created by another test!
+    response = await agent.generate_str(
+        "Update user test_user_123"  # Will fail if run alone
+    )
+```
+
+### 4. Use explicit assertions
+
+**✅ Do:** Be specific about expectations
+
+```python
+@task("Test JSON response format")
+async def test_json_format(agent, session):
+    response = await agent.generate_str("Get user data as JSON")
+    
+    # Explicit, specific assertions
+    await session.assert_that(
+        Expect.content.regex(r'\{"id":\s*\d+'),  # Has ID field
+        Expect.content.regex(r'"name":\s*"[^"]+"'),  # Has name
+        Expect.content.regex(r'"created":\s*"\d{4}-\d{2}-\d{2}"'),  # Has date
+        response=response
+    )
+```
+
+**❌ Don't:** Use vague or implicit checks
+
+```python
+# BAD: Too vague
+await session.assert_that(
+    Expect.content.contains("data"),  # What data?
+    response=response
+)
+```
+
+## Test organization
+
+### Directory structure
+
+Organize tests by functionality and type:
+
+```
+tests/
+├── unit/                 # Fast, isolated tests
+│   ├── test_calculator.py
+│   ├── test_validator.py
+│   └── test_parser.py
+├── integration/          # Multi-component tests
+│   ├── test_data_pipeline.py
+│   ├── test_api_workflow.py
+│   └── test_database_sync.py
+├── e2e/                  # End-to-end scenarios
+│   ├── test_user_journey.py
+│   └── test_complete_workflow.py
+├── performance/          # Performance tests
+│   ├── test_response_time.py
+│   └── test_throughput.py
+├── fixtures/             # Shared test data
+│   ├── sample_data.json
+│   └── test_configs.yaml
+└── conftest.py          # Shared fixtures and setup
+```
+
+### Test file naming
+
+Follow consistent naming patterns:
+
+```python
+# Good naming patterns
+test_<feature>_<aspect>.py
+
+# Examples:
+test_calculator_basic_operations.py
+test_calculator_error_handling.py
+test_calculator_performance.py
+test_api_authentication.py
+test_api_rate_limiting.py
+```
+
+### Grouping related tests
+
+Use classes or modules to group related tests:
+
+```python
+# tests/test_calculator_operations.py
+
+class TestBasicOperations:
+    """All basic math operations."""
+    
+    @task("Addition")
+    async def test_addition(self, agent, session):
+        pass
+    
+    @task("Subtraction")
+    async def test_subtraction(self, agent, session):
+        pass
+
+class TestAdvancedOperations:
+    """Scientific calculator features."""
+    
+    @task("Square root")
+    async def test_sqrt(self, agent, session):
+        pass
+    
+    @task("Logarithm")
+    async def test_log(self, agent, session):
+        pass
+```
+
+## Assertion strategies
+
+### Layered assertions
+
+Build assertions from deterministic to probabilistic:
+
+```python
+@task("Test comprehensive response quality")
+async def test_response_quality(agent, session):
+    response = await agent.generate_str(
+        "Explain how to reset a password"
+    )
+    
+    # Layer 1: Structural (deterministic)
+    await session.assert_that(
+        Expect.content.contains("password"),
+        Expect.content.contains("reset"),
+        response=response
+    )
+    
+    # Layer 2: Tool usage (deterministic)
+    await session.assert_that(
+        Expect.tools.was_called("help_system"),
+        Expect.tools.success_rate(min_rate=1.0)
+    )
+    
+    # Layer 3: Performance (measurable)
+    await session.assert_that(
+        Expect.performance.response_time_under(3000),
+        Expect.performance.max_iterations(2)
+    )
+    
+    # Layer 4: Quality (probabilistic)
+    await session.assert_that(
+        Expect.judge.llm(
+            "Provides clear, step-by-step instructions",
+            min_score=0.8
+        ),
+        response=response
+    )
+```
+
+### Assertion selection guide
+
+Choose assertions based on what you're testing:
+
+| Testing | Use These Assertions | Avoid |
+|---------|---------------------|--------|
+| **Correctness** | `contains`, `regex`, `equals` | LLM judges for exact values |
+| **Tool Usage** | `was_called`, `called_with`, `sequence` | Content checks for tool behavior |
+| **Performance** | `response_time_under`, `max_iterations` | Exact timing matches |
+| **Quality** | `judge.llm`, `multi_criteria` | Brittle string matching |
+| **Error Handling** | `judge.llm` with error rubric | Expecting exact error text |
+
+### Custom assertion patterns
+
+Create reusable assertion combinations:
+
+```python
+# assertions/common.py
+async def assert_successful_api_call(session, response, endpoint):
+    """Reusable assertion for API calls."""
+    await session.assert_that(
+        Expect.tools.was_called("http_client"),
+        Expect.tools.success_rate(min_rate=1.0),
+        Expect.content.regex(r'"status":\s*20\d'),  # 2xx status
+        Expect.content.contains(endpoint),
+        response=response
+    )
+
+# Use in tests
+@task("Test user API")
+async def test_user_api(agent, session):
+    response = await agent.generate_str("Get user data from /api/users")
+    await assert_successful_api_call(session, response, "/api/users")
+```
+
+## Performance optimization
+
+### Minimize LLM calls
+
+**✅ Do:** Batch operations when possible
+
+```python
+@task("Test multiple calculations efficiently")
+async def test_batch_calculations(agent, session):
+    # One LLM call for multiple operations
+    response = await agent.generate_str("""
+        Calculate the following:
+        1. 15 + 27
+        2. 98 - 43
+        3. 12 * 8
+    """)
+    
+    # Verify all results
+    for expected in ["42", "55", "96"]:
+        await session.assert_that(
+            Expect.content.contains(expected),
+            response=response
+        )
+```
+
+**❌ Don't:** Make unnecessary separate calls
+
+```python
+# BAD: Three separate LLM calls
+response1 = await agent.generate_str("Calculate 15 + 27")
+response2 = await agent.generate_str("Calculate 98 - 43")
+response3 = await agent.generate_str("Calculate 12 * 8")
+```
+
+### Use appropriate models
+
+Match model to test complexity:
+
+```python
+# conftest.py or setup
+def get_model_for_test_type(test_type):
+    """Select appropriate model for test type."""
+    models = {
+        "simple": "claude-3-haiku-20240307",  # Fast, cheap
+        "complex": "claude-3-5-sonnet-20241022",  # Capable
+        "judge": "claude-3-5-sonnet-20241022",  # Accurate judging
+    }
+    return models.get(test_type, "claude-3-haiku-20240307")
+```
+
+### Parallel execution
+
+Run independent tests concurrently:
+
+```yaml
+# mcpeval.yaml
+execution:
+  max_concurrency: 10  # Run up to 10 tests in parallel
+  parallel: true
+```
+
+```python
+# Mark tests that can run in parallel
+@pytest.mark.parallel
+@task("Independent test 1")
+async def test_independent_1(agent, session):
+    pass
+
+@pytest.mark.parallel
+@task("Independent test 2")
+async def test_independent_2(agent, session):
+    pass
+```
+
+### Cache when appropriate
+
+```yaml
+# mcpeval.yaml
+cache:
+  enabled: true
+  ttl: 3600  # Cache for 1 hour during development
+  
+development:
+  cache_responses: true  # Cache LLM responses
+```
+
+## Reliability patterns
+
+### Handle non-determinism
+
+LLMs are probabilistic, so account for variation:
+
+```python
+@task("Test with retry logic")
+@retry(max_attempts=3)
+async def test_with_variation(agent, session):
+    """Retry on transient failures."""
+    response = await agent.generate_str(
+        "Generate a creative story about testing"
+    )
+    
+    # Use flexible assertions
+    await session.assert_that(
+        Expect.judge.llm(
+            "Story is about testing and is creative",
+            min_score=0.7  # Allow some variation
+        ),
+        response=response
+    )
+```
+
+### Reduce flakiness
+
+Common causes and solutions:
+
+| Flakiness Source | Solution |
+|-----------------|----------|
+| Network issues | Add retries, increase timeouts |
+| Race conditions | Use explicit waits, not sleep |
+| Random data | Use fixed seeds or deterministic data |
+| External services | Mock or use test instances |
+| LLM variation | Lower temperature, use flexible assertions |
+
+```python
+# Reduce LLM variation
+response = await agent.generate_str(
+    prompt,
+    temperature=0,  # Deterministic
+    seed=42  # Fixed seed if supported
+)
+```
+
+### Test isolation
+
+Ensure tests don't affect each other:
+
+```python
+@setup
+def reset_test_environment():
+    """Clean state before each test."""
+    # Clear any caches
+    cache.clear()
+    
+    # Reset any global state
+    global_state.reset()
+    
+    # Ensure clean database
+    db.rollback()
+
+@teardown
+def cleanup_test_artifacts():
+    """Clean up after each test."""
+    # Delete test files
+    for file in Path("test_outputs").glob("test_*"):
+        file.unlink()
+    
+    # Close connections
+    await close_all_connections()
+```
+
+## Maintainability
+
+### Documentation in tests
+
+Document complex test logic:
+
+```python
+@task("Test complex data transformation workflow")
+async def test_data_transformation(agent, session):
+    """
+    Test the complete data transformation pipeline.
+    
+    Flow:
+    1. Load raw CSV data
+    2. Validate format and content
+    3. Transform to normalized JSON
+    4. Store in database
+    5. Generate summary report
+    
+    Expected behavior:
+    - All steps complete successfully
+    - Data integrity is maintained
+    - Report contains key metrics
+    """
+    
+    # Step 1: Load data
+    # Important: Using test fixture with known values
+    response = await agent.generate_str(
+        "Process data from test_fixtures/sample.csv"
+    )
+    
+    # Verify each step completed
+    await session.assert_that(
+        Expect.tools.sequence([
+            "file_reader",
+            "validator", 
+            "transformer",
+            "database",
+            "report_generator"
+        ]),
+        name="correct_pipeline_sequence"
+    )
+```
+
+### Parameterized test patterns
+
+Make tests reusable with parameters:
+
+```python
+class TestServerResponses:
+    """Test various server response scenarios."""
+    
+    @parametrize("status_code,expected_behavior", [
+        (200, "processes normally"),
+        (404, "reports not found"),
+        (500, "handles server error"),
+        (429, "respects rate limit"),
+    ])
+    @task("Test HTTP status {status_code} handling")
+    async def test_status_handling(
+        self, agent, session, status_code, expected_behavior
+    ):
+        response = await agent.generate_str(
+            f"Handle HTTP {status_code} response"
+        )
+        
+        await session.assert_that(
+            Expect.judge.llm(f"Agent {expected_behavior}"),
+            response=response
+        )
+```
+
+### Test data management
+
+Centralize test data:
+
+```python
+# test_data/datasets.py
+class TestDatasets:
+    """Centralized test data management."""
+    
+    @staticmethod
+    def get_user_data(variant="default"):
+        """Get test user data."""
+        datasets = {
+            "default": {"id": 1, "name": "Test User"},
+            "invalid": {"id": "not_a_number"},
+            "large": {"id": 999999, "name": "x" * 1000},
+        }
+        return datasets.get(variant, datasets["default"])
+    
+    @staticmethod
+    def get_calculation_cases():
+        """Get calculation test cases."""
+        return [
+            ("5 + 3", "8"),
+            ("10 - 4", "6"),
+            ("3 * 7", "21"),
+            ("20 / 4", "5"),
+        ]
+```
+
+### Version your tests
+
+Track test evolution with your code:
+
+```python
+@task("Test API v2 compatibility")
+@since_version("2.0.0")
+async def test_api_v2(agent, session):
+    """Test new v2 API features."""
+    pass
+
+@task("Test legacy API support")
+@deprecated("3.0.0", "Use test_api_v2 instead")
+async def test_api_v1(agent, session):
+    """Test old API for backwards compatibility."""
+    pass
+```
+
+## Anti-patterns to avoid
+
+### 1. Testing implementation details
+
+**❌ Don't:** Test internal implementation
+
+```python
+# BAD: Testing internal state
+response = await agent.generate_str("Calculate something")
+# Don't check internal variables or private methods
+assert agent._internal_state == "some_value"  # Bad!
+```
+
+**✅ Do:** Test behavior and outputs
+
+```python
+# GOOD: Test observable behavior
+response = await agent.generate_str("Calculate 5 + 3")
+await session.assert_that(
+    Expect.content.contains("8"),
+    response=response
+)
+```
+
+### 2. Overusing LLM judges
+
+**❌ Don't:** Use judges for deterministic checks
+
+```python
+# BAD: Using judge for exact value
+await session.assert_that(
+    Expect.judge.llm("Response contains exactly '42'"),
+    response=response
+)
+```
+
+**✅ Do:** Use appropriate assertion types
+
+```python
+# GOOD: Direct assertion for exact values
+await session.assert_that(
+    Expect.content.contains("42"),
+    response=response
+)
+```
+
+### 3. Ignoring test failures
+
+**❌ Don't:** Skip or ignore failing tests
+
+```python
+# BAD: Ignoring failures
+@pytest.mark.skip("Fails sometimes")  # Don't ignore!
+async def test_important_feature(agent, session):
+    pass
+```
+
+**✅ Do:** Fix or properly mark flaky tests
+
+```python
+# GOOD: Fix the root cause or mark appropriately
+@pytest.mark.flaky(reruns=3, reruns_delay=2)
+async def test_with_external_dependency(agent, session):
+    """Test that depends on external service."""
+    pass
+```
+
+### 4. Magic numbers and strings
+
+**❌ Don't:** Use unexplained values
+
+```python
+# BAD: What do these numbers mean?
+await session.assert_that(
+    Expect.performance.response_time_under(5000),  # Why 5000?
+    Expect.judge.llm("Good", min_score=0.73)  # Why 0.73?
+)
+```
+
+**✅ Do:** Use named constants with explanations
+
+```python
+# GOOD: Clear, documented values
+MAX_ACCEPTABLE_RESPONSE_TIME_MS = 5000  # SLA requirement
+QUALITY_THRESHOLD = 0.75  # Based on user study baseline
+
+await session.assert_that(
+    Expect.performance.response_time_under(MAX_ACCEPTABLE_RESPONSE_TIME_MS),
+    Expect.judge.llm("Meets quality standards", min_score=QUALITY_THRESHOLD)
+)
+```
+
+## Testing checklist
+
+Use this checklist for every test you write:
+
+- [ ] **Single purpose** - Tests one specific behavior
+- [ ] **Descriptive name** - Clearly indicates what's being tested
+- [ ] **Independent** - Doesn't depend on other tests
+- [ ] **Deterministic** - Produces consistent results
+- [ ] **Fast** - Runs quickly (< 5 seconds for unit tests)
+- [ ] **Documented** - Has docstring explaining purpose
+- [ ] **Maintainable** - Easy to understand and modify
+- [ ] **Appropriate assertions** - Uses right assertion types
+- [ ] **Error handling** - Handles expected failures gracefully
+- [ ] **Cleanup** - Cleans up any created resources
+
+## Advanced patterns
+
+### Property-based testing
+
+Test properties rather than specific examples:
+
+```python
+from hypothesis import given, strategies as st
+
+@given(
+    a=st.integers(min_value=-1000, max_value=1000),
+    b=st.integers(min_value=-1000, max_value=1000)
+)
+@task("Test addition properties")
+async def test_addition_properties(agent, session, a, b):
+    """Test mathematical properties of addition."""
+    
+    response = await agent.generate_str(f"Calculate {a} + {b}")
+    
+    # Verify commutative property
+    response2 = await agent.generate_str(f"Calculate {b} + {a}")
+    
+    # Both should have the same result
+    result1 = extract_number(response)
+    result2 = extract_number(response2)
+    assert result1 == result2, "Addition should be commutative"
+```
+
+### Contract testing
+
+Define contracts between components:
+
+```python
+@task("Test API contract")
+async def test_api_contract(agent, session):
+    """Verify API adheres to contract."""
+    
+    response = await agent.generate_str("Get user from API")
+    
+    # Verify response structure matches contract
+    contract = {
+        "id": int,
+        "name": str,
+        "email": str,
+        "created_at": str,
+    }
+    
+    for field, expected_type in contract.items():
+        await session.assert_that(
+            Expect.content.contains(f'"{field}"'),
+            name=f"has_{field}_field",
+            response=response
+        )
+```
+
+### Mutation testing
+
+Verify your tests catch bugs:
+
+```python
+@task("Test catches calculation errors")
+async def test_mutation_detection(agent, session):
+    """Verify test suite detects bugs."""
+    
+    # Introduce intentional bug
+    with mock.patch("calculator.add", return_value=99):
+        response = await agent.generate_str("Calculate 5 + 3")
+        
+        # This should fail, proving our test catches bugs
+        with pytest.raises(AssertionError):
+            await session.assert_that(
+                Expect.content.contains("8"),
+                response=response
+            )
+```
+
+## Continuous improvement
+
+### Metrics to track
+
+Monitor your test suite health:
+
+- **Pass rate** - Should be > 95% for stable tests
+- **Execution time** - Track trends, investigate increases
+- **Flakiness** - Identify and fix flaky tests
+- **Coverage** - Ensure critical paths are tested
+- **Maintenance cost** - Time spent fixing tests
+
+### Regular reviews
+
+Schedule periodic test suite reviews:
+
+1. **Weekly:** Review failed tests, fix or mark as flaky
+2. **Monthly:** Remove obsolete tests, update assertions
+3. **Quarterly:** Refactor test organization, update patterns
+4. **Yearly:** Major test suite health assessment
+
+<!-- TODO: Add dashboard screenshot showing test suite health metrics -->
+
+---
+
+**You're now equipped** with best practices that will make your MCP‑Eval tests reliable, maintainable, and valuable! Remember: good tests are an investment in your project's future. 🌟
