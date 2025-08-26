@@ -6,198 +6,435 @@ icon: "rocket"
 keywords: ["quickstart","installation","getting started","first test","mcp.json","setup"]
 ---
 
-> Welcome to MCP‑Eval! This guide will have you testing MCP servers and agents in just 5 minutes.
+> 🚀 **Welcome to MCP‑Eval!** You're about to supercharge your MCP development with powerful testing capabilities. This guide will have you testing MCP servers and agents in just 5 minutes!
+
+## What you'll learn
+
+By the end of this quickstart, you'll be able to:
+- ✅ Install and configure MCP‑Eval for your project
+- ✅ Connect your MCP servers for testing
+- ✅ Write and run your first test
+- ✅ Understand test reports and iterate on failures
+- ✅ Choose the right testing style for your needs
+
+**Time to complete:** ~5 minutes
 
 ## Before you begin
 
-Make sure you have:
+Let's make sure you have everything ready:
 
-* **Python 3.10+** installed ([Download Python](https://www.python.org/downloads/))
-* **An MCP server** to test (we'll use the fetch example)
-* **An API key** for Claude or OpenAI (for LLM judge features)
+### System requirements
+
+<CardGroup cols={3}>
+  <Card title="Python 3.10+" icon="python">
+    Required for running MCP‑Eval
+    
+    [Download Python →](https://www.python.org/downloads/)
+  </Card>
+  
+  <Card title="MCP Server" icon="server">
+    Any MCP-compatible server to test
+    
+    [Browse MCP servers →](https://github.com/modelcontextprotocol/servers)
+  </Card>
+  
+  <Card title="API Key" icon="key">
+    Claude or OpenAI key for LLM features
+    
+    [Get Claude API →](https://console.anthropic.com/)
+  </Card>
+</CardGroup>
 
 <Tip>
-  **New to MCP?** Start with the [MCP documentation](https://modelcontextprotocol.io) to understand the basics of Model Context Protocol servers.
+  **New to MCP?** No worries! Check out the [MCP documentation](https://modelcontextprotocol.io) to understand the basics of Model Context Protocol servers. You'll be testing them like a pro in no time!
 </Tip>
 
-## Get started in 5 steps (fetch example)
+## Your 5-minute journey to testing mastery
+
+<!-- TODO: Add animated GIF showing the entire quickstart flow from install to first passing test -->
 
 <Steps>
-  <Step title="Install mcp-eval and set keys">
+  <Step title="Install MCP‑Eval and configure API keys">
+    First, let's get MCP‑Eval installed in your project:
+    
     ```bash
+    # Using pip
+    pip install mcp-eval
+    
+    # Or using uv (faster!)
+    uv pip install mcp-eval
+    
+    # For development (recommended for now)
     pip install -e .
-    # or
-    uv pip install -e .
     ```
-
-    Recommended judges/generation provider:
-
+    
+    Now set up your API key for the best experience:
+    
     ```bash
-    export ANTHROPIC_API_KEY=...  # Claude Sonnet / Opus are ideal
+    # We recommend Claude for superior test generation and judging
+    export ANTHROPIC_API_KEY="sk-ant-..."
+    
+    # Alternative: OpenAI
+    export OPENAI_API_KEY="sk-..."
     ```
+    
+    <Note>
+      **Pro tip:** Claude Sonnet or Opus models provide the best results for test generation and LLM judge evaluations!
+    </Note>
+    
+    <!-- TODO: Screenshot showing successful installation output -->
   </Step>
 
-  <Step title="Initialize the project">
+  <Step title="Initialize your test project">
+    Let's set up your testing environment with our interactive wizard:
+    
     ```bash
     mcp-eval init
     ```
-
-    - Writes `mcpeval.yaml` and secrets
-    - Lets you import servers and set a default agent
-    <!-- TODO(screenshot): init prompts and resulting files. -->
+    
+    This friendly wizard will:
+    - 🎯 Ask for your preferred LLM provider and model
+    - 📝 Create `mcpeval.yaml` with your configuration
+    - 🔐 Set up `mcpeval.secrets.yaml` for secure API key storage
+    - 🤖 Help you define your first test agent
+    - 🔧 Import any existing MCP servers
+    
+    **What happens during init:**
+    
+    ```
+    ? Select your LLM provider: Anthropic
+    ? Select model: claude-3-5-sonnet-20241022
+    ? Import servers from mcp.json? Yes
+    ? Path to mcp.json: .cursor/mcp.json
+    ✓ Found 2 servers: fetch, filesystem
+    ? Create a default agent? Yes
+    ? Agent name: TestBot
+    ? Agent instruction: You test MCP servers thoroughly
+    ✓ Configuration saved to mcpeval.yaml
+    ✓ Secrets saved to mcpeval.secrets.yaml
+    ```
+    
+    <!-- TODO: Screenshot of the interactive init prompts and successful completion -->
+    <!-- TODO: Screenshot showing the created files in the project directory -->
   </Step>
 
-  <Step title="Add the fetch server">
-    From `mcp.json`:
-    ```bash
-    mcp-eval add server --from-mcp-json .cursor/mcp.json
-    ```
-    Or from DXT:
-    ```bash
-    mcp-eval add server --from-dxt path/to/manifest.dxt
-    ```
-    See [Connect Servers](./connect-servers.mdx) for options.
+  <Step title="Add your MCP server">
+    Now let's connect the server you want to test. You have several options:
+    
+    <Tabs>
+      <Tab title="From mcp.json">
+        If you're using Cursor or VS Code with MCP:
+        
+        ```bash
+        mcp-eval add server --from-mcp-json .cursor/mcp.json
+        ```
+        
+        This imports all servers from your IDE's MCP configuration.
+      </Tab>
+      
+      <Tab title="From DXT">
+        For Anthropic Desktop users:
+        
+        ```bash
+        mcp-eval add server --from-dxt ~/Desktop/my-server.dxt
+        ```
+        
+        This imports servers from DXT manifest files.
+      </Tab>
+      
+      <Tab title="Interactive">
+        Add a server step-by-step:
+        
+        ```bash
+        mcp-eval add server
+        ```
+        
+        The wizard will guide you through:
+        - Server name
+        - Command to run
+        - Arguments
+        - Environment variables
+      </Tab>
+      
+      <Tab title="Manual">
+        Edit `mcpeval.yaml` directly:
+        
+        ```yaml
+        mcp:
+          servers:
+            fetch:
+              command: "uvx"
+              args: ["mcp-server-fetch"]
+              env: 
+                UV_NO_PROGRESS: "1"
+        ```
+      </Tab>
+    </Tabs>
+    
+    <Info>
+      **About server connections:** MCP‑Eval can test any MCP server regardless of implementation language. As long as it speaks the MCP protocol, we can test it!
+    </Info>
+    
+    <!-- TODO: Screenshot showing successful server import with list of discovered tools -->
   </Step>
 
-  <Step title="Run the fetch tests">
+  <Step title="Run your first test">
+    Time for the exciting part - running your first test! Let's use the included fetch example:
+    
     ```bash
     mcp-eval run examples/mcp_server_fetch/tests/test_decorator_style.py \
-      -v --markdown test-reports/results.md --html test-reports/index.html
+      -v \
+      --markdown test-reports/results.md \
+      --html test-reports/index.html
     ```
-    Expected: `fetch` tool is called, output contains "Example Domain", and path efficiency passes.
-    <!-- TODO(screenshot): terminal run summary and a passing HTML report section. -->
+    
+    **What's happening:**
+    - 🏃 Running decorator-style tests from the example file
+    - 📊 Verbose output (`-v`) shows test progress
+    - 📝 Markdown report for documentation
+    - 🌐 HTML report for interactive exploration
+    
+    **Expected output:**
+    
+    ```
+    Running tests...
+    ✓ test_basic_fetch_decorator - Test basic URL fetching [2.3s]
+      ✓ fetch_tool_called: Tool 'fetch' was called
+      ✓ contains_domain_text: Content contains "Example Domain"
+      ✓ fetch_success_rate: Tool success rate 100%
+    
+    ✓ test_content_extraction_decorator - Test extraction quality [3.1s]
+      ✓ fetch_called_for_extraction: Tool 'fetch' was called
+      ✓ extraction_quality_assessment: LLM judge score 0.92
+    
+    Results: 2 passed, 0 failed
+    Reports saved to test-reports/
+    ```
+    
+    <!-- TODO: Screenshot of terminal showing colorized test run output with progress -->
+    <!-- TODO: Screenshot of the test summary showing passed/failed counts -->
   </Step>
 
-  <Step title="Inspect reports and iterate">
-    - Open `test-reports/index.html`
-    - Review assertion failures (e.g., output_matches), judge scores, and tool sequences
-    - Tweak assertions or prompts, rerun
-    <!-- TODO(screenshot): failed assertion detail view with diff. -->
+  <Step title="Explore your test results">
+    Open your shiny new test report to see the details:
+    
+    ```bash
+    # Open the HTML report in your browser
+    open test-reports/index.html
+    
+    # Or view the markdown report
+    cat test-reports/results.md
+    ```
+    
+    **Understanding the HTML report:**
+    
+    The interactive report shows:
+    - 📊 **Overview dashboard** - Pass/fail rates, performance metrics
+    - 🔍 **Test details** - Each test with all assertions
+    - 🛠️ **Tool usage** - What tools were called and when
+    - 💭 **LLM reasoning** - The agent's thought process
+    - ⚡ **Performance** - Response times and efficiency metrics
+    - 🎯 **Failed assertions** - Detailed diffs and explanations
+    
+    **Common things to check:**
+    - Did the right tools get called?
+    - Was the output accurate?
+    - How efficient was the agent's approach?
+    - What was the LLM judge's assessment?
+    
+    <!-- TODO: Screenshot of HTML report overview page showing test results summary -->
+    <!-- TODO: Screenshot of a failed assertion with detailed diff view -->
+    <!-- TODO: Screenshot of tool usage timeline visualization -->
+    
+    <Warning>
+      **Test failed?** Don't worry! Check the assertion details to understand why. Common issues:
+      - Tool not found (check server configuration)
+      - Content mismatch (adjust your assertions)
+      - Timeout (increase timeout in config)
+    </Warning>
   </Step>
 </Steps>
 
-## Detailed setup
+## What's next? Write your own test!
 
-### 1) Install
+Now that you've run the example, let's write your very first custom test:
 
-```bash
-uv pip install -e .
-# or
-pip install -e .
-```
+### Choose your testing style
 
-Set provider keys (recommended for judges/generation):
+<CardGroup cols={2}>
+  <Card title="Decorator Style" icon="at">
+    **Best for:** Quick, readable tests
+    
+    ```python
+    from mcp_eval import task, Expect
+    
+    @task("My first test")
+    async def test_my_server(agent, session):
+        response = await agent.generate_str(
+            "Use my tool to do something"
+        )
+        
+        await session.assert_that(
+            Expect.tools.was_called("my_tool"),
+            response=response
+        )
+    ```
+  </Card>
+  
+  <Card title="Pytest Style" icon="flask">
+    **Best for:** Integration with existing pytest suites
+    
+    ```python
+    import pytest
+    from mcp_eval import Expect
+    
+    @pytest.mark.asyncio
+    async def test_my_server(mcp_agent):
+        response = await mcp_agent.generate_str(
+            "Use my tool to do something"
+        )
+        
+        await mcp_agent.session.assert_that(
+            Expect.tools.was_called("my_tool"),
+            response=response
+        )
+    ```
+  </Card>
+</CardGroup>
 
-```bash
-export ANTHROPIC_API_KEY=...   # recommended for generation/judging
-export OPENAI_API_KEY=...
-```
+### Your test file structure
 
-### 2) Initialize a project
-
-```bash
-mcp-eval init
-```
-
-- Captures provider/model (uses ModelSelector if not given)
-- Writes `mcpeval.yaml` and `mcpeval.secrets.yaml`
-- Lets you add/import a server and define a default agent
-
-Source: [Generator CLI](../src/mcp_eval/cli/generator.py)
-
-### 3) Add a server
-
-Interactive:
-
-```bash
-mcp-eval add server
-```
-
-From `mcp.json` (Cursor/VS Code integrations):
-
-```bash
-mcp-eval add server --from-mcp-json .cursor/mcp.json
-```
-
-From DXT manifest (Anthropic Desktop):
-
-```bash
-mcp-eval add server --from-dxt path/to/manifest.dxt
-```
-
-References:
-- `mcp.json` format: [mcp.json guide](https://gofastmcp.com/integrations/mcp-json-configuration)
-- DXT: [DXT README](https://github.com/anthropics/dxt/blob/main/README.md)
-
-### 4) Define an agent
-
-During init you set a default agent (AgentSpec). You can add more:
-
-```bash
-mcp-eval add agent
-```
-
-Source: [Generator CLI](../src/mcp_eval/cli/generator.py), [CLI utils](../src/mcp_eval/cli/utils.py)
-
-### 5) Run tests
-
-- Decorator tests:
-
-```bash
-mcp-eval run examples/mcp_server_fetch/tests/test_decorator_style.py -v --markdown out.md --html out.html
-```
-
-- Pytest style:
-
-```bash
-pytest examples/mcp_server_fetch/tests/test_pytest_style.py -v
-```
-
-- Dataset file:
-
-```bash
-mcp-eval run dataset --file examples/mcp_server_fetch/datasets/basic_fetch_dataset.yaml
-```
-
-Runner source: [Runner](../src/mcp_eval/runner.py)
-
-### 6) Generate tests with an LLM (optional)
-
-We recommend Anthropic Sonnet/Opus for better generation quality.
-
-```bash
-mcp-eval generate --style pytest --n-examples 8 --provider anthropic
-```
-
-This discovers tools, drafts scenarios, refines assertions, and writes tests.
-
-Source: [Generator CLI](../src/mcp_eval/cli/generator.py)
-
-### Reports and traces
-
-- JSON/Markdown/HTML combined reports
-- Per‑test JSON and OTEL `.jsonl` traces under `./test-reports`
-
-Configure in `mcpeval.yaml` ([schema](../schema/mcpeval.config.schema.json)), see [Configuration](../src/mcp_eval/config.py).
-
-#### Files created by init
-
-- `mcpeval.yaml` for eval knobs and agents
-- `mcpeval.secrets.yaml` for API keys
-- Updates to your mcp‑agent settings if needed
-
-#### Minimal test (decorator)
+Create a new test file `tests/test_my_server.py`:
 
 ```python
-from mcp_eval import task, Expect
+"""Tests for my awesome MCP server."""
 
-@task("Fetch and verify")
-async def test_fetch(agent, session):
-  resp = await agent.generate_str("Fetch https://example.com")
-  await session.assert_that(Expect.tools.was_called("fetch"), response=resp)
-  await session.assert_that(Expect.content.contains("Example Domain"), response=resp)
+from mcp_eval import task, setup, Expect
+
+@setup
+def configure_tests():
+    """Any setup needed before tests run."""
+    print("🚀 Starting my server tests!")
+
+@task("Test basic functionality")
+async def test_basic_operation(agent, session):
+    """Verify the server responds correctly to basic requests."""
+    
+    # 1. Send a prompt to the agent
+    response = await agent.generate_str(
+        "Please use the calculator to add 2 + 2"
+    )
+    
+    # 2. Check that the right tool was called
+    await session.assert_that(
+        Expect.tools.was_called("calculate"),
+        name="calculator_used"
+    )
+    
+    # 3. Verify the response content
+    await session.assert_that(
+        Expect.content.contains("4"),
+        name="correct_answer",
+        response=response
+    )
+    
+    # 4. Check efficiency (optional)
+    await session.assert_that(
+        Expect.performance.max_iterations(3),
+        name="completed_efficiently"
+    )
+
+@task("Test error handling")
+async def test_error_recovery(agent, session):
+    """Verify graceful error handling."""
+    
+    response = await agent.generate_str(
+        "Try to divide by zero, then recover"
+    )
+    
+    # Use LLM judge for complex behavior
+    await session.assert_that(
+        Expect.judge.llm(
+            rubric="Agent should handle error gracefully and provide helpful response",
+            min_score=0.8
+        ),
+        name="error_handling_quality",
+        response=response
+    )
 ```
 
-<!-- TODO: Add screenshot of init prompts; add screenshot of first run summary; add screenshot of reports directory contents. -->
+Run your new test:
 
+```bash
+mcp-eval run tests/test_my_server.py -v --html reports/my_test.html
+```
 
+## Troubleshooting common issues
+
+<Accordion title="My server isn't being found">
+  **Solution:** Check your `mcpeval.yaml` to ensure the server is properly configured:
+  
+  ```yaml
+  mcp:
+    servers:
+      my_server:
+        command: "python"
+        args: ["path/to/server.py"]
+  ```
+  
+  Also verify the server name matches what you're using in your agent's `server_names`.
+</Accordion>
+
+<Accordion title="Tests are timing out">
+  **Solution:** Increase the timeout in your configuration:
+  
+  ```yaml
+  execution:
+    timeout_seconds: 600  # 10 minutes
+  ```
+</Accordion>
+
+<Accordion title="API key errors">
+  **Solution:** Ensure your API key is set correctly:
+  
+  ```bash
+  # Check if it's set
+  echo $ANTHROPIC_API_KEY
+  
+  # Or add to mcpeval.secrets.yaml
+  anthropic:
+    api_key: "sk-ant-..."
+  ```
+</Accordion>
+
+## Resources to level up
+
+Ready to become an MCP‑Eval expert? Here's your learning path:
+
+<CardGroup cols={2}>
+  <Card title="Complete Examples" href="./examples" icon="code">
+    Full test suites showing all testing patterns
+  </Card>
+  
+  <Card title="Common Workflows" href="./common-workflows" icon="arrows-turn-to-dots">
+    Step-by-step guides for typical testing scenarios
+  </Card>
+  
+  <Card title="Configuration Guide" href="./configuration" icon="gear">
+    Deep dive into all configuration options
+  </Card>
+  
+  <Card title="Best Practices" href="./best-practices" icon="star">
+    Pro tips for writing maintainable tests
+  </Card>
+</CardGroup>
+
+## Get help
+
+- 💬 **Questions?** Check our [FAQ](./faq) or [troubleshooting guide](./troubleshooting)
+- 🐛 **Found a bug?** [Report it on GitHub](https://github.com/anthropics/mcp-eval/issues)
+- 💡 **Have ideas?** We'd love to hear them in [discussions](https://github.com/anthropics/mcp-eval/discussions)
+
+---
+
+**Congratulations!** 🎉 You've successfully set up MCP‑Eval and run your first tests. You're now ready to ensure your MCP servers and agents work flawlessly. Happy testing!

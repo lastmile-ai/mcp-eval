@@ -10,6 +10,8 @@ from mcp_eval.cli.generator import (
     init_project_cli,
     run_generator_cli,
     update_tests_cli,
+    server_app,
+    agent_app,
 )
 from mcp_eval.cli.list_command import app as list_app
 from mcp_eval.cli.validate import validate
@@ -22,7 +24,9 @@ console = Console()
 # Subcommands
 app.add_typer(runner_app, name="run", help="Run tests")
 app.add_typer(list_app, name="list", help="List configured resources")
-app.add_typer(add_app, name="add", help="Add servers or agents")
+app.add_typer(server_app, name="server", help="Manage MCP servers (add, list)")
+app.add_typer(agent_app, name="agent", help="Manage agents (add, list)")
+app.add_typer(add_app, name="add", help="Add servers or agents (legacy)")
 
 
 @app.command()

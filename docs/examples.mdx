@@ -1,15 +1,1000 @@
 ---
-title: "Examples"
-description: "A gallery of runnable examples."
+title: "Complete Examples"
+description: "Learn by example! Complete, runnable test suites for MCP servers and agents, covering all testing patterns and real-world scenarios."
 sidebarTitle: "Examples"
-icon: "image"
-keywords: ["examples","gallery"]
+icon: "code"
+keywords: ["examples","test suites","code samples","patterns","real-world","decorator","pytest","dataset"]
 ---
 
-### Featured
+> 🎯 **Learn by doing!** These complete examples show you exactly how to test MCP servers and agents in real-world scenarios. Copy, paste, and adapt them for your needs!
 
-- [mcp_server_fetch](./examples-mcp-server-fetch.mdx)
+## Quick example finder
 
-> More examples coming soon. Contributions welcome!
+What are you trying to test?
 
+<CardGroup cols={3}>
+  <Card title="Basic Server Test" href="#basic-server-testing">
+    Simple tool verification and output checking
+  </Card>
+  
+  <Card title="Agent Evaluation" href="#agent-evaluation-suite">
+    Comprehensive agent behavior testing
+  </Card>
+  
+  <Card title="Error Handling" href="#error-handling-patterns">
+    Robust error recovery testing
+  </Card>
+  
+  <Card title="Performance Tests" href="#performance-testing">
+    Efficiency and optimization checks
+  </Card>
+  
+  <Card title="Integration Suite" href="#full-integration-suite">
+    Multi-server orchestration tests
+  </Card>
+  
+  <Card title="Dataset Testing" href="#dataset-driven-testing">
+    Systematic test coverage with datasets
+  </Card>
+</CardGroup>
 
+## Basic server testing
+
+Let's start with a simple but complete example testing a calculator MCP server:
+
+<!-- TODO: Screenshot of test output showing passed assertions -->
+
+<Tabs>
+  <Tab title="Decorator Style">
+    ```python
+    """Complete test suite for calculator MCP server using decorator style."""
+    
+    from mcp_eval import task, setup, teardown, parametrize, Expect
+    from mcp_eval.session import TestAgent, TestSession
+    
+    @setup
+    def configure_calculator_tests():
+        """Setup before all calculator tests."""
+        print("🧮 Starting calculator server tests")
+    
+    @teardown
+    def cleanup_calculator_tests():
+        """Cleanup after all tests."""
+        print("✅ Calculator tests completed")
+    
+    @task("Test basic addition")
+    async def test_addition(agent: TestAgent, session: TestSession):
+        """Verify the calculator can perform addition correctly."""
+        
+        response = await agent.generate_str(
+            "Use the calculator to add 15 and 27"
+        )
+        
+        # Verify tool was called
+        await session.assert_that(
+            Expect.tools.was_called("calculate"),
+            name="calculator_called"
+        )
+        
+        # Check the calculation arguments
+        await session.assert_that(
+            Expect.tools.called_with(
+                "calculate",
+                {"operation": "add", "a": 15, "b": 27}
+            ),
+            name="correct_arguments"
+        )
+        
+        # Verify the result
+        await session.assert_that(
+            Expect.content.contains("42"),
+            name="correct_result",
+            response=response
+        )
+    
+    @parametrize(
+        "operation,a,b,expected",
+        [
+            ("add", 10, 5, "15"),
+            ("subtract", 10, 3, "7"),
+            ("multiply", 4, 7, "28"),
+            ("divide", 20, 4, "5"),
+        ]
+    )
+    @task("Test all operations")
+    async def test_operations(
+        agent: TestAgent,
+        session: TestSession,
+        operation: str,
+        a: int,
+        b: int,
+        expected: str
+    ):
+        """Test all calculator operations with various inputs."""
+        
+        response = await agent.generate_str(
+            f"Use the calculator to {operation} {a} and {b}"
+        )
+        
+        await session.assert_that(
+            Expect.content.contains(expected),
+            name=f"{operation}_result",
+            response=response
+        )
+        
+        await session.assert_that(
+            Expect.tools.success_rate(min_rate=1.0, tool_name="calculate"),
+            name=f"{operation}_success"
+        )
+    
+    @task("Test division by zero handling")
+    async def test_division_by_zero(agent: TestAgent, session: TestSession):
+        """Verify graceful handling of division by zero."""
+        
+        response = await agent.generate_str(
+            "Try to divide 10 by 0 using the calculator"
+        )
+        
+        # Tool should be called but may fail
+        await session.assert_that(
+            Expect.tools.was_called("calculate"),
+            name="attempted_division"
+        )
+        
+        # Response should handle error gracefully
+        await session.assert_that(
+            Expect.judge.llm(
+                rubric="Response acknowledges division by zero error and explains it clearly",
+                min_score=0.8
+            ),
+            name="error_handling",
+            response=response
+        )
+    ```
+  </Tab>
+  
+  <Tab title="Pytest Style">
+    ```python
+    """Complete test suite for calculator MCP server using pytest."""
+    
+    import pytest
+    from mcp_eval import Expect
+    
+    class TestCalculator:
+        """Calculator server test suite."""
+        
+        @pytest.mark.asyncio
+        async def test_basic_addition(self, mcp_agent):
+            """Test basic addition operation."""
+            
+            response = await mcp_agent.generate_str(
+                "Calculate 15 + 27"
+            )
+            
+            # Verify using session assertions
+            await mcp_agent.session.assert_that(
+                Expect.tools.was_called("calculate"),
+                Expect.content.contains("42"),
+                response=response
+            )
+        
+        @pytest.mark.asyncio
+        @pytest.mark.parametrize(
+            "a,b,operation,expected",
+            [
+                (10, 5, "add", "15"),
+                (10, 3, "subtract", "7"),
+                (4, 7, "multiply", "28"),
+                (20, 4, "divide", "5"),
+            ]
+        )
+        async def test_all_operations(
+            self, mcp_agent, a, b, operation, expected
+        ):
+            """Test all calculator operations."""
+            
+            prompt_map = {
+                "add": f"Add {a} and {b}",
+                "subtract": f"Subtract {b} from {a}",
+                "multiply": f"Multiply {a} by {b}",
+                "divide": f"Divide {a} by {b}"
+            }
+            
+            response = await mcp_agent.generate_str(prompt_map[operation])
+            
+            assert expected in response
+            
+            # Also check with Expect API
+            await mcp_agent.session.assert_that(
+                Expect.tools.was_called("calculate"),
+                name=f"{operation}_called"
+            )
+        
+        @pytest.mark.asyncio
+        async def test_error_handling(self, mcp_agent):
+            """Test error handling for invalid operations."""
+            
+            response = await mcp_agent.generate_str(
+                "Divide 10 by 0"
+            )
+            
+            # Should handle error gracefully
+            await mcp_agent.session.assert_that(
+                Expect.judge.llm(
+                    "Handles division by zero appropriately",
+                    min_score=0.7
+                ),
+                response=response
+            )
+    ```
+  </Tab>
+</Tabs>
+
+## Agent evaluation suite
+
+Testing an agent's reasoning, tool selection, and response quality:
+
+<!-- TODO: Screenshot of agent evaluation report showing reasoning paths -->
+
+```python
+"""Comprehensive agent evaluation suite."""
+
+from mcp_eval import task, Expect
+from mcp_eval.evaluators import EvaluationCriterion
+
+@task("Test agent reasoning quality")
+async def test_agent_reasoning(agent, session):
+    """Evaluate the agent's reasoning capabilities."""
+    
+    response = await agent.generate_str(
+        "I have 3 apples. I eat one, buy 5 more, then give away 2. "
+        "How many apples do I have? Show your reasoning."
+    )
+    
+    # Multi-criteria evaluation
+    criteria = [
+        EvaluationCriterion(
+            name="correct_answer",
+            description="Arrives at the correct answer of 5 apples",
+            weight=3.0,
+            min_score=0.9
+        ),
+        EvaluationCriterion(
+            name="clear_reasoning",
+            description="Shows clear step-by-step reasoning",
+            weight=2.0,
+            min_score=0.8
+        ),
+        EvaluationCriterion(
+            name="calculation_accuracy",
+            description="All intermediate calculations are correct",
+            weight=2.0,
+            min_score=0.9
+        )
+    ]
+    
+    await session.assert_that(
+        Expect.judge.multi_criteria(
+            criteria=criteria,
+            aggregate_method="weighted",
+            require_all_pass=False
+        ),
+        name="reasoning_quality",
+        response=response
+    )
+
+@task("Test tool selection intelligence")
+async def test_tool_selection(agent, session):
+    """Verify agent selects appropriate tools for tasks."""
+    
+    # Agent has access to: calculator, web_search, file_reader
+    
+    response = await agent.generate_str(
+        "First, calculate 15% of 200. Then search for the "
+        "current population of Tokyo. Finally, read the "
+        "contents of config.json"
+    )
+    
+    # Check tool sequence
+    await session.assert_that(
+        Expect.tools.sequence(
+            ["calculator", "web_search", "file_reader"],
+            allow_other_calls=True
+        ),
+        name="correct_tool_sequence"
+    )
+    
+    # Verify all tools succeeded
+    await session.assert_that(
+        Expect.tools.success_rate(min_rate=1.0),
+        name="all_tools_succeeded"
+    )
+    
+    # Check efficiency
+    await session.assert_that(
+        Expect.path.efficiency(
+            expected_tool_sequence=["calculator", "web_search", "file_reader"],
+            allow_extra_steps=0,
+            penalize_repeated_tools=True
+        ),
+        name="efficient_tool_usage"
+    )
+
+@task("Test context retention")
+async def test_context_retention(agent, session):
+    """Verify agent maintains context across interactions."""
+    
+    # First interaction
+    response1 = await agent.generate_str(
+        "My name is Alice and I like blue. Remember this."
+    )
+    
+    # Second interaction referencing first
+    response2 = await agent.generate_str(
+        "What's my name and favorite color?"
+    )
+    
+    await session.assert_that(
+        Expect.content.contains("Alice", case_sensitive=True),
+        name="remembers_name",
+        response=response2
+    )
+    
+    await session.assert_that(
+        Expect.content.contains("blue", case_sensitive=False),
+        name="remembers_color",
+        response=response2
+    )
+```
+
+## Error handling patterns
+
+Robust testing for error scenarios and recovery:
+
+```python
+"""Error handling and recovery test patterns."""
+
+from mcp_eval import task, Expect
+import asyncio
+
+@task("Test graceful degradation")
+async def test_graceful_degradation(agent, session):
+    """Verify system degrades gracefully when tools fail."""
+    
+    response = await agent.generate_str(
+        "Try to fetch https://this-domain-definitely-does-not-exist-12345.com "
+        "If that fails, explain what HTTP status codes mean."
+    )
+    
+    # Should attempt the fetch
+    await session.assert_that(
+        Expect.tools.was_called("fetch"),
+        name="attempted_fetch"
+    )
+    
+    # Should handle failure gracefully
+    await session.assert_that(
+        Expect.judge.llm(
+            rubric="""
+            Response should:
+            1. Acknowledge the fetch failed
+            2. Provide useful information about HTTP status codes
+            3. Not expose internal errors to the user
+            """,
+            min_score=0.8
+        ),
+        name="graceful_degradation",
+        response=response
+    )
+
+@task("Test retry logic")
+async def test_retry_behavior(agent, session):
+    """Test agent's retry behavior on transient failures."""
+    
+    response = await agent.generate_str(
+        "Fetch data from the API endpoint /flaky-endpoint "
+        "(this endpoint fails 50% of the time randomly)"
+    )
+    
+    # Should retry on failure
+    await session.assert_that(
+        Expect.tools.was_called("fetch", min_times=1),
+        name="fetch_attempted"
+    )
+    
+    # Eventually should succeed or give up gracefully
+    await session.assert_that(
+        Expect.judge.llm(
+            "Either successfully retrieved data or clearly explained the failure",
+            min_score=0.9
+        ),
+        name="handled_flaky_endpoint",
+        response=response
+    )
+
+@task("Test timeout handling")
+async def test_timeout_handling(agent, session):
+    """Verify proper timeout handling."""
+    
+    # Simulate slow operation
+    response = await agent.generate_str(
+        "Fetch data from /slow-endpoint (takes 10 seconds to respond)",
+        timeout=5  # Set shorter timeout
+    )
+    
+    # Should handle timeout appropriately
+    await session.assert_that(
+        Expect.judge.llm(
+            "Response indicates timeout or long wait time appropriately",
+            min_score=0.8
+        ),
+        name="timeout_handled",
+        response=response
+    )
+
+@task("Test input validation")
+async def test_input_validation(agent, session):
+    """Test handling of invalid inputs."""
+    
+    test_cases = [
+        "Calculate the square root of -1",
+        "Divide by the string 'hello'",
+        "Fetch from URL: not-a-valid-url",
+        "Read file: /etc/shadow"  # Permission denied
+    ]
+    
+    for test_input in test_cases:
+        response = await agent.generate_str(test_input)
+        
+        # Should handle invalid input gracefully
+        await session.assert_that(
+            Expect.judge.llm(
+                f"Handles invalid input appropriately: {test_input}",
+                min_score=0.7
+            ),
+            name=f"validates_{test_input[:20]}",
+            response=response
+        )
+```
+
+## Performance testing
+
+Testing efficiency, speed, and resource usage:
+
+<!-- TODO: Screenshot of performance metrics dashboard -->
+
+```python
+"""Performance and efficiency testing patterns."""
+
+from mcp_eval import task, Expect
+import time
+
+@task("Test response time")
+async def test_response_time(agent, session):
+    """Verify responses are generated within acceptable time."""
+    
+    start_time = time.time()
+    
+    response = await agent.generate_str(
+        "What is 2+2? Give me just the number."
+    )
+    
+    elapsed = (time.time() - start_time) * 1000  # Convert to ms
+    
+    # Should respond quickly for simple queries
+    await session.assert_that(
+        Expect.performance.response_time_under(2000),  # 2 seconds
+        name="quick_response"
+    )
+    
+    # Content should be concise
+    assert len(response) < 50, "Response should be concise"
+
+@task("Test batch processing efficiency")
+async def test_batch_efficiency(agent, session):
+    """Test efficiency when processing multiple items."""
+    
+    response = await agent.generate_str(
+        "Calculate the following: "
+        "1) 15 + 27 "
+        "2) 98 - 43 "
+        "3) 12 * 8 "
+        "4) 144 / 12 "
+        "Process all calculations efficiently."
+    )
+    
+    # Should use tool efficiently
+    await session.assert_that(
+        Expect.tools.count("calculate", expected_count=4),
+        name="batch_processed"
+    )
+    
+    # Should complete in minimal iterations
+    await session.assert_that(
+        Expect.performance.max_iterations(2),
+        name="efficient_iterations"
+    )
+    
+    # Verify all results
+    for expected in ["42", "55", "96", "12"]:
+        await session.assert_that(
+            Expect.content.contains(expected),
+            name=f"contains_{expected}",
+            response=response
+        )
+
+@task("Test caching behavior")
+async def test_caching(agent, session):
+    """Verify caching improves performance on repeated queries."""
+    
+    # First call - should be slower
+    response1 = await agent.generate_str(
+        "Fetch the current weather in Tokyo"
+    )
+    metrics1 = session.get_metrics()
+    
+    # Same call - should be faster (cached)
+    response2 = await agent.generate_str(
+        "Fetch the current weather in Tokyo"
+    )
+    metrics2 = session.get_metrics()
+    
+    # Second call should be faster
+    assert metrics2.total_duration_ms < metrics1.total_duration_ms * 0.5, \
+        "Cached response should be at least 50% faster"
+    
+    # Content should be consistent
+    await session.assert_that(
+        Expect.judge.llm(
+            "Both responses contain consistent weather information",
+            min_score=0.9
+        ),
+        name="consistent_cache",
+        response=response2
+    )
+
+@task("Test parallel tool execution")
+async def test_parallel_execution(agent, session):
+    """Verify agent can execute independent tools in parallel."""
+    
+    response = await agent.generate_str(
+        "Simultaneously: "
+        "1) Fetch weather for London "
+        "2) Calculate 99 * 77 "
+        "3) Read contents of readme.txt"
+    )
+    
+    # Check parallelism in metrics
+    metrics = session.get_metrics()
+    assert metrics.max_concurrent_operations > 1, \
+        "Should execute tools in parallel"
+    
+    # All tools should complete
+    await session.assert_that(
+        Expect.tools.was_called("weather_api"),
+        Expect.tools.was_called("calculate"),
+        Expect.tools.was_called("file_reader"),
+        name="all_tools_called"
+    )
+```
+
+## Full integration suite
+
+Complete multi-server orchestration testing:
+
+```python
+"""Full integration test suite for multi-server scenarios."""
+
+from mcp_eval import task, setup, Expect
+from mcp_agent.agents.agent import Agent
+
+@setup
+def configure_integration():
+    """Setup multi-server test environment."""
+    # Agent has access to: database, api, filesystem, calculator
+    pass
+
+@task("Test data pipeline flow")
+async def test_data_pipeline(agent, session):
+    """Test complete data processing pipeline."""
+    
+    response = await agent.generate_str("""
+        1. Read user IDs from users.csv
+        2. For each user, fetch their data from the API
+        3. Calculate statistics (average age, total count)
+        4. Store results in the database
+        5. Generate a summary report
+    """)
+    
+    # Verify complete pipeline execution
+    expected_sequence = [
+        "file_reader",     # Read CSV
+        "api",            # Fetch user data
+        "calculator",     # Calculate stats
+        "database",       # Store results
+    ]
+    
+    await session.assert_that(
+        Expect.tools.sequence(expected_sequence, allow_other_calls=True),
+        name="pipeline_sequence"
+    )
+    
+    # Verify data integrity
+    await session.assert_that(
+        Expect.judge.llm(
+            rubric="""
+            Verify the response shows:
+            1. Successfully read user data
+            2. Fetched additional info from API
+            3. Calculated correct statistics
+            4. Stored in database
+            5. Generated meaningful summary
+            """,
+            min_score=0.85
+        ),
+        name="pipeline_complete",
+        response=response
+    )
+
+@task("Test cross-server transaction")
+async def test_transaction(agent, session):
+    """Test transactional operations across servers."""
+    
+    response = await agent.generate_str("""
+        Perform a money transfer:
+        1. Check balance in account A (database)
+        2. If sufficient, deduct $100 from account A
+        3. Add $100 to account B
+        4. Log transaction to audit.log (filesystem)
+        5. Send notification via API
+        Ensure atomicity - roll back on any failure
+    """)
+    
+    # Should maintain consistency
+    await session.assert_that(
+        Expect.judge.multi_criteria(
+            criteria={
+                "atomicity": "Transaction is atomic - all or nothing",
+                "consistency": "Data remains consistent",
+                "audit": "Transaction is properly logged",
+                "notification": "Notification is sent"
+            },
+            require_all_pass=True
+        ),
+        name="transaction_integrity",
+        response=response
+    )
+
+@task("Test server coordination")
+async def test_server_coordination(agent, session):
+    """Test complex coordination between multiple servers."""
+    
+    response = await agent.generate_str("""
+        Coordinate a backup operation:
+        1. Stop accepting new writes (database)
+        2. Flush all pending operations
+        3. Create filesystem snapshot
+        4. Upload snapshot to cloud (api)
+        5. Verify backup integrity
+        6. Resume normal operations
+        Report on each step.
+    """)
+    
+    # Check coordination metrics
+    metrics = session.get_metrics()
+    
+    # Operations should be sequential for consistency
+    await session.assert_that(
+        Expect.performance.max_concurrent_operations(1),
+        name="sequential_coordination"
+    )
+    
+    # All steps should complete
+    await session.assert_that(
+        Expect.tools.success_rate(min_rate=1.0),
+        name="all_steps_succeeded"
+    )
+```
+
+## Dataset-driven testing
+
+Systematic testing using datasets for comprehensive coverage:
+
+```python
+"""Dataset-driven testing for comprehensive coverage."""
+
+from mcp_eval import Dataset, Case
+from mcp_eval.evaluators import (
+    ToolWasCalled, ResponseContains, 
+    LLMJudge, ToolSucceeded
+)
+
+# Define test cases
+calculation_cases = [
+    Case(
+        name="simple_addition",
+        inputs="Calculate 5 + 3",
+        expected_output="8",
+        evaluators=[
+            ToolWasCalled("calculator"),
+            ResponseContains("8"),
+            ToolSucceeded("calculator")
+        ]
+    ),
+    Case(
+        name="complex_expression",
+        inputs="Calculate (10 * 5) + (20 / 4) - 3",
+        expected_output="52",
+        evaluators=[
+            ToolWasCalled("calculator", min_times=1),
+            ResponseContains("52"),
+            LLMJudge("Shows correct order of operations")
+        ]
+    ),
+    Case(
+        name="word_problem",
+        inputs="If I have 12 apples and give away 3, how many remain?",
+        expected_output="9",
+        evaluators=[
+            ResponseContains("9"),
+            LLMJudge("Correctly interprets word problem", min_score=0.8)
+        ]
+    ),
+]
+
+# Create and run dataset
+async def run_calculation_tests():
+    """Run comprehensive calculation tests via dataset."""
+    
+    dataset = Dataset(
+        name="Calculator Test Suite",
+        cases=calculation_cases,
+        agent_spec="CalculatorAgent"  # Reference to configured agent
+    )
+    
+    # Define how to execute each case
+    async def execute_case(inputs: str, agent, session) -> str:
+        return await agent.generate_str(inputs)
+    
+    # Run evaluation
+    report = await dataset.evaluate(execute_case)
+    
+    # Generate reports
+    report.print(include_scores=True)
+    report.to_json("calculation_results.json")
+    report.to_html("calculation_results.html")
+    
+    # Assertions on overall results
+    assert report.pass_rate >= 0.9, "At least 90% should pass"
+    assert report.get_case("simple_addition").passed, "Basic addition must work"
+```
+
+### Loading datasets from files
+
+```yaml
+# datasets/api_tests.yaml
+name: "API Integration Tests"
+cases:
+  - name: "fetch_json"
+    inputs: "Fetch JSON data from https://api.example.com/users"
+    evaluators:
+      - type: "ToolWasCalled"
+        args:
+          tool_name: "http_client"
+      - type: "ResponseContains"
+        args:
+          text: "users"
+      - type: "LLMJudge"
+        args:
+          rubric: "Successfully fetches and interprets JSON data"
+
+  - name: "post_data"
+    inputs: "POST {name: 'test'} to https://api.example.com/users"
+    evaluators:
+      - type: "ToolWasCalled"
+        args:
+          tool_name: "http_client"
+      - type: "ToolSucceeded"
+        args:
+          tool_name: "http_client"
+
+  - name: "handle_404"
+    inputs: "Fetch from https://api.example.com/nonexistent"
+    evaluators:
+      - type: "LLMJudge"
+        args:
+          rubric: "Handles 404 error appropriately"
+          min_score: 0.8
+```
+
+```python
+# Load and run the dataset
+from mcp_eval import Dataset
+
+dataset = Dataset.from_yaml("datasets/api_tests.yaml")
+report = await dataset.evaluate(task_func)
+```
+
+## Advanced patterns
+
+### Custom evaluators
+
+```python
+"""Creating custom evaluators for specific needs."""
+
+from mcp_eval.evaluators.base import SyncEvaluator, EvaluatorContext
+from mcp_eval.evaluators.shared import EvaluatorResult
+
+class SQLQueryValidator(SyncEvaluator):
+    """Validates SQL query syntax and safety."""
+    
+    def __init__(self, allow_destructive: bool = False):
+        self.allow_destructive = allow_destructive
+    
+    def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
+        response = ctx.output.lower()
+        
+        # Check for SQL injection attempts
+        dangerous_patterns = ["drop table", "delete from", "truncate"]
+        if not self.allow_destructive:
+            for pattern in dangerous_patterns:
+                if pattern in response:
+                    return EvaluatorResult(
+                        passed=False,
+                        expected="Safe SQL query",
+                        actual=f"Contains dangerous pattern: {pattern}"
+                    )
+        
+        # Validate basic syntax
+        if "select" in response and "from" in response:
+            return EvaluatorResult(
+                passed=True,
+                expected="Valid SQL query",
+                actual="Query appears valid"
+            )
+        
+        return EvaluatorResult(
+            passed=False,
+            expected="Valid SQL query",
+            actual="Missing required SQL keywords"
+        )
+
+# Use custom evaluator
+@task("Test SQL generation")
+async def test_sql_generation(agent, session):
+    response = await agent.generate_str(
+        "Generate SQL to find all users older than 25"
+    )
+    
+    await session.assert_that(
+        SQLQueryValidator(allow_destructive=False),
+        name="valid_safe_sql",
+        response=response
+    )
+```
+
+### Mocking and test doubles
+
+```python
+"""Using mocks for isolated testing."""
+
+from unittest.mock import AsyncMock, patch
+
+@task("Test with mocked server")
+async def test_with_mock(agent, session):
+    """Test agent behavior with mocked server responses."""
+    
+    # Mock the fetch tool
+    with patch('mcp_agent.tools.fetch') as mock_fetch:
+        mock_fetch.return_value = {
+            "status": 200,
+            "content": "Mocked response data"
+        }
+        
+        response = await agent.generate_str(
+            "Fetch data from https://api.example.com"
+        )
+        
+        # Verify mock was called
+        assert mock_fetch.called
+        
+        # Check agent handled mocked data
+        await session.assert_that(
+            Expect.content.contains("Mocked response"),
+            response=response
+        )
+```
+
+## Running the examples
+
+### Command line
+
+```bash
+# Run all examples
+mcp-eval run examples/
+
+# Run specific test file
+mcp-eval run examples/test_calculator.py
+
+# Run with specific configuration
+mcp-eval run examples/ --config custom-config.yaml
+
+# Generate reports
+mcp-eval run examples/ \
+  --html reports/examples.html \
+  --json reports/examples.json \
+  --markdown reports/examples.md
+```
+
+### CI/CD integration
+
+```yaml
+# .github/workflows/test.yml
+name: Run MCP-Eval Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install mcp-eval
+          pip install -r requirements.txt
+      
+      - name: Run tests
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          mcp-eval run examples/ \
+            --html test-results/report.html \
+            --junit test-results/junit.xml
+      
+      - name: Upload results
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: test-results/
+```
+
+<!-- TODO: Screenshot of CI/CD test results in GitHub Actions -->
+
+## Tips for writing good examples
+
+<CardGroup cols={2}>
+  <Card title="Be specific" icon="bullseye">
+    Use clear, specific prompts that leave no ambiguity about expected behavior
+  </Card>
+  
+  <Card title="Test one thing" icon="1">
+    Each test should focus on a single aspect or behavior
+  </Card>
+  
+  <Card title="Use meaningful names" icon="tag">
+    Test names should clearly describe what they're testing
+  </Card>
+  
+  <Card title="Add comments" icon="comment">
+    Explain complex logic or non-obvious test strategies
+  </Card>
+</CardGroup>
+
+## More resources
+
+- 📚 [API Reference](./api-catalog) - Complete API documentation
+- 🎯 [Best Practices](./best-practices) - Testing best practices
+- 🔧 [Configuration](./configuration) - Advanced configuration options
+- 🚀 [Common Workflows](./common-workflows) - Step-by-step guides
+
+---
+
+**Ready to test?** Copy any example above, adapt it to your needs, and start ensuring your MCP servers and agents work perfectly! 🎉

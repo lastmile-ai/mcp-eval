@@ -56,6 +56,10 @@ from mcp_eval.cli.utils import (
     write_server_to_mcpeval,
     write_agent_to_mcpeval,
 )
+from mcp_eval.cli.list_command import (
+    list_servers as _list_servers_cmd,
+    list_agents as _list_agents_cmd,
+)
 
 app = typer.Typer(help="Generate MCP‑Eval tests for an MCP server")
 console = Console()
@@ -1336,11 +1340,20 @@ async def update_tests(
 
 
 add_app = typer.Typer(
-    help="Add resources to mcpeval.yaml (servers, agents).\n\nExamples:\n  - Add a server interactively:\n    mcp-eval add server\n\n  - Import servers from mcp.json:\n    mcp-eval add server --from-mcp-json .cursor/mcp.json\n\n  - Add an agent:\n    mcp-eval add agent"
+    help="Add resources to mcpeval.yaml (servers, agents).\n\nExamples:\n  - Add a server interactively:\n    mcp-eval server add\n\n  - Import servers from mcp.json:\n    mcp-eval server add --from-mcp-json .cursor/mcp.json\n\n  - Add an agent:\n    mcp-eval agent add"
 )
+
+# Noun-first groups
+server_app = typer.Typer(help="Manage MCP servers (add, list)")
+agent_app = typer.Typer(help="Manage agents (add, list)")
+
+# Register noun-first groups for local module CLI execution
+app.add_typer(server_app, name="server")
+app.add_typer(agent_app, name="agent")
 app.add_typer(add_app, name="add")
 
 
+@server_app.command("add")
 @add_app.command("server")
 def add_server(
     out_dir: str = typer.Option(".", help="Project directory"),
@@ -1355,9 +1368,9 @@ def add_server(
 
     Examples:
 
-    Interactive add: $ mcp-eval add server
+    Interactive add: $ mcp-eval server add
 
-    From mcp.json: $ mcp-eval add server --from-mcp-json .cursor/mcp.json
+    From mcp.json: $ mcp-eval server add --from-mcp-json .cursor/mcp.json
     """
     project = Path(out_dir)
     project.mkdir(parents=True, exist_ok=True)
@@ -1420,6 +1433,7 @@ def add_server(
     console.print(f"[green]✓ Added server '{server_name}'[/green]")
 
 
+@agent_app.command("add")
 @add_app.command("agent")
 def add_agent(
     out_dir: str = typer.Option(".", help="Project directory"),
@@ -1428,7 +1442,7 @@ def add_agent(
 
     Examples:
 
-    Add an agent and set as default: $ mcp-eval add agent
+    Add an agent and set as default: $ mcp-eval agent add
     """
     project = Path(out_dir)
     project.mkdir(parents=True, exist_ok=True)
@@ -1485,6 +1499,26 @@ def add_agent(
     )
     write_agent_to_mcpeval(project, agent, set_default=set_default)
     console.print(f"[green]✓ Added agent '{name}'[/green]")
+
+
+# Noun-first: list commands delegated to existing implementations
+@server_app.command("list")
+def list_servers_command(
+    project_dir: str = typer.Option(".", help="Project directory"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full details"),
+):
+    """List configured servers (alias of 'list servers')."""
+    _list_servers_cmd(project_dir=project_dir, verbose=verbose)
+
+
+@agent_app.command("list")
+def list_agents_command(
+    project_dir: str = typer.Option(".", help="Project directory"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full instructions"),
+    name: str | None = typer.Option(None, help="Show details for specific agent"),
+):
+    """List configured agents (alias of 'list agents')."""
+    _list_agents_cmd(project_dir=project_dir, verbose=verbose, name=name)
 
 
 # ---- Sync wrappers for Typer (Click) to execute async commands ----

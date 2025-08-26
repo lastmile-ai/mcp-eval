@@ -29,7 +29,7 @@ def list_servers(
     if not servers:
         console.print("[yellow]No servers configured.[/yellow]")
         console.print("\nTo add servers, run:")
-        console.print("  [cyan]mcp-eval add server[/cyan]")
+        console.print("  [cyan]mcp-eval server add[/cyan]")
         return
 
     if verbose:
@@ -125,7 +125,7 @@ def list_agents(
     if not agents:
         console.print("[yellow]No agents configured.[/yellow]")
         console.print("\nTo add agents, run:")
-        console.print("  [cyan]mcp-eval add agent[/cyan]")
+        console.print("  [cyan]mcp-eval agent add[/cyan]")
         return
 
     # If specific agent requested
