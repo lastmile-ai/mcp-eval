@@ -74,15 +74,24 @@ mcp_eval = "mcp_eval.cli:app"
 [project.entry-points."pytest11"]
 mcp_eval = "mcp_eval.pytest_plugin"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-dir]
-"" = "src"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.package-data]
+mcp_eval = [
+    "data/**/*.md",
+    "data/**/*.yaml",
+    "data/**/*.yml",
+    "data/**/*.json",
+    "templates/**/*.j2"
+]

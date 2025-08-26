@@ -1,5 +1,8 @@
 name: "Run MCP-Eval tests with uv"
 description: "Install with uv, run mcp-eval tests, generate reports, upload artifacts, and emit a summary."
+branding:
+  icon: check-circle
+  color: blue
 inputs:
   python-version:
     description: "Python version to use"
@@ -39,6 +42,10 @@ inputs:
   install-args:
     description: "Arguments to pass to 'uv pip install'. Defaults to editable install of current project."
     default: "-e ."
+    required: false
+  include-pytest:
+    description: "Install pytest/pytest-asyncio (only needed if you run pytest)"
+    default: "false"
     required: false
   extra-packages:
     description: "Extra packages to install with uv (space-separated)."
@@ -183,21 +190,42 @@ EOF_ENV
         if [[ -n "${{ inputs.requirements }}" ]]; then
           echo "Installing from requirements: ${{ inputs.requirements }}"
           uv pip install -r "${{ inputs.requirements }}"
+        elif [[ -f pyproject.toml ]]; then
+          echo "Syncing project dependencies via uv"
+          uv sync
+        elif [[ -f requirements.txt ]]; then
+          echo "Installing from local requirements.txt"
+          uv pip install -r requirements.txt
         else
-          if [[ -f pyproject.toml ]]; then
-            echo "Installing editable project via uv"
-            uv pip install ${{ inputs.install-args }}
-          elif [[ -f requirements.txt ]]; then
-            echo "Installing from local requirements.txt"
-            uv pip install -r requirements.txt
-          else
-            echo "No project metadata found. Installing minimal mcp-eval + pytest."
-            uv pip install "mcp-eval[pytest]"
+          echo "Bootstrapping minimal project and adding dependencies with uv add"
+          cat > pyproject.toml << 'PY'
+[project]
+name = "mcpeval-ci"
+version = "0.0.0"
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+PY
+          uv add mcpevals "mcp-agent[anthropic,openai]"
+          if [[ "${{ inputs.include-pytest }}" == "true" ]]; then
+            uv add pytest pytest-asyncio
           fi
+          uv sync
         fi
         if [[ -n "${{ inputs.extra-packages }}" ]]; then
           echo "Installing extra packages: ${{ inputs.extra-packages }}"
-          uv pip install ${{ inputs.extra-packages }}
+          # Prefer uv add for named packages; fall back to uv pip for URLs/files
+          for pkg in ${{ inputs.extra-packages }}; do
+            if [[ "$pkg" == http* || "$pkg" == git+* || "$pkg" == *\.whl || "$pkg" == *\.tar.gz ]]; then
+              uv pip install "$pkg"
+            else
+              uv add "$pkg"
+            fi
+          done
+          uv sync
         fi
 
     - name: Show tool versions

@@ -31,3 +31,12 @@ coverage-report:
 prompt:
 	rm -f prompt.md
 	uv run scripts/promptify.py
+
+# Documentation
+.PHONY: sync-subagents
+sync-subagents:
+	uv run python scripts/sync_subagents.py --sync
+
+.PHONY: verify-subagents
+verify-subagents:
+	uv run python scripts/sync_subagents.py

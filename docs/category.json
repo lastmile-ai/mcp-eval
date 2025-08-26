@@ -24,8 +24,26 @@
         { "href": "/assertions", "title": "Assertions", "icon": "check-double" },
         { "href": "/datasets", "title": "Datasets", "icon": "table" },
         { "href": "/pytest", "title": "Pytest Integration", "icon": "flask" },
-        { "href": "/test-generation", "title": "Generating Tests with LLMs", "icon": "magic" },
         { "href": "/best-practices", "title": "Best Practices", "icon": "star" }
+      ]
+    },
+    {
+      "group": "Building with LLMs",
+      "pages": [
+        { "href": "/test-generation", "title": "Generating Tests with LLMs", "icon": "magic" },
+        { "href": "/building-with-claude", "title": "Building with Claude", "icon": "robot" },
+        {
+          "group": "Claude Subagents",
+          "pages": [
+            { "href": "/subagents/mcp-eval-test-writer", "title": "Test Writer", "icon": "pen" },
+            { "href": "/subagents/mcp-eval-test-generator", "title": "Test Generator", "icon": "wand-magic-sparkles" },
+            { "href": "/subagents/mcp-eval-debugger", "title": "Debugger", "icon": "bug" },
+            { "href": "/subagents/mcp-eval-config-expert", "title": "Config Expert", "icon": "gear" },
+            { "href": "/subagents/test-scenario-designer", "title": "Scenario Designer", "icon": "lightbulb" },
+            { "href": "/subagents/test-assertion-refiner", "title": "Assertion Refiner", "icon": "check-circle" },
+            { "href": "/subagents/test-code-emitter", "title": "Code Emitter", "icon": "code" }
+          ]
+        }
       ]
     },
     {

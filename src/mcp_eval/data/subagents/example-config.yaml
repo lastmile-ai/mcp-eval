@@ -1,0 +1,21 @@
+# Example configuration showing how to load MCP-Eval subagents
+# Add this to your mcpeval.yaml or mcp-agent.config.yaml
+
+# For mcp-agent to discover the subagents
+agents:
+  enabled: true
+  search_paths:
+    # If running from source/development
+    - "./src/mcp_eval/data/subagents"
+    
+    # If installed as package, you can find the location with:
+    # python -c "import mcp_eval; import os; print(os.path.dirname(mcp_eval.__file__))"
+    # Then use: "<site-packages>/mcp_eval/data/subagents"
+    
+    # Standard Claude locations (if you copy subagents there)
+    - ".claude/agents"
+    - "~/.claude/agents"
+    - ".mcp-agent/agents"
+    - "~/.mcp-agent/agents"
+  
+  pattern: "*.md"  # Load markdown subagents
