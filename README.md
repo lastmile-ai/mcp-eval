@@ -78,3 +78,24 @@ Troubleshooting in CI:
 ```bash
 uv run mcp-eval doctor --full
 ```
+
+### Badges
+
+The CI generates two badges under `mcpeval-reports/badges`:
+
+- `tests.svg`: shows passed/total tests
+- `coverage.svg`: shows tool coverage across all configured servers (unique tools used vs available from metrics)
+
+To embed in your README:
+
+```markdown
+![MCP Tests](mcpeval-reports/badges/tests.svg)
+![MCP Tool Coverage](mcpeval-reports/badges/coverage.svg)
+```
+
+If you enable GitHub Pages (see workflow), the report HTML is published and badges are also uploaded under `site/badges`. You can link the badges to the latest report page:
+
+```markdown
+[![MCP Tests](mcpeval-reports/badges/tests.svg)](https://<owner>.github.io/<repo>/)
+[![MCP Tool Coverage](mcpeval-reports/badges/coverage.svg)](https://<owner>.github.io/<repo>/)
+```
