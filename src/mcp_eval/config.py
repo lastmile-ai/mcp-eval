@@ -194,16 +194,24 @@ def find_eval_secrets(project_dir: Path | None = None) -> Path | None:
 
     Looks for (in project_dir upwards and ~/.mcp-eval):
     - mcpeval.secrets.yaml | mcpeval.secrets.yml
+    - mcpevals.secrets.json | mcpevals.secrets.jsonl
     - .mcp-eval/secrets.yaml | .mcp-eval/secrets.yml
     - .mcp-eval.secrets.yaml | .mcp-eval.secrets.yml
     """
     candidates = [
         "mcpeval.secrets.yaml",
         "mcpeval.secrets.yml",
+        "mcpevals.secrets.json",
+        "mcpevals.secrets.jsonl",
         ".mcp-eval/secrets.yaml",
         ".mcp-eval/secrets.yml",
         ".mcp-eval.secrets.yaml",
         ".mcp-eval.secrets.yml",
+        ".mcpevals/secrets.yaml",
+        ".mcpevals/secrets.yml",
+        ".mcpevals.secrets.yaml",
+        ".mcpevals.secrets.yml",
+
     ]
     return _search_upwards_for(candidates, project_dir)
 
@@ -443,12 +451,6 @@ def use_agent_factory(factory: Callable[[], Agent | AugmentedLLM]):
 def use_agent_object(obj: Agent | AugmentedLLM):
     """Explicitly set a programmatic agent or LLM instance for tests (strongly-typed)."""
     return use_agent(obj)
-
-
-def use_llm_factory(llm_factory: type):
-    raise NotImplementedError(
-        "use_llm_factory removed. Configure provider/model in settings."
-    )
 
 
 async def create_test_context():
