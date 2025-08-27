@@ -100,8 +100,8 @@ class MCPEvalSettings(AgentSettings):
     default_servers: List[str] | None = Field(default_factory=list)
 
     # LLM defaults for tests
-    provider: str | None = "anthropic"
-    model: str | None = "claude-sonnet-4-0"
+    provider: str | None = None
+    model: str | None = None
 
     default_agent: AgentSpec | str | None = None
 
