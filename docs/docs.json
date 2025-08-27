@@ -18,61 +18,89 @@
     "tabs": [
       {
         "tab": "Documentation",
+        "icon": "book",
         "groups": [
           {
-            "group": "Get Started",
+            "group": "Getting Started",
             "pages": [
               "index",
               "overview",
               "quickstart",
-              "common-workflows"
+              "common-workflows",
+              "examples"
             ]
           },
           {
             "group": "Core Concepts",
             "pages": [
-              "detailed_guide",
               "concepts",
-              "reports",
-              "metrics-tracing"
+              "detailed_guide"
             ]
           },
           {
-            "group": "Evaluation",
+            "group": "Writing Tests",
             "pages": [
-              "agent-evaluation",
-              "server-evaluation",
               "assertions",
-              "pytest",
               "datasets",
-              "test-generation"
+              "pytest",
+              "best-practices"
+            ]
+          },
+          {
+            "group": "Building with LLMs",
+            "pages": [
+              "test-generation",
+              "building-with-claude"
+            ]
+          },
+          {
+            "group": "Evaluation Guides",
+            "pages": [
+              "server-evaluation",
+              "agent-evaluation"
             ]
           },
           {
             "group": "Configuration",
             "pages": [
-              "agents",
+              "configuration",
               "connect-servers",
-              "integrations",
-              "configuration"
+              "security"
+            ]
+          },
+          {
+            "group": "CI/CD & Deployment",
+            "pages": [
+              "ci-cd"
+            ]
+          },
+          {
+            "group": "Test Reporting",
+            "pages": [
+              "reports",
+              "metrics-tracing",
+              "integrations"
             ]
           },
           {
             "group": "API Reference",
             "pages": [
-              "cli-reference",
+              "api-catalog",
               "api-session",
               "api-core",
-              "api-catalog",
               "api-config"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli-reference"
             ]
           },
           {
             "group": "Resources",
             "pages": [
-              "examples",
               "examples-mcp-server-fetch",
-              "ci-cd",
               "troubleshooting",
               "faq",
               "changelog"
