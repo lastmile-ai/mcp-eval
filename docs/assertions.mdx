@@ -114,6 +114,32 @@ await session.assert_that(judge_mc, response=resp, name="multi_criteria")
 
 Evaluators source: [evaluators/](../src/mcp_eval/evaluators/)
 
+### Examples
+
+```python
+# Enforce exact order and single use of tools
+await session.assert_that(
+  Expect.path.efficiency(
+    expected_tool_sequence=["validate", "process", "save"],
+    tool_usage_limits={"validate": 1, "process": 1, "save": 1},
+    allow_extra_steps=0,
+    penalize_backtracking=True,
+  ),
+  name="golden_path",
+)
+
+# Allow a retry of a fragile step without failing the whole path
+await session.assert_that(
+  Expect.path.efficiency(
+    expected_tool_sequence=["fetch", "parse"],
+    tool_usage_limits={"fetch": 2, "parse": 1},
+    allow_extra_steps=1,
+    penalize_repeated_tools=False,
+  ),
+  name="robust_path",
+)
+```
+
 ### Tips
 
 - Prefer structural checks (`output_matches`) for tool outputs when possible for stability

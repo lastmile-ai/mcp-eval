@@ -502,7 +502,31 @@ This analyzes your server's tools and generates comprehensive test coverage.
 
 ### Scenario Testing
 
-For complex scenarios, compose multiple focused assertions (content, tools, performance, judge) within a single task to evaluate end-to-end behavior.
+Compose multiple focused assertions in one coherent workflow:
+
+```python
+from mcp_eval import task, Expect
+
+@task("Fetch and summarize")
+async def test_fetch_and_summarize(agent, session):
+    response = await agent.generate_str(
+        "Fetch https://example.com and summarize in one sentence"
+    )
+
+    await session.assert_that(
+        Expect.tools.was_called("fetch"),
+        name="fetch_called"
+    )
+    await session.assert_that(
+        Expect.content.contains("Example Domain"),
+        response=response,
+        name="has_expected_text"
+    )
+    await session.assert_that(
+        Expect.performance.max_iterations(3),
+        name="efficient"
+    )
+```
 
 ### Custom Evaluators
 

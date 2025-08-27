@@ -45,7 +45,26 @@ async def test_basic(agent, session):
 ### Task parameters
 
 ```python
-# Configure complexity via configuration and compose assertions inside the task
+# Compose multiple assertions and give them names for clear reporting
+@task("Fetch and summarize")
+async def test_fetch_and_summarize(agent, session):
+    response = await agent.generate_str(
+        "Fetch https://example.com and summarize in one sentence"
+    )
+
+    await session.assert_that(
+        Expect.tools.was_called("fetch"),
+        name="fetch_called"
+    )
+    await session.assert_that(
+        Expect.content.contains("Example Domain"),
+        response=response,
+        name="has_expected_text"
+    )
+    await session.assert_that(
+        Expect.performance.max_iterations(3),
+        name="efficient"
+    )
 ```
 
 ### Task with custom configuration
@@ -91,11 +110,10 @@ async def test_minimal(agent):
 ### Inline agent configuration
 
 ```python
-from mcp_eval.agent import AgentConfig
+from mcp_agent.agents.agent_spec import AgentSpec
 
-@with_agent(AgentConfig(
-    model="claude-3-5-sonnet-20241022",
-    provider="anthropic",
+@with_agent(AgentSpec(
+    name="code_reviewer",
     instruction="You are a code reviewer. Be thorough and critical.",
     server_names=["filesystem", "git"]
 ))
@@ -160,6 +178,30 @@ async def test_calculator(agent, operation, x, y):
 ### Named scenarios
 
 Use `@parametrize("name,url,expected", [...])` to model named cases.
+
+```python
+@with_agent("default")
+@parametrize(
+    "name,url,expected",
+    [
+        ("home", "https://example.com", "Example Domain"),
+        ("httpbin_json", "https://httpbin.org/json", "slideshow"),
+    ],
+)
+@task("Fetch {name}")
+async def test_fetch_case(agent, session, name: str, url: str, expected: str):
+    response = await agent.generate_str(f"Fetch {url}")
+
+    await session.assert_that(
+        Expect.tools.was_called("fetch"),
+        name=f"{name}_fetch_called",
+    )
+    await session.assert_that(
+        Expect.content.contains(expected, case_sensitive=False),
+        response=response,
+        name=f"{name}_has_expected",
+    )
+```
 
 ### Dynamic parametrization
 
@@ -333,7 +375,40 @@ def analyze_test_results(results: list[TestResult]):
 ## Advanced patterns
 
 ### Conditional test execution
-Control selection via your test runner (markers, CLI flags) rather than decorators.
+Prefer selecting tests with your runner and environment rather than custom decorators.
+
+```bash
+# Run a single test function (pytest-style selector supported by the runner)
+mcp-eval run tests/test_fetch.py::test_fetch_case
+
+# Narrow to a file or directory
+mcp-eval run tests/test_fetch.py
+```
+
+Using pytest marks for conditions (when running under pytest):
+
+```python
+import os, pytest
+from mcp_eval.core import task
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip on CI")
+@task("Local-only behavior")
+async def test_local_only(agent, session):
+    response = await agent.generate_str("Do something local")
+    # assertions...
+
+@pytest.mark.slow
+@task("Slow end-to-end scenario")
+async def test_slow_scenario(agent, session):
+    # long-running flow...
+    ...
+```
+
+Then select by mark:
+
+```bash
+pytest -m "not slow" tests/
+```
 
 ### Test dependencies
 Prefer independent tests; if ordering is required, orchestrate via your runner.

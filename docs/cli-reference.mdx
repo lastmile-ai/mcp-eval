@@ -35,6 +35,13 @@ Dataset file runner:
 mcp-eval run dataset datasets/basic_fetch_dataset.yaml
 ```
 
+Combined reports example:
+
+```bash
+# Save JSON and Markdown reports from a mixed run
+mcp-eval run tests/ --json reports/combined.json --markdown reports/combined.md
+```
+
 Source: [runner.py](../src/mcp_eval/runner.py)
 
 ## list
@@ -120,7 +127,14 @@ Source: [generator.py](../src/mcp_eval/cli/generator.py), [utils.py](../src/mcp_
 Checks API keys, judge config, and optionally connects to servers and spins agents.
 
 ```bash
-mcp-eval validate [--quick] [--servers <true|false>] [--agents <true|false>]
+# Quick checks only (no connections)
+mcp-eval validate --quick
+
+# Servers only
+mcp-eval validate --agents false
+
+# Agents only
+mcp-eval validate --servers false
 ```
 
 Examples:

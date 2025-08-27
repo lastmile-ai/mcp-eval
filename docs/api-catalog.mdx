@@ -163,7 +163,17 @@ await session.assert_that(
 ### Resource usage
 
 ```python
-# For tokens/cost, inspect metrics programmatically via session.get_metrics()
+# Inspect tokens/cost programmatically via session.get_metrics()
+metrics = session.get_metrics()
+
+# LLM token usage (if available)
+if metrics.llm_metrics:
+    print(f"Input tokens: {metrics.llm_metrics.input_tokens}")
+    print(f"Output tokens: {metrics.llm_metrics.output_tokens}")
+    print(f"Total tokens: {metrics.llm_metrics.total_tokens}")
+
+# Cost estimate (if computed)
+print(f"Estimated cost: ${metrics.cost_estimate:.4f}")
 ```
 
 ## Judge namespace

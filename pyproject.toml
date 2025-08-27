@@ -1,5 +1,5 @@
 [project]
-name = "mcp-eval"
+name = "mcpevals"
 version = "0.1.3"
 description = "Pytest-style framework for evaluating Model Context Protocol (MCP) servers."
 license = { file = "LICENSE" }
@@ -68,8 +68,10 @@ jaeger = [
 
 [project.scripts]
 mcp-eval = "mcp_eval.cli:app"
+mcp-evals = "mcp_eval.cli:app"
 mcpeval = "mcp_eval.cli:app"
 mcp_eval = "mcp_eval.cli:app"
+mcpevals = "mcp_eval.cli:app"
 
 [project.entry-points."pytest11"]
 mcp_eval = "mcp_eval.pytest_plugin"
@@ -86,6 +88,9 @@ where = ["src"]
 
 [tool.setuptools.package-dir]
 "" = "src"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_eval"]
 
 [tool.setuptools.package-data]
 mcp_eval = [

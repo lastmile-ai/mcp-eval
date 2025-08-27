@@ -1,8 +1,5 @@
 """Tests for the catalog module."""
 
-import pytest
-from unittest.mock import MagicMock, patch
-from typing import Pattern
 import re
 
 from mcp_eval.catalog import (
