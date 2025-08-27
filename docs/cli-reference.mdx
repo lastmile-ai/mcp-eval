@@ -32,7 +32,7 @@ mcp-eval run tests/ --max-concurrency 4
 Dataset file runner:
 
 ```bash
-mcp-eval run dataset --file datasets/basic_fetch_dataset.yaml
+mcp-eval run dataset datasets/basic_fetch_dataset.yaml
 ```
 
 Source: [runner.py](../src/mcp_eval/runner.py)
@@ -120,7 +120,7 @@ Source: [generator.py](../src/mcp_eval/cli/generator.py), [utils.py](../src/mcp_
 Checks API keys, judge config, and optionally connects to servers and spins agents.
 
 ```bash
-mcp-eval validate [--quick] [--no-servers] [--no-agents]
+mcp-eval validate [--quick] [--servers <true|false>] [--agents <true|false>]
 ```
 
 Examples:

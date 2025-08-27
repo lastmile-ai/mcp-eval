@@ -57,36 +57,31 @@ async with test_session("test-name") as agent:
     # Your test code here
     pass
 
-# Manual lifecycle management
-session = await TestSession.create(
-    test_name="test-name",
-    agent_config=my_agent_config,
-    server_configs=my_server_configs
-)
+# Manual lifecycle (advanced)
+session = TestSession(test_name="test-name")
+agent = await session.__aenter__()
 try:
-    agent = await session.start()
     # Your test code
+    ...
 finally:
-    await session.cleanup()
+    await session.__aexit__(None, None, None)
+    session.cleanup()
 ```
 
 ### Session with custom configuration
 
 ```python
-from mcp_eval.session import TestSession
-from mcp_eval.agent import AgentConfig
+from mcp_eval.session import test_session
+from mcp_agent.agents.agent_spec import AgentSpec
 
-session = await TestSession.create(
-    test_name="custom-test",
-    agent_config=AgentConfig(
-        model="claude-3-5-sonnet-20241022",
-        provider="anthropic",
-        server_names=["my_server"],
-        instruction="You are a helpful test assistant"
-    ),
-    timeout_seconds=300,
-    output_dir="test-reports/custom"
+spec = AgentSpec(
+    name="custom",
+    instruction="You are a helpful test assistant",
+    server_names=["my_server"],
 )
+async with test_session("custom-test", agent=spec) as agent:
+    # Your test code
+    pass
 ```
 
 ## Agent interactions
@@ -98,11 +93,7 @@ session = await TestSession.create(
 response = await agent.generate_str("What is 2+2?")
 print(response)  # "The answer is 4"
 
-# Full response object with metadata
-full_response = await agent.generate("Explain quantum computing")
-print(full_response.content)  # The actual text
-print(full_response.model)    # Which model was used
-print(full_response.usage)    # Token usage stats
+# Full response object may be available depending on provider; prefer generate_str for portability
 ```
 
 ### Multi-turn conversations

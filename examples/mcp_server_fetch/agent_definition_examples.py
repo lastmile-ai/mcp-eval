@@ -52,7 +52,7 @@ async def test_config_agent(agent: TestAgent, session: TestSession):
     """
     response = await agent.generate_str("Fetch https://example.com")
     await session.assert_that(
-        Expect.tools.was_called("fetchCallIJustMadeUp"), name="fetch_called"
+        Expect.tools.was_called("fetch"), name="fetch_called"
     )
     await session.assert_that(
         Expect.content.contains("Example Domain"),
@@ -213,7 +213,7 @@ async def test_agent_factory(agent: TestAgent, session: TestSession):
     await agent.generate_str("Summarize https://example.com in one sentence")
 
     await session.assert_that(
-        Expect.tools.was_called("fetchIMadeUpTheToolName"), name="fetch_called"
+        Expect.tools.was_called("fetch"), name="fetch_called"
     )
     await session.assert_that(
         Expect.performance.max_iterations(2), name="efficient_execution"

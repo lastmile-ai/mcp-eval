@@ -165,3 +165,6 @@ prompt.md
 
 # mcp-eval test reports
 test-reports/
+
+# Claude settings
+.claude/

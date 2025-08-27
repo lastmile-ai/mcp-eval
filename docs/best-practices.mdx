@@ -40,7 +40,7 @@ Jump to what you need:
 
 ## Test design principles
 
-### 1. Test one thing at a time
+### 1. Test one thing at a time (by default)
 
 **✅ Do:** Focus each test on a single behavior or feature
 
@@ -67,7 +67,31 @@ async def test_division_by_zero(agent, session):
     )
 ```
 
-**❌ Don't:** Mix multiple concerns in one test
+**When to go broader:** Complex agent behaviors sometimes require end-to-end scenarios (multi-tool flows, recovery, efficiency). In those cases:
+
+- Keep assertions layered and named (content, tools, performance, judge)
+- Bound scope (one coherent workflow per test)
+- Use separate tests for alternative branches or failure paths
+
+Example end-to-end scenario:
+
+```python
+@task("Fetch and summarize workflow")
+async def test_document_flow(agent, session):
+    # Single coherent workflow
+    summary = await agent.generate_str(
+        "Fetch https://example.com and summarize the main content"
+    )
+    await session.assert_that(Expect.tools.was_called("fetch"), name="fetched")
+    await session.assert_that(
+        Expect.content.contains("Example Domain"), response=summary, name="has_title"
+    )
+    await session.assert_that(Expect.performance.max_iterations(3), name="efficient")
+    await session.assert_that(
+        Expect.path.efficiency(expected_tool_sequence=["fetch"], allow_extra_steps=0),
+        name="golden_path",
+    )
+```
 
 ```python
 # BAD: Testing too many things at once
@@ -290,7 +314,7 @@ Choose assertions based on what you're testing:
 
 | Testing | Use These Assertions | Avoid |
 |---------|---------------------|--------|
-| **Correctness** | `contains`, `regex`, `equals` | LLM judges for exact values |
+| **Correctness** | `contains`, `regex` | LLM judges for exact values |
 | **Tool Usage** | `was_called`, `called_with`, `sequence` | Content checks for tool behavior |
 | **Performance** | `response_time_under`, `max_iterations` | Exact timing matches |
 | **Quality** | `judge.llm`, `multi_criteria` | Brittle string matching |

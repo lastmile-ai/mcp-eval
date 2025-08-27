@@ -64,7 +64,7 @@ mcp-eval run tests/test_decorator_style.py --verbose
 python tests/test_dataset_style.py
 
 # Run from YAML dataset
-mcp-eval dataset datasets/basic_fetch_dataset.yaml
+mcp-eval run dataset datasets/basic_fetch_dataset.yaml
 
 # Generate reports
 mcp-eval run tests/test_dataset_style.py --json=results.json --markdown=results.md

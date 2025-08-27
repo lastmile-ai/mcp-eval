@@ -45,29 +45,13 @@ async def test_basic(agent, session):
 ### Task parameters
 
 ```python
-@task(
-    name="Complex test",
-    description="Tests advanced features with retries",
-    tags=["integration", "slow"],
-    timeout_seconds=300,
-    max_retries=3
-)
-async def test_complex(agent, session):
-    # Your test code
-    pass
+# Configure complexity via configuration and compose assertions inside the task
 ```
 
 ### Task with custom configuration
 
 ```python
-@task(
-    "Expensive test",
-    config={
-        "model": "claude-3-opus-20240229",  # Use specific model
-        "temperature": 0.0,  # Deterministic responses
-        "max_tokens": 4000  # Longer responses allowed
-    }
-)
+@task("Expensive test")
 async def test_with_config(agent, session):
     response = await agent.generate_str("Complex analysis task")
     # Test continues...
@@ -173,28 +157,9 @@ async def test_calculator(agent, operation, x, y):
     )
 ```
 
-### Parametrize with named scenarios
+### Named scenarios
 
-```python
-from mcp_eval.core import parametrize_scenario
-
-scenarios = [
-    {"name": "simple", "url": "https://example.com", "expected": "Example Domain"},
-    {"name": "secure", "url": "https://secure.example.com", "expected": "Secure"},
-    {"name": "api", "url": "https://api.example.com/v1", "expected": "API"}
-]
-
-@with_agent("default")
-@parametrize_scenario(scenarios)
-@task("Test URL fetching scenarios")
-async def test_urls(agent, name, url, expected):
-    response = await agent.generate_str(f"Fetch {url}")
-    
-    await agent.assert_that(
-        Expect.content.contains(expected),
-        name=f"has_{name}_content"
-    )
-```
+Use `@parametrize("name,url,expected", [...])` to model named cases.
 
 ### Dynamic parametrization
 
@@ -331,25 +296,7 @@ result = TestResult(
 ### Accessing TestResult in hooks
 
 ```python
-from mcp_eval.core import on_test_complete
-
-@on_test_complete
-def log_test_result(result: TestResult):
-    """Custom logging after each test."""
-    status = "✅" if result.passed else "❌"
-    print(f"{status} {result.name}")
-    print(f"  Duration: {result.duration_ms:.2f}ms")
-    print(f"  Tokens: {result.metrics.get('tokens_used', 0)}")
-    
-    if not result.passed and result.error:
-        print(f"  Error: {result.error}")
-    
-    # Log to external system
-    logger.info("Test completed", extra={
-        "test_id": result.id,
-        "passed": result.passed,
-        "duration_ms": result.duration_ms
-    })
+# Use CLI combined reports or session.get_metrics()/get_results() for summaries
 ```
 
 ### Aggregating results
@@ -386,40 +333,10 @@ def analyze_test_results(results: list[TestResult]):
 ## Advanced patterns
 
 ### Conditional test execution
-
-```python
-import os
-from mcp_eval.core import task, skip_if, only_if
-
-@skip_if(os.getenv("CI") == "true", reason="Skip in CI")
-@task("Local-only test")
-async def test_local_only(agent):
-    # This test only runs locally
-    pass
-
-@only_if(os.getenv("RUN_SLOW_TESTS") == "true")
-@task("Expensive test")
-async def test_expensive(agent):
-    # This test only runs when explicitly enabled
-    pass
-```
+Control selection via your test runner (markers, CLI flags) rather than decorators.
 
 ### Test dependencies
-
-```python
-from mcp_eval.core import task, depends_on
-
-@task("Setup database")
-async def test_setup_db(agent):
-    response = await agent.generate_str("Create test database")
-    await agent.assert_that(Expect.content.contains("created"))
-
-@depends_on(test_setup_db)
-@task("Test with database")
-async def test_with_db(agent):
-    # This only runs if test_setup_db passes
-    response = await agent.generate_str("Query test database")
-```
+Prefer independent tests; if ordering is required, orchestrate via your runner.
 
 ### Custom test context
 
@@ -475,10 +392,7 @@ async def test_error_handling(agent):
     )
     
     # Verify no tool crashes
-    await agent.assert_that(
-        Expect.tools.no_errors(),
-        name="no_tool_crashes"
-    )
+    # Check tool success via success_rate, e.g., Expect.tools.success_rate(1.0)
 ```
 
 ### Testing multi-step workflows

@@ -18,7 +18,6 @@ from mcp_eval.catalog import Expect
 # Content assertions
 Expect.content.contains("success")
 Expect.content.regex(r"\d+ results?")
-Expect.content.equals("exact match")
 
 # Tool assertions
 Expect.tools.was_called("fetch")
@@ -28,7 +27,6 @@ Expect.tools.sequence(["validate", "process", "format"])
 # Performance assertions
 Expect.performance.max_iterations(3)
 Expect.performance.response_time_under(5000)
-Expect.performance.token_usage_under(10000)
 
 # LLM judge assertions
 Expect.judge.llm("Must be professional and accurate")
@@ -55,9 +53,9 @@ await session.assert_that(
     name="has_expected_text"
 )
 
-# Exact match
+# Exact match (use regex or precise substring)
 await session.assert_that(
-    Expect.content.equals("The answer is 42"),
+    Expect.content.regex(r"^The answer is 42$"),
     response=response
 )
 
@@ -100,7 +98,7 @@ await session.assert_that(
 
 # Check tool wasn't called (negative assertion)
 await session.assert_that(
-    Expect.tools.was_not_called("dangerous_tool"),
+    Expect.tools.count("dangerous_tool", 0),
     name="safety_check"
 )
 ```
@@ -116,7 +114,7 @@ await session.assert_that(
 
 # Check tool was called with specific arguments
 await session.assert_that(
-    Expect.tools.was_called_with(
+    Expect.tools.called_with(
         tool_name="fetch",
         expected_args={"url": "https://api.example.com"}
     )
@@ -137,7 +135,7 @@ await session.assert_that(
     Expect.tools.output_matches(
         tool_name="weather_api",
         expected_output="sunny",
-        match_type="contains"  # or "equals", "regex"
+        match_type="contains"  # or "exact", "regex", "partial"
     )
 )
 ```
@@ -165,21 +163,7 @@ await session.assert_that(
 ### Resource usage
 
 ```python
-# Token usage limits
-await session.assert_that(
-    Expect.performance.token_usage_under(10000),
-    name="token_efficiency"
-)
-
-# Combined performance criteria
-await session.assert_that(
-    Expect.performance.meets_sla(
-        max_response_time_ms=5000,
-        max_tokens=10000,
-        max_iterations=5,
-        min_success_rate=0.95
-    )
-)
+# For tokens/cost, inspect metrics programmatically via session.get_metrics()
 ```
 
 ## Judge namespace
@@ -253,9 +237,7 @@ await session.assert_that(
 judge = Expect.judge.llm(
     rubric="Evaluate for technical accuracy",
     min_score=0.85,
-    model="claude-3-opus-20240229",  # Use Opus for best quality
-    temperature=0.0,  # Deterministic judging
-    max_tokens=1000
+    model="claude-3-opus-20240229"
 )
 
 await session.assert_that(judge, response=response)
@@ -277,9 +259,8 @@ await session.assert_that(
             "process": 1,   # Process only once
             "save": 1       # Save only once
         },
-        allow_extra_steps=0,  # No unnecessary steps
-        penalize_backtracking=True,  # Fail if agent goes backward
-        strict_order=True  # Tools must be called in exact order
+        allow_extra_steps=0,
+        penalize_backtracking=True
     ),
     name="golden_path"
 )
@@ -290,21 +271,8 @@ await session.assert_that(
 ```python
 # Allow some variation while ensuring key waypoints
 await session.assert_that(
-    Expect.path.includes_waypoints(
-        required_tools=["auth", "fetch", "logout"],
-        max_distance_between=3,  # Up to 3 steps between waypoints
-        allow_duplicates=False
-    )
-)
-
-# Check path doesn't include dangerous patterns
-await session.assert_that(
-    Expect.path.avoids_patterns(
-        forbidden_sequences=[
-            ["delete", "confirm"],  # Prevent accidental deletion
-            ["sudo", "*"],  # No sudo commands
-        ]
-    )
+    # For waypoint/pattern checks, combine Expect.tools.sequence and
+    # Expect.tools.count along with Expect.path.efficiency
 )
 ```
 

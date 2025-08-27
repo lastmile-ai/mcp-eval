@@ -159,14 +159,13 @@ All assertions use the `Expect` API with specialized namespaces:
 **Content assertions**: Verify response text
 ```python
 Expect.content.contains("text")           # Substring check
-Expect.content.equals("exact match")      # Exact match
 Expect.content.regex(r"\d+ items?")       # Regex pattern
 ```
 
 **Tool assertions**: Verify MCP tool usage
 ```python
 Expect.tools.was_called("tool_name")      # Tool was invoked
-Expect.tools.was_not_called("dangerous")  # Tool was not invoked  
+Expect.tools.count("dangerous", 0)        # Tool was not invoked  
 Expect.tools.sequence(["read", "write"])  # Exact sequence
 Expect.tools.success_rate(min_rate=0.95)  # Success threshold
 Expect.tools.output_matches(               # Check tool output
@@ -179,8 +178,6 @@ Expect.tools.output_matches(               # Check tool output
 **Performance assertions**: Verify efficiency metrics
 ```python
 Expect.performance.response_time_under(5000)      # Max latency (ms)
-Expect.performance.token_usage_under(10000)       # Max tokens
-Expect.performance.cost_under(0.10)               # Max cost ($USD)
 Expect.performance.max_iterations(3)              # Max LLM calls
 ```
 
@@ -387,11 +384,11 @@ export MCPEVAL_TIMEOUT_SECONDS="600"
 
 ```python
 from mcp_eval.config import use_agent, update_config
-from mcp_eval.agent import AgentConfig
+from mcp_agent.agents.agent_spec import AgentSpec
 
 # Use specific agent
-use_agent(AgentConfig(
-    model="claude-3-opus-20240229",
+use_agent(AgentSpec(
+    name="test_agent",
     instruction="Be extremely thorough in testing.",
     server_names=["server1", "server2"]
 ))
@@ -481,7 +478,6 @@ mcp-eval generate --n-examples 10     # Generate test cases
 # Server management
 mcp-eval server list                  # List configured servers
 mcp-eval server add --from-mcp-json   # Import from mcp.json
-mcp-eval server test my_server        # Test server connectivity
 
 # Utilities
 mcp-eval doctor --full                 # Diagnose configuration issues
@@ -504,31 +500,9 @@ mcp-eval generate \
 
 This analyzes your server's tools and generates comprehensive test coverage.
 
-### Multi-Agent Testing
+### Scenario Testing
 
-Test complex multi-agent workflows:
-
-```python
-@task("Multi-agent coordination")
-async def test_multi_agent(agent, session):
-    # Agent 1: Research
-    research = await agent.generate_str(
-        "Research the latest MCP specification",
-        agent_name="researcher"
-    )
-    
-    # Agent 2: Summarize
-    summary = await agent.generate_str(
-        f"Summarize this research: {research}",
-        agent_name="summarizer"
-    )
-    
-    # Verify coordination
-    await session.assert_that(
-        Expect.tools.was_called("fetch", agent="researcher"),
-        Expect.content.contains("MCP", response=summary)
-    )
-```
+For complex scenarios, compose multiple focused assertions (content, tools, performance, judge) within a single task to evaluate end-to-end behavior.
 
 ### Custom Evaluators
 
@@ -558,23 +532,9 @@ await session.assert_that(
 )
 ```
 
-### Performance Profiling
+### Performance Analysis
 
-Detailed performance analysis:
-
-```python
-from mcp_eval.profiling import profile_test
-
-@profile_test
-@task("Performance critical operation")
-async def test_performance(agent, session):
-    response = await agent.generate_str("Complex task")
-    
-    metrics = session.get_metrics()
-    print(f"Tool call latencies: {metrics.tool_latencies}")
-    print(f"Token throughput: {metrics.tokens_per_second}")
-    print(f"Cost breakdown: {metrics.cost_by_model}")
-```
+Use `session.get_metrics()` and CLI reports (`--json/--markdown/--html`) to analyze latency, token usage, and tool behavior.
 
 ## Documentation
 

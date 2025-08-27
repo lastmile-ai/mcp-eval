@@ -14,7 +14,7 @@ from mcp_eval.core import (
     _teardown_functions,
 )
 from mcp_eval.session import TestSession, TestAgent
-from mcp_eval.evaluators import EvaluationRecord
+from mcp_eval.evaluators.shared import EvaluationRecord, EvaluatorResult
 from mcp_eval.metrics import TestMetrics, ToolCall, ToolCoverage, LLMMetrics
 
 
@@ -119,61 +119,61 @@ def test_metrics_to_dict_none():
 def test_metrics_to_dict_with_tool_calls():
     """Test _metrics_to_dict with tool calls."""
     metrics = TestMetrics(
-        total_iterations=5,
-        total_llm_calls=3,
-        total_tool_calls=2,
+        iteration_count=5,
         tool_calls=[
-            ToolCall(tool_name="test_tool", arguments={"arg": "value"}),
-            {"tool_name": "already_dict", "arguments": {}},  # Already a dict
+            ToolCall(
+                name="test_tool",
+                arguments={"arg": "value"},
+                result="result",
+                start_time=0.0,
+                end_time=1.0,
+            ),
+            {"name": "already_dict", "arguments": {}},  # Already a dict
         ],
         tool_coverage={},
-        llm_metrics=None,
     )
 
     result = _metrics_to_dict(metrics)
     assert result is not None
-    assert result["total_iterations"] == 5
+    assert result["iteration_count"] == 5
     assert len(result["tool_calls"]) == 2
-    assert result["tool_calls"][0]["tool_name"] == "test_tool"
-    assert result["tool_calls"][1]["tool_name"] == "already_dict"
+    assert result["tool_calls"][0]["name"] == "test_tool"
+    assert result["tool_calls"][1]["name"] == "already_dict"
 
 
 def test_metrics_to_dict_with_tool_coverage():
     """Test _metrics_to_dict with tool coverage."""
     metrics = TestMetrics(
-        total_iterations=5,
-        total_llm_calls=3,
-        total_tool_calls=2,
+        iteration_count=5,
         tool_calls=[],
         tool_coverage={
             "server1": ToolCoverage(
-                total_tools=10,
-                tools_called=5,
-                coverage_percentage=50.0,
-                tools_list=["tool1", "tool2"],
-                called_tools=["tool1"],
+                server_name="server1",
+                available_tools=["tool1", "tool2"],
+                used_tools=["tool1"],
             )
         },
-        llm_metrics=None,
     )
 
     result = _metrics_to_dict(metrics)
     assert result is not None
     assert "tool_coverage" in result
     assert "server1" in result["tool_coverage"]
-    assert result["tool_coverage"]["server1"]["total_tools"] == 10
+    assert result["tool_coverage"]["server1"]["available_tools"] == ["tool1", "tool2"]
 
 
 def test_metrics_to_dict_with_llm_metrics():
     """Test _metrics_to_dict with LLM metrics."""
     llm_metrics = LLMMetrics(
-        total_tokens=1000, prompt_tokens=600, completion_tokens=400, total_cost=0.01
+        model_name="test-model",
+        input_tokens=600,
+        output_tokens=400,
+        total_tokens=1000,
+        cost_estimate=0.01,
     )
 
     metrics = TestMetrics(
-        total_iterations=5,
-        total_llm_calls=3,
-        total_tool_calls=2,
+        iteration_count=5,
         tool_calls=[],
         tool_coverage={},
         llm_metrics=llm_metrics,
@@ -187,13 +187,15 @@ def test_metrics_to_dict_with_llm_metrics():
 
 def test_test_result_dataclass():
     """Test TestResult dataclass."""
-    eval_record = EvaluationRecord(
-        name="test_eval",
-        evaluator_type="TestEvaluator",
+    eval_result = EvaluatorResult(
         passed=True,
         score=1.0,
-        reasoning="Good",
-        confidence=0.9,
+        details={"reasoning": "Good", "confidence": 0.9},
+    )
+    eval_record = EvaluationRecord(
+        name="test_eval",
+        result=eval_result,
+        passed=True,
     )
 
     result = TestResult(
@@ -264,6 +266,7 @@ async def test_task_decorator_with_session():
         mock_session.__aexit__ = AsyncMock(return_value=None)
         mock_session.get_results = Mock(return_value=[])
         mock_session.get_span_tree = Mock(return_value=None)
+        mock_session.all_passed = Mock(return_value=True)
         mock_session.metrics = None
         MockSession.return_value = mock_session
 
@@ -298,12 +301,15 @@ async def test_task_decorator_with_error():
 
         mock_session.__aenter__ = AsyncMock(return_value=mock_agent)
         mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.all_passed = Mock(return_value=False)  # Failed because of error
+        mock_session.get_results = Mock(return_value=[])
+        mock_session.get_span_tree = Mock(return_value=None)
         MockSession.return_value = mock_session
 
         # The decorator should catch and handle the error
         with patch("mcp_eval.core.traceback.print_exc"):
             result = await test_error_task()
-            assert result.error == "Test error"
+            assert "Test error" in result.error  # Error contains traceback
             assert result.passed is False
 
 
@@ -351,6 +357,7 @@ async def test_task_decorator_sync_setup_teardown():
         mock_session.__aexit__ = AsyncMock(return_value=None)
         mock_session.get_results = Mock(return_value=[])
         mock_session.get_span_tree = Mock(return_value=None)
+        mock_session.all_passed = Mock(return_value=True)
         mock_session.metrics = None
         MockSession.return_value = mock_session
 
@@ -377,23 +384,23 @@ async def test_task_with_evaluations():
         mock_session.__aexit__ = AsyncMock(return_value=None)
 
         # Mock evaluation results
-        mock_eval_record = EvaluationRecord(
-            name="test_eval",
-            evaluator_type="TestEvaluator",
+        eval_result = EvaluatorResult(
             passed=True,
             score=1.0,
-            reasoning="Good",
-            confidence=0.9,
+            details={"reasoning": "Good", "confidence": 0.9},
+        )
+        mock_eval_record = EvaluationRecord(
+            name="test_eval",
+            result=eval_result,
+            passed=True,
         )
         mock_session.get_results = Mock(return_value=[mock_eval_record])
         mock_session.get_span_tree = Mock(return_value=None)
+        mock_session.all_passed = Mock(return_value=True)
         mock_session.metrics = TestMetrics(
-            total_iterations=1,
-            total_llm_calls=1,
-            total_tool_calls=0,
+            iteration_count=1,
             tool_calls=[],
             tool_coverage={},
-            llm_metrics=None,
         )
 
         MockSession.return_value = mock_session
