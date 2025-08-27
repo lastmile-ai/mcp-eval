@@ -517,10 +517,14 @@ async def _write_mcpeval_configs(
 
     # Update settings object
     settings.judge.model = judge_model
+    settings.judge.provider = provider
     settings.judge.min_score = 0.8
+    # Also set global provider for clarity in reports (model left unchanged here)
+    settings.provider = provider
 
     cfg_overlay = {
-        "judge": {"model": judge_model, "min_score": 0.8},
+        "provider": provider,
+        "judge": {"provider": provider, "model": judge_model, "min_score": 0.8},
         "reporting": {"formats": ["json", "markdown"], "output_dir": "./test-reports"},
     }
     if provider == "anthropic":

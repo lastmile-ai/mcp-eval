@@ -72,7 +72,7 @@ Before diving into specific issues, let's run a quick health check:
   
   3. **Validate configuration:**
      ```bash
-     mcp-eval validate --keys
+     mcp-eval validate
      ```
   
   **Pro tip:** Never commit API keys to version control! Use `.gitignore` for secrets files.
@@ -147,7 +147,7 @@ Before diving into specific issues, let's run a quick health check:
   
   3. **Debug with verbose output:**
      ```bash
-     mcp-eval run tests/ -vv --debug
+     mcp-eval run tests/ -vv
      ```
   
   4. **Common fixes:**
@@ -182,7 +182,7 @@ Before diving into specific issues, let's run a quick health check:
   2. **Verify tool discovery:**
      ```bash
      # List available tools
-     mcp-eval list tools --server my_server
+     mcp-eval server list --verbose
      ```
   
   3. **Check MCP protocol implementation:**
@@ -244,8 +244,8 @@ Before diving into specific issues, let's run a quick health check:
   
   5. **Profile slow tests:**
      ```bash
-     # Generate performance report
-     mcp-eval run tests/ --profile --html reports/perf.html
+     # Increase verbosity and export HTML for manual review
+     mcp-eval run tests/ -v --html reports/perf.html
      ```
 </Accordion>
 
@@ -321,8 +321,8 @@ Before diving into specific issues, let's run a quick health check:
      # Temporarily add debug output
      print(f"Actual response: {response!r}")
      
-     # Or use the test report
-     mcp-eval run tests/ --debug --json debug.json
+     # Or save a JSON report
+     mcp-eval run tests/ --json debug.json
      ```
   
   4. **Use partial matching for tools:**
@@ -390,7 +390,7 @@ When tests fail mysteriously, enable debug mode for detailed insights:
 
 ```bash
 # Maximum verbosity
-mcp-eval run tests/ -vvv --debug
+mcp-eval run tests/ -vvv
 
 # Or set in config
 ```
@@ -484,11 +484,11 @@ mcp:
 ### Identifying bottlenecks
 
 ```bash
-# Generate performance profile
-mcp-eval run tests/ --profile --output profile.json
+# Save a machine-readable report and analyze offline
+mcp-eval run tests/ --json profile.json
 
-# Analyze the profile
-mcp-eval analyze profile.json
+# Analyze the report (custom scripts)
+cat profile.json | jq '.' | less
 ```
 
 Key metrics to watch:
@@ -593,7 +593,7 @@ Key metrics to watch:
 
 3. **Validate everything:**
    ```bash
-   mcp-eval validate --all
+   mcp-eval validate
    ```
 
 {/* TODO: Screenshot of doctor --full output with annotations */}

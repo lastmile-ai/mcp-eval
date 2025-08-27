@@ -26,14 +26,7 @@ class JudgeLLMClient:
         if not self._llm:
             settings = get_settings()
 
-            # Determine provider: explicit > judge config > global config > infer from model
-            provider = self.provider
-            if not provider:
-                provider = settings.judge.provider
-            if not provider:
-                provider = settings.provider
-
-            # Determine model: explicit > judge config > global config > ModelSelector
+            # Determine model first: explicit > judge config > global config > ModelSelector
             model = self.model
             if not model:
                 model = settings.judge.model
@@ -49,13 +42,24 @@ class JudgeLLMClient:
                     costPriority=0.4, speedPriority=0.2, intelligencePriority=0.4
                 )
 
+            # Determine provider: explicit > judge config > global config
+            provider = self.provider or settings.judge.provider or settings.provider
+
             # Create an AugmentedLLM with minimal agent for judging
-            self._llm = create_llm(
-                agent_name="judge",
-                instruction="You are an evaluation judge that provides objective assessments.",
-                provider=provider,
-                model=model,
-            )
+            try:
+                self._llm = create_llm(
+                    agent_name="judge",
+                    instruction="You are an evaluation judge that provides objective assessments.",
+                    provider=provider,
+                    model=model,
+                )
+            except Exception as e:
+                # Provide a clearer error for missing/invalid provider/model
+                hint = (
+                    "Ensure judge.provider or provider and corresponding API key are configured; "
+                    "or provide a valid model id."
+                )
+                raise RuntimeError(f"Failed to initialize LLM judge: {e}. {hint}") from e
 
             # Store the actual configuration used
             self._actual_provider = provider

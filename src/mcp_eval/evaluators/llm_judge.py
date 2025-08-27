@@ -79,6 +79,7 @@ class LLMJudge(Evaluator):
         prompt = "\n".join(prompt_parts)
 
         try:
+            # Pass through model and allow provider to be resolved from settings/model name
             client = get_judge_client(self.model)
 
             # Ensure LLM is initialized to get actual config
@@ -134,10 +135,26 @@ class LLMJudge(Evaluator):
                     },
                 )
             except Exception as fallback_error:
+                # Distinguish between parse failure and upstream LLM call/config failure
+                error_msg = str(e)
+                user_friendly = (
+                    "unable to call completion to model provider"
+                    if any(
+                        token in error_msg.lower()
+                        for token in [
+                            "api key",
+                            "authentication",
+                            "invalid model",
+                            "model not found",
+                            "provider not configured",
+                        ]
+                    )
+                    else "failed to parse"
+                )
                 return EvaluatorResult(
                     passed=False,
                     expected=f"score >= {self.min_score}",
-                    actual="failed to parse",
+                    actual=user_friendly,
                     score=0.0,
                     error=str(fallback_error),
                     details={
@@ -148,6 +165,7 @@ class LLMJudge(Evaluator):
                         "judge_config": judge_config
                         if "judge_config" in locals()
                         else None,
+                        "raw_error": error_msg,
                     },
                 )
 

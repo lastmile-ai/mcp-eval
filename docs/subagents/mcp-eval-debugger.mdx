@@ -174,7 +174,7 @@ mcp-eval server list --verbose
 mcp-eval server test my_server
 
 # Run single test with debug output
-mcp-eval run test_file.py::test_name -v --debug
+mcp-eval run test_file.py::test_name -v
 ```
 
 ### Analyzing Test Reports
@@ -330,7 +330,7 @@ mcp:
       args: ["mcp-server-fetch"]
 EOF
 
-mcp-eval run test.py --config test_config.yaml
+mcp-eval run test.py
 ```
 
 ### Debug Agent Configuration

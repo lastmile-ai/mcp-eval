@@ -1,0 +1,60 @@
+$schema: ../../schema/mcpeval.config.schema.json
+eval_name: "Sample Server Examples"
+eval_description: "Local examples for the sample server and fetch server"
+
+# MCP Server Configuration
+mcp:
+  servers:
+    fetch:
+      command: "uvx"
+      args: ["mcp-server-fetch"]
+      env:
+        UV_NO_PROGRESS: "1"
+    sample_server:
+      command: "uv"
+      args: ["run", "sample_server.py"]
+      env:
+        UV_NO_PROGRESS: "1"
+
+# Global defaults for LLM used in tests/examples
+provider: "anthropic"
+model: "claude-sonnet-4-0"
+
+# Optional: default agent available to tests (usage_example sets its own agent)
+default_agent: "default"
+agents:
+  definitions:
+    - name: "default"
+      instruction: |
+        You are a helpful assistant that can fetch and analyze web content.
+      server_names: ["fetch"]
+      max_iterations: 6
+
+# Judge configuration (used by Expect.judge.llm)
+judge:
+  model: "claude-sonnet-4-0"
+  min_score: 0.8
+  max_tokens: 2000
+  system_prompt: |
+    You are an expert evaluator. Assess correctness, completeness, and clarity.
+
+# Metrics & reporting
+metrics:
+  collect:
+    - "response_time"
+    - "tool_coverage"
+    - "iteration_count"
+    - "token_usage"
+
+reporting:
+  formats: ["json", "markdown"]
+  output_dir: "./test-reports"
+  include_traces: true
+
+# Execution defaults
+execution:
+  max_concurrency: 3
+  timeout_seconds: 180
+  retry_failed: false
+
+

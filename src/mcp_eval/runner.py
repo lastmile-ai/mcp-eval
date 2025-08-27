@@ -42,7 +42,13 @@ from mcp_eval.report_generation.console import (
     TestProgressDisplay,
 )
 
-app = typer.Typer()
+app = typer.Typer(
+    context_settings={
+        "allow_interspersed_args": True,
+        "allow_extra_args": True,
+        "ignore_unknown_options": False,
+    }
+)
 console = Console()
 
 
@@ -448,7 +454,7 @@ async def run_dataset_evaluations(
 def run_tests(
     ctx: typer.Context,
     test_dir: str = typer.Argument(
-        "tests", help="Directory to scan for tests and datasets"
+        "tests", help="Directory/file or file::function to scan for tests and datasets"
     ),
     format: str = typer.Option("auto", help="Output format (auto, decorator, dataset)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
@@ -461,11 +467,19 @@ def run_tests(
         None, "--max-concurrency", help="Maximum concurrent evaluations"
     ),
 ):
-    """Run MCP-Eval tests and datasets."""
+    """Run MCP-Eval tests and datasets.
+
+    Supports multiple specs: pass additional paths after the first (e.g., tests/a tests/b).
+    Options can be placed before or after arguments.
+    """
     if ctx.invoked_subcommand is None:
+        # Collect any extra args (e.g., additional paths from shell globs)
+        extra_specs = [arg for arg in (ctx.args or []) if not arg.startswith("-")]
+        test_specs = [test_dir] + extra_specs if test_dir else extra_specs
+
         asyncio.run(
             _run_async(
-                test_dir,
+                test_specs,
                 format,
                 verbose,
                 json_report,
@@ -477,7 +491,7 @@ def run_tests(
 
 
 async def _run_async(
-    test_dir: str,
+    test_specs: list[str],
     format: str,
     verbose: bool,
     json_report: str | None,
@@ -487,22 +501,28 @@ async def _run_async(
 ):
     """Async implementation of the run command."""
     console.print(pad("MCP-Eval", char="*", console=console), style="magenta")
-    # Parse pytest-style test specifier for path validation
-    if "::" in test_dir:
-        file_path, _ = test_dir.split("::", 1)
-        test_path = Path(file_path)
-    else:
-        test_path = Path(test_dir)
+    # Normalize and validate all test specs
+    normalized_specs: list[str] = []
+    for spec in test_specs:
+        # Handle pytest-style function spec
+        if "::" in spec:
+            file_path, _ = spec.split("::", 1)
+            path = Path(file_path)
+        else:
+            path = Path(spec)
 
-    if not test_path.exists():
-        console.print(f"[red]Error:[/] Test path '{test_path}' not found")
-        raise typer.Exit(1)
+        if not path.exists():
+            console.print(f"[red]Error:[/] Test path '{path}' not found")
+            raise typer.Exit(1)
+        normalized_specs.append(spec)
 
     console.print("[blue]Discovering tests and datasets...[/blue]")
-    discovered = discover_tests_and_datasets(test_dir)
-
-    tasks = discovered["tasks"]
-    datasets = discovered["datasets"]
+    tasks: list[Any] = []
+    datasets: list[Any] = []
+    for spec in normalized_specs:
+        discovered = discover_tests_and_datasets(spec)
+        tasks.extend(discovered["tasks"])
+        datasets.extend(discovered["datasets"])
 
     if not tasks and not datasets:
         console.print("[yellow]No tests or datasets found[/]")
