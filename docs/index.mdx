@@ -18,31 +18,47 @@ sidebarTitle: "Home"
 
 ## Get Started in 30 Seconds
 
-We recommend using [uv](https://docs.astral.sh/uv/) to manage your Python projects:
+We recommend using [uv](https://docs.astral.sh/uv/) to install `mcp-eval` as a global tool:
 
 <CodeGroup>
-```bash uv
-# Install `mcp-eval`
+```bash uv (recommended)
+# Install mcp-eval globally (for CLI)
+uv tool install mcpevals
+
+# Add mcp-eval dependency to your project
 uv add mcpevals
 
-# Initialize your project
+# Initialize your project (interactive setup)
 mcp-eval init
 
-# Run your first test
-mcp-eval run examples/fetch_test.py
+# Add your MCP server to test
+mcp-eval server add
+
+# Auto-generate tests with an LLM
+mcp-eval generate
+
+# Run tests
+mcp-eval run tests/
 ```
 
 ```bash pip
-# Install `mcp-eval`
+# Install mcp-eval
 pip install mcpevals
 
 # Initialize your project
 mcp-eval init
 
-# Run your first test
-mcp-eval run examples/fetch_test.py
+# Add your MCP server
+mcp-eval server add
+
+# Run tests
+mcp-eval run tests/
 ```
 </CodeGroup>
+
+<Info>
+  **Test any MCP server:** It doesn't matter what language your MCP server is written in - Python, TypeScript, Go, Rust, Java, or any other. As long as it implements the MCP protocol, `mcp-eval` can test it!
+</Info>
 
 <Check>You're ready to start testing! [Continue with the Quickstart →](./quickstart)</Check>
 

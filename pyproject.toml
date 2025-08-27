@@ -95,6 +95,7 @@ packages = ["src/mcp_eval"]
 [tool.setuptools.package-data]
 mcp_eval = [
     "data/**/*.md",
+    "data/**/*.py",
     "data/**/*.yaml",
     "data/**/*.yml",
     "data/**/*.json",

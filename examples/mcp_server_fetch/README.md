@@ -206,7 +206,7 @@ Optionally override timing with `when="now" | "end"`.
 
 ## Configuration
 
-The test suite uses `mcpeval.yaml` for configuration ([view file](../../mcpeval.yaml)):
+The test suite uses `mcpeval.yaml` for configuration. When bootstrapped via `mcp-eval init --template sample`, a starter `mcpeval.yaml` is copied into your project.
 
 - **Server**: MCP fetch server via uvx
 - **Agents**: Different agent configurations for various test types

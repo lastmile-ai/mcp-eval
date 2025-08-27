@@ -56,6 +56,7 @@ from mcp_eval.cli.utils import (
     write_server_to_mcpeval,
     write_agent_to_mcpeval,
 )
+from mcp_eval.data.utils import copy_sample_template
 from mcp_eval.cli.list_command import (
     list_servers as _list_servers_cmd,
     list_agents as _list_agents_cmd,
@@ -827,6 +828,10 @@ async def _emit_tests(
 
 async def init_project(
     out_dir: str = typer.Option(".", help="Project directory for configs"),
+    template: str = typer.Option(
+        "basic",
+        help="Bootstrap template: empty (no files), basic (config only), sample (examples + config)",
+    ),
 ):
     """Initialize an mcp-eval project.
 
@@ -848,7 +853,67 @@ async def init_project(
     """
     project = Path(out_dir)
     project.mkdir(parents=True, exist_ok=True)
+
+    # Copy template files first so ensure_mcpeval_yaml does not overwrite
+    tpl = (template or "").strip().lower()
+    if tpl not in ("empty", "basic", "sample"):
+        tpl = "basic"
+
+    if tpl == "sample":
+        console.print("[cyan]Bootstrapping sample project files...[/cyan]")
+        try:
+            copied = copy_sample_template(project)
+            if copied:
+                for p in copied:
+                    console.print(f"[dim]  wrote {p}[/dim]")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to copy sample files: {e}[/yellow]")
+    elif tpl == "basic":
+        console.print("[cyan]Bootstrapping basic config files...[/cyan]")
+        try:
+            copy_sample_template(
+                project,
+                files_to_copy=[
+                    "mcpeval.yaml",
+                    "mcpeval.secrets.yaml.example",
+                    "usage_example.py",
+                    "sample_server.py",
+                ],
+                overwrite=False,
+            )
+        except Exception:
+            # Fall through to ensure minimal config
+            pass
+
+    # Ensure mcpeval.yaml and secrets exist
     ensure_mcpeval_yaml(project)
+
+    # Create a simple README if one is not present
+    readme_path = project / "README.md"
+    if not readme_path.exists():
+        try:
+            lines = [
+                "# MCP-Eval Quick Start\n",
+                "\n",
+                "This project was bootstrapped by mcp-eval.\n",
+                "\n",
+                "## Run the example\n",
+                "\n",
+                "1. Set your API key (example for Anthropic):\n",
+                "```bash\nexport ANTHROPIC_API_KEY=your_key_here\n```\n",
+                "\n",
+                "2. (Optional) Run the sample server in this directory:\n",
+                "```bash\nuv run python sample_server.py\n```\n",
+                "\n",
+                "3. Run the example evaluation:\n",
+                "```bash\nuv run mcp-eval run usage_example.py\n```\n",
+                "\n",
+                "> Tip: The first run may take a moment while uv prepares an environment.\n",
+            ]
+            readme_path.write_text("".join(lines), encoding="utf-8")
+            console.print(f"[green]✓[/] Wrote {readme_path}")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not write README.md: {e}[/yellow]")
 
     # Create a lightweight context for ModelSelector to avoid global fallback
     context = Context()
@@ -1607,8 +1672,12 @@ def list_agents_command(
 @app.command("init")
 def init_project_cli(
     out_dir: str = typer.Option(".", help="Project directory for configs"),
+    template: str = typer.Option(
+        "basic",
+        help="Bootstrap template: empty (no files), basic (config only), sample (examples + config)",
+    ),
 ):
-    return asyncio.run(init_project(out_dir=out_dir))
+    return asyncio.run(init_project(out_dir=out_dir, template=template))
 
 
 @app.command("generate")

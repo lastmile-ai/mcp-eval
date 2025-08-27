@@ -37,6 +37,7 @@ async def test_config_agent(agent: TestAgent, session: TestSession):
     - mcp-agent.config.yaml (under 'agents' section)
     - .claude/agents/*.yaml (discovered subagents)
     - .mcp-agent/agents/*.yaml
+    - package-provided examples via `mcp_eval.data.sample` (use `mcp-eval init --template sample`)
 
     Example mcpeval.yaml:
     ```yaml
