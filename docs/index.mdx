@@ -16,9 +16,27 @@ sidebarTitle: "Home"
   **`mcp-eval`** ensures your MCP servers, and agents built with them, work reliably in production.
 </Info>
 
+## What `mcp-eval` Does for You
+
+<Columns cols={2}>
+  <Card title="Test MCP Servers" icon="server">
+    Ensure your MCP servers respond correctly to agent requests and handle edge cases gracefully
+  </Card>
+  <Card title="Evaluate Agents" icon="robot">
+    Measure how effectively agents use tools, follow instructions, and recover from errors
+  </Card>
+  <Card title="Track Performance" icon="chart-line">
+    Monitor latency, token usage, cost, and success rates with OpenTelemetry-backed metrics
+  </Card>
+  <Card title="Assert Quality" icon="circle-check">
+    Use structural checks, LLM judges, and path efficiency validators to ensure high quality
+  </Card>
+</Columns>
+
+
 ## Get Started in 30 Seconds
 
-We recommend using [uv](https://docs.astral.sh/uv/) to install `mcp-eval` as a global tool:
+We recommend using [uv](https://docs.astral.sh/uv/):
 
 <CodeGroup>
 ```bash uv (recommended)
@@ -62,22 +80,77 @@ mcp-eval run tests/
 
 <Check>You're ready to start testing! [Continue with the Quickstart →](./quickstart)</Check>
 
-## What `mcp-eval` Does for You
+## 🎮 Choose Your Testing Adventure
 
-<Columns cols={2}>
-  <Card title="Test MCP Servers" icon="server">
-    Ensure your MCP servers respond correctly to agent requests and handle edge cases gracefully
-  </Card>
-  <Card title="Evaluate Agents" icon="robot">
-    Measure how effectively agents use tools, follow instructions, and recover from errors
-  </Card>
-  <Card title="Track Performance" icon="chart-line">
-    Monitor latency, token usage, cost, and success rates with OpenTelemetry-backed metrics
-  </Card>
-  <Card title="Assert Quality" icon="circle-check">
-    Use structural checks, LLM judges, and path efficiency validators to ensure high quality
-  </Card>
-</Columns>
+What are you evaluating today?
+
+<Tabs>
+  <Tab title="I'm testing an MCP Server" icon="server">
+    **You built an MCP server** (in any language!) and want to ensure it handles agent requests correctly.
+    
+    <Card title="Perfect! Let's test your server" icon="server">
+      mcp-eval will spin up an AI agent to test your server with realistic requests, edge cases, and error scenarios.
+      
+      **Your server could be:**
+      - A streamable HTTP database connector
+      - An SSE API wrapper  
+      - A stdio file system server
+      - Any server that speaks MCP!
+    </Card>
+    
+    <Columns cols={2}>
+      <Card title="Start Here" icon="rocket" href="./server-evaluation">
+        MCP Server Testing Guide
+      </Card>
+      <Card title="See Examples" icon="code" href="./examples-mcp-server-fetch">
+        Testing the Fetch Server
+      </Card>
+    </Columns>
+  </Tab>
+  
+  <Tab title="I'm testing an Agent" icon="robot">
+    **You built an AI agent** that uses MCP servers and want to ensure it uses tools effectively.
+    
+    <Card title="Perfect! Let's evaluate your agent" icon="robot">
+      mcp-eval will connect your agent to MCP servers and verify it uses tools correctly, handles errors, and meets performance targets.
+      
+      **Your agent could be:**
+      - A customer service bot
+      - A coding assistant
+      - A deep research agent
+      - Any MCP agent!
+    </Card>
+    
+    <Columns cols={2}>
+      <Card title="Start Here" icon="rocket" href="./agent-evaluation">
+        Agent Evaluation Guide
+      </Card>
+      <Card title="Learn Patterns" icon="graduation-cap" href="./common-workflows">
+        Common Testing Patterns
+      </Card>
+    </Columns>
+  </Tab>
+  
+  <Tab title="I want both!" icon="sparkles">
+    **You're building a complete system** with both MCP servers and agents.
+    
+    <Card title="Awesome! Test the whole stack" icon="sparkles">
+      mcp-eval can test your entire integration - ensuring servers handle requests correctly AND agents use tools effectively.
+    </Card>
+    
+    <Columns cols={3}>
+      <Card title="Quick Start" icon="rocket" href="./quickstart">
+        5-minute setup
+      </Card>
+      <Card title="Concepts" icon="lightbulb" href="./concepts">
+        Core concepts
+      </Card>
+      <Card title="Examples" icon="code" href="./examples">
+        Browse all examples
+      </Card>
+    </Columns>
+  </Tab>
+</Tabs>
 
 ## Why Teams Choose `mcp-eval`
 

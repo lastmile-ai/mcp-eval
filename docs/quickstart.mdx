@@ -347,8 +347,8 @@ Now that you've run the example, let's write your very first custom test:
 
 ### Choose your testing style
 
-<CardGroup cols={2}>
-  <Card title="Decorator Style" icon="at">
+<Tabs>
+  <Tab title="Task Decorators" icon="at">
     **Best for:** Quick, readable tests
     
     ```python
@@ -365,9 +365,9 @@ Now that you've run the example, let's write your very first custom test:
             response=response
         )
     ```
-  </Card>
+  </Tab>
   
-  <Card title="Pytest Style" icon="flask">
+  <Tab title="Pytest" icon="flask">
     **Best for:** Integration with existing pytest suites
     
     ```python
@@ -385,8 +385,8 @@ Now that you've run the example, let's write your very first custom test:
             response=response
         )
     ```
-  </Card>
-</CardGroup>
+  </Tab>
+</Tabs>
 
 ### Your test file structure
 
