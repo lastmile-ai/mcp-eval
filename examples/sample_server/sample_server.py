@@ -30,5 +30,3 @@ def summarize_text(text: str, length: int = 30) -> str:
 
 if __name__ == "__main__":
     asyncio.run(server.run_stdio_async())
-
-

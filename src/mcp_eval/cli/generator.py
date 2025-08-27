@@ -339,9 +339,9 @@ def _convert_servers_to_mcp_settings(
     return result
 
 
-def _load_existing_provider() -> (
-    tuple[str | None, str | None, Dict[str, str], MCPEvalSettings]
-):
+def _load_existing_provider() -> tuple[
+    str | None, str | None, Dict[str, str], MCPEvalSettings
+]:
     """Load existing provider configuration from environment and config files.
 
     Returns:
@@ -893,6 +893,7 @@ async def init_project(
     if not readme_path.exists():
         try:
             from importlib import resources
+
             src = resources.files("mcp_eval.data.sample").joinpath("README.md")
             with resources.as_file(src) as src_path:
                 readme_path.write_bytes(Path(src_path).read_bytes())

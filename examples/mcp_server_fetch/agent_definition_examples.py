@@ -213,9 +213,7 @@ async def test_agent_factory(agent: TestAgent, session: TestSession):
     """
     await agent.generate_str("Summarize https://example.com in one sentence")
 
-    await session.assert_that(
-        Expect.tools.was_called("fetch"), name="fetch_called"
-    )
+    await session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called")
     await session.assert_that(
         Expect.performance.max_iterations(2), name="efficient_execution"
     )
@@ -311,7 +309,9 @@ async def test_default_fallback(agent: TestAgent, session: TestSession):
     await agent.generate_str("Hello, can you fetch https://example.com?")
 
     # Even the default agent should work if servers are configured
-    await session.assert_that(Expect.tools.was_called("fetchIMadeUpTheToolName"), name="fetch_attempted")
+    await session.assert_that(
+        Expect.tools.was_called("fetchIMadeUpTheToolName"), name="fetch_attempted"
+    )
 
 
 # =============================================================================
