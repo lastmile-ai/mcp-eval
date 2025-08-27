@@ -1,0 +1,99 @@
+---
+title: "Connect MCP Servers"
+description: "Configure and validate MCP servers via mcp.json, DXT manifests, or programmatic settings."
+sidebarTitle: "Connect Servers"
+icon: "plug"
+keywords: ["mcp","servers","dxt","mcp.json","configuration"]
+---
+
+> Connect your Model Context Protocol (MCP) servers so mcp‑eval can exercise real tools during evaluation.
+
+## Options at a glance
+
+- Add from `mcp.json` (project‑scoped)
+- Import a DXT manifest
+- Programmatic defaults in config or per Agent
+- Mix local stdio with remote SSE/HTTP servers
+
+## Add servers from mcp.json
+
+If your project already defines servers in a `mcp.json` file (or a path you specify), you can import them:
+
+```bash
+mcp-eval server add --from-mcp-json .cursor/mcp.json
+```
+
+Reference: `mcp.json` format and conventions at `https://gofastmcp.com/integrations/mcp-json-configuration`.
+
+## Add servers from a DXT manifest
+
+DXT manifests describe an MCP server (command/args/env or URL). Import directly:
+
+```bash
+mcp-eval server add --from-dxt ~/Desktop/manifest.dxt
+```
+
+Reference: DXT documentation at `https://github.com/anthropics/dxt/blob/main/README.md`.
+
+## Programmatic configuration (global defaults)
+
+You can set default servers for all tests via the evaluation config. In `mcpeval.yaml`:
+
+```yaml
+default_servers:
+  - sse:https://mcp.example.com/sse
+  - http:https://mcp.example.com/mcp
+  - stdio:npx -y @my/mcp-server
+```
+
+Or programmatically:
+
+```python
+from mcp_eval.config import update_config
+
+update_config({
+  "default_servers": [
+    "sse:https://mcp.example.com/sse",
+    "stdio:npx -y @my/mcp-server",
+  ]
+})
+```
+
+## Per‑Agent servers
+
+If you are constructing an `Agent` or `AgentSpec`, you can override servers at the agent level (recommended for multi‑server agents):
+
+```python
+from mcp_agent.core import AgentSpec
+
+spec = AgentSpec(
+  name="fetch-agent",
+  servers=[
+    "sse:https://mcp.fetcher.dev/sse",
+    "stdio:npx -y @bytebase/dbhub",
+  ],
+)
+```
+
+## Validate connectivity
+
+Before running tests, verify configuration and connectivity:
+
+```bash
+# Quick config checks (no network)
+mcp-eval validate --quick
+
+# Full validation: connect servers, spin agent, basic probes
+mcp-eval validate
+
+# List discovered servers and available tools
+mcp-eval server list -v | cat
+```
+
+### Tips
+
+- Prefer SSE/HTTP for hosted SaaS servers; use stdio for local CLIs.
+- Keep secrets in your secrets file/env rather than hardcoding in `mcp.json`/DXT.
+- For multi‑server agents, name servers clearly and use `Expect.tools.*` assertions to verify the correct server/tool was used.
+
+

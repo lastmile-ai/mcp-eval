@@ -1,6 +1,6 @@
 """ToolSuccessRate evaluator for checking tool success rates."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from dataclasses import dataclass
 
 from mcp_eval.evaluators.base import SyncEvaluator, EvaluatorContext
@@ -15,7 +15,7 @@ class ToolSuccessRate(SyncEvaluator):
     """
 
     min_rate: float = 0.9
-    tool_name: Optional[str] = None  # If None, checks all tools
+    tool_name: str | None = None  # If None, checks all tools
     requires_final_metrics: bool = True
 
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:

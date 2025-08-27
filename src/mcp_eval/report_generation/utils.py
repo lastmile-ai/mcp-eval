@@ -4,7 +4,7 @@ import os
 import sys
 import platform
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import yaml
 
 
@@ -21,7 +21,7 @@ def get_environment_info() -> Dict[str, Any]:
     }
 
 
-def load_config_info() -> Optional[Dict[str, Any]]:
+def load_config_info() -> Dict[str, Any] | None:
     """Load MCP-Eval configuration from standard locations."""
     config_paths = ["mcpeval.yaml", "mcpeval.yml"]
     for config_path in config_paths:

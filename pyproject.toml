@@ -1,6 +1,6 @@
 [project]
-name = "mcp-eval"
-version = "0.1.0"
+name = "mcpevals"
+version = "0.1.3"
 description = "Pytest-style framework for evaluating Model Context Protocol (MCP) servers."
 license = { file = "LICENSE" }
 readme = "README.md"
@@ -68,17 +68,13 @@ jaeger = [
 
 [project.scripts]
 mcp-eval = "mcp_eval.cli:app"
+mcp-evals = "mcp_eval.cli:app"
 mcpeval = "mcp_eval.cli:app"
 mcp_eval = "mcp_eval.cli:app"
+mcpevals = "mcp_eval.cli:app"
 
 [project.entry-points."pytest11"]
 mcp_eval = "mcp_eval.pytest_plugin"
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-dir]
-"" = "src"
 
 [build-system]
 requires = ["hatchling"]
@@ -86,3 +82,21 @@ build-backend = "hatchling.build"
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_eval"]
+
+[tool.setuptools.package-data]
+mcp_eval = [
+    "data/**/*.md",
+    "data/**/*.yaml",
+    "data/**/*.yml",
+    "data/**/*.json",
+    "templates/**/*.j2"
+]

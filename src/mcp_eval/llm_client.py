@@ -1,6 +1,6 @@
 """Simple LLM client for judge evaluations."""
 
-from typing import Optional, TypeVar
+from typing import TypeVar
 from pydantic import BaseModel
 from mcp_agent.workflows.factory import create_llm
 from mcp_eval.config import get_settings
@@ -14,7 +14,7 @@ class JudgeLLMClient:
     This wraps an AugmentedLLM instance configured specifically for judging.
     """
 
-    def __init__(self, model: Optional[str] = None, provider: Optional[str] = None):
+    def __init__(self, model: str | None = None, provider: str | None = None):
         self.model = model
         self.provider = provider
         self._llm = None
@@ -92,7 +92,7 @@ class JudgeLLMClient:
 
 
 def get_judge_client(
-    model: Optional[str] = None, provider: Optional[str] = None
+    model: str | None = None, provider: str | None = None
 ) -> JudgeLLMClient:
     """Get a judge LLM client.
 

@@ -1,0 +1,36 @@
+---
+title: "Integrations"
+description: "Patterns for connecting external MCP servers and multi‑server agents."
+sidebarTitle: "Integrations"
+icon: "diagram-project"
+keywords: ["integrations","mcp","servers","multi-server"]
+---
+
+### Popular patterns
+
+- SaaS SSE/HTTP servers for product data (e.g., docs, tickets)
+- Local stdio servers for CLIs/databases
+- Composite agents with multiple servers (fetch, search, storage)
+
+### Multi‑server agents
+
+Combine multiple servers on a single agent and constrain path with assertions:
+
+```python
+from mcp_eval.catalog import Expect
+
+await session.assert_that(Expect.tools.sequence(["search", "fetch"]))
+await session.assert_that(Expect.path.efficiency(expected_tool_sequence=["search","fetch"]))
+```
+
+### Server discovery and drift
+
+- Use `mcp-eval server list -v` in CI to detect missing tools.
+- Add an `Expect.tools.count(tool, >=1)` guard to ensure expected calls happen.
+
+### Security
+
+- Store credentials in CI secrets / local secrets file.
+- Avoid writing secrets in `mcp.json` or DXT.
+
+

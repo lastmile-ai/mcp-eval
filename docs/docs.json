@@ -1,0 +1,39 @@
+{
+  "navigation": {
+    "pages": [
+      "index",
+      "overview",
+      "quickstart",
+      "common-workflows",
+      "detailed_guide",
+      "concepts",
+      "reports",
+      "metrics-tracing",
+      "agent-evaluation",
+      "server-evaluation",
+      "assertions",
+      "pytest",
+      "datasets",
+      "agents",
+      "connect-servers",
+      "integrations",
+      "configuration",
+      "cli-reference",
+      "api-session",
+      "api-core",
+      "api-catalog",
+      "api-config",
+      "test-generation",
+      "examples",
+      "examples-mcp-server-fetch",
+      "ci-cd",
+      "troubleshooting",
+      "faq",
+      "changelog"
+    ]
+  },
+  "styling": {
+    "eyebrows": "breadcrumbs"
+  }
+}
+

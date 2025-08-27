@@ -1,0 +1,528 @@
+---
+title: "API: Core"
+description: "Essential decorators and primitives for writing MCP-Eval tests: @task, @with_agent, @parametrize, and more."
+sidebarTitle: "API: Core"
+icon: "code"
+keywords: ["task","with_agent","parametrize","setup","teardown","TestResult","decorators"]
+---
+
+> The Core API provides the fundamental building blocks for writing MCP-Eval tests. These decorators and utilities make your tests clean, reusable, and powerful.
+
+## Quick reference
+
+```python
+from mcp_eval.core import (
+    task,           # Define a test task
+    with_agent,     # Specify which agent to use
+    parametrize,    # Run tests with multiple inputs
+    setup,          # Run before tests
+    teardown,       # Run after tests
+    TestResult      # Test execution results
+)
+```
+
+## The @task decorator
+
+The foundation of every MCP-Eval test:
+
+### Basic usage
+
+```python
+from mcp_eval.core import task
+from mcp_eval.catalog import Expect
+
+@task("My first test")
+async def test_basic(agent, session):
+    """A simple test that checks basic functionality."""
+    response = await agent.generate_str("Hello, world!")
+    
+    await session.assert_that(
+        Expect.content.contains("Hello"),
+        response=response
+    )
+```
+
+### Task parameters
+
+```python
+# Compose multiple assertions and give them names for clear reporting
+@task("Fetch and summarize")
+async def test_fetch_and_summarize(agent, session):
+    response = await agent.generate_str(
+        "Fetch https://example.com and summarize in one sentence"
+    )
+
+    await session.assert_that(
+        Expect.tools.was_called("fetch"),
+        name="fetch_called"
+    )
+    await session.assert_that(
+        Expect.content.contains("Example Domain"),
+        response=response,
+        name="has_expected_text"
+    )
+    await session.assert_that(
+        Expect.performance.max_iterations(3),
+        name="efficient"
+    )
+```
+
+### Task with custom configuration
+
+```python
+@task("Expensive test")
+async def test_with_config(agent, session):
+    response = await agent.generate_str("Complex analysis task")
+    # Test continues...
+```
+
+## The @with_agent decorator
+
+Specify which agent configuration to use:
+
+### Using named agents
+
+```python
+@with_agent("default")
+@task("Test with default agent")
+async def test_default(agent):
+    # Uses the 'default' agent from config
+    response = await agent.generate_str("Test prompt")
+```
+
+### Multiple agent configurations
+
+```python
+# Define agents in mcpeval.yaml first
+@with_agent("specialized_agent")
+@task("Test specialized behavior")
+async def test_specialized(agent):
+    # Uses a different agent configuration
+    pass
+
+@with_agent("minimal_agent")
+@task("Test minimal setup")
+async def test_minimal(agent):
+    # Uses yet another configuration
+    pass
+```
+
+### Inline agent configuration
+
+```python
+from mcp_agent.agents.agent_spec import AgentSpec
+
+@with_agent(AgentSpec(
+    name="code_reviewer",
+    instruction="You are a code reviewer. Be thorough and critical.",
+    server_names=["filesystem", "git"]
+))
+@task("Code review test")
+async def test_code_review(agent):
+    response = await agent.generate_str("Review this code: ...")
+```
+
+<Warning>
+  **Decorator order matters!** Always apply `@with_agent` above `@task` to ensure the agent is properly configured when the task runs.
+  
+  ```python
+  # ✅ Correct
+  @with_agent("default")
+  @task("test")
+  async def test_func(agent): ...
+  
+  # ❌ Wrong - will error
+  @task("test")
+  @with_agent("default")
+  async def test_func(agent): ...
+  ```
+</Warning>
+
+## The @parametrize decorator
+
+Run the same test with different inputs:
+
+### Basic parametrization
+
+```python
+@with_agent("default")
+@parametrize("number", [1, 2, 5, 10, 100])
+@task("Test with different numbers")
+async def test_numbers(agent, number):
+    response = await agent.generate_str(f"Is {number} prime?")
+    # Each number creates a separate test case
+    await agent.assert_that(
+        Expect.content.regex(r"(yes|no|prime|composite)")
+    )
+```
+
+### Multiple parameters
+
+```python
+@with_agent("default")
+@parametrize("operation", ["add", "subtract", "multiply"])
+@parametrize("x", [1, 10, 100])
+@parametrize("y", [2, 5])
+@task("Test calculator operations")
+async def test_calculator(agent, operation, x, y):
+    # Creates 3 * 3 * 2 = 18 test cases!
+    prompt = f"Use the calculator to {operation} {x} and {y}"
+    response = await agent.generate_str(prompt)
+    
+    # Verify the right tool was used
+    await agent.assert_that(
+        Expect.tools.was_called(f"calculator_{operation}")
+    )
+```
+
+### Named scenarios
+
+Use `@parametrize("name,url,expected", [...])` to model named cases.
+
+```python
+@with_agent("default")
+@parametrize(
+    "name,url,expected",
+    [
+        ("home", "https://example.com", "Example Domain"),
+        ("httpbin_json", "https://httpbin.org/json", "slideshow"),
+    ],
+)
+@task("Fetch {name}")
+async def test_fetch_case(agent, session, name: str, url: str, expected: str):
+    response = await agent.generate_str(f"Fetch {url}")
+
+    await session.assert_that(
+        Expect.tools.was_called("fetch"),
+        name=f"{name}_fetch_called",
+    )
+    await session.assert_that(
+        Expect.content.contains(expected, case_sensitive=False),
+        response=response,
+        name=f"{name}_has_expected",
+    )
+```
+
+### Dynamic parametrization
+
+```python
+def get_test_cases():
+    """Generate test cases dynamically."""
+    import json
+    with open("test_data.json") as f:
+        return json.load(f)["test_cases"]
+
+@with_agent("default")
+@parametrize("test_case", get_test_cases())
+@task("Dynamic test cases")
+async def test_dynamic(agent, test_case):
+    response = await agent.generate_str(test_case["prompt"])
+    
+    await agent.assert_that(
+        Expect.content.contains(test_case["expected"]),
+        response=response
+    )
+```
+
+## Setup and teardown
+
+Run code before and after your tests:
+
+### Simple setup/teardown
+
+```python
+from mcp_eval.core import setup, teardown
+import os
+import tempfile
+
+test_dir = None
+
+@setup
+def prepare_test_environment():
+    """Create temporary test directory."""
+    global test_dir
+    test_dir = tempfile.mkdtemp(prefix="mcp_test_")
+    print(f"🚀 Created test directory: {test_dir}")
+    
+    # Set up test files
+    with open(f"{test_dir}/test.txt", "w") as f:
+        f.write("Test content")
+
+@teardown
+def cleanup_test_environment():
+    """Clean up after tests."""
+    global test_dir
+    if test_dir and os.path.exists(test_dir):
+        import shutil
+        shutil.rmtree(test_dir)
+        print(f"🧹 Cleaned up {test_dir}")
+```
+
+### Async setup/teardown
+
+```python
+@setup
+async def async_prepare():
+    """Setup that requires async operations."""
+    # Connect to database
+    await db.connect()
+    
+    # Seed test data
+    await db.execute("INSERT INTO test_table ...")
+    
+    print("✅ Database ready")
+
+@teardown
+async def async_cleanup():
+    """Async cleanup operations."""
+    await db.execute("DELETE FROM test_table WHERE ...")
+    await db.disconnect()
+```
+
+### Setup with validation
+
+```python
+@setup
+def validate_environment():
+    """Ensure test environment is properly configured."""
+    import sys
+    
+    # Check Python version
+    if sys.version_info < (3, 10):
+        raise RuntimeError("Tests require Python 3.10+")
+    
+    # Check required environment variables
+    required_vars = ["ANTHROPIC_API_KEY", "TEST_SERVER_URL"]
+    missing = [var for var in required_vars if not os.getenv(var)]
+    
+    if missing:
+        raise RuntimeError(f"Missing environment variables: {missing}")
+    
+    # Check MCP servers are accessible
+    from mcp_eval.utils import check_server_health
+    if not check_server_health("my_server"):
+        raise RuntimeError("MCP server 'my_server' is not responding")
+    
+    print("✅ Environment validated successfully")
+```
+
+## TestResult object
+
+Understanding test execution results:
+
+### TestResult structure
+
+```python
+from mcp_eval.core import TestResult
+
+# After a test runs, you get a TestResult:
+result = TestResult(
+    id="test_123_abc",
+    name="Test basic fetch",
+    passed=True,
+    duration_ms=1234.56,
+    parameters={"url": "https://example.com"},
+    metrics={
+        "tool_calls": 2,
+        "tokens_used": 500,
+        "cost_usd": 0.01
+    },
+    evaluations=[
+        {"name": "content_check", "passed": True, "score": 1.0},
+        {"name": "performance", "passed": True, "details": "Under 2s"}
+    ],
+    error=None  # Or error message if failed
+)
+```
+
+### Accessing TestResult in hooks
+
+```python
+# Use CLI combined reports or session.get_metrics()/get_results() for summaries
+```
+
+### Aggregating results
+
+```python
+def analyze_test_results(results: list[TestResult]):
+    """Analyze a batch of test results."""
+    total = len(results)
+    passed = sum(1 for r in results if r.passed)
+    
+    total_duration = sum(r.duration_ms for r in results)
+    total_cost = sum(r.metrics.get('cost_usd', 0) for r in results)
+    
+    print(f"\n📊 Test Summary:")
+    print(f"  Total tests: {total}")
+    print(f"  Passed: {passed}/{total} ({passed/total*100:.1f}%)")
+    print(f"  Total duration: {total_duration/1000:.2f}s")
+    print(f"  Total cost: ${total_cost:.4f}")
+    
+    # Find slowest tests
+    slowest = sorted(results, key=lambda r: r.duration_ms, reverse=True)[:3]
+    print(f"\n🐢 Slowest tests:")
+    for result in slowest:
+        print(f"  {result.name}: {result.duration_ms:.0f}ms")
+    
+    # Find failed tests
+    failed = [r for r in results if not r.passed]
+    if failed:
+        print(f"\n❌ Failed tests:")
+        for result in failed:
+            print(f"  {result.name}: {result.error}")
+```
+
+## Advanced patterns
+
+### Conditional test execution
+Prefer selecting tests with your runner and environment rather than custom decorators.
+
+```bash
+# Run a single test function (pytest-style selector supported by the runner)
+mcp-eval run tests/test_fetch.py::test_fetch_case
+
+# Narrow to a file or directory
+mcp-eval run tests/test_fetch.py
+```
+
+Using pytest marks for conditions (when running under pytest):
+
+```python
+import os, pytest
+from mcp_eval.core import task
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip on CI")
+@task("Local-only behavior")
+async def test_local_only(agent, session):
+    response = await agent.generate_str("Do something local")
+    # assertions...
+
+@pytest.mark.slow
+@task("Slow end-to-end scenario")
+async def test_slow_scenario(agent, session):
+    # long-running flow...
+    ...
+```
+
+Then select by mark:
+
+```bash
+pytest -m "not slow" tests/
+```
+
+### Test dependencies
+Prefer independent tests; if ordering is required, orchestrate via your runner.
+
+### Custom test context
+
+```python
+from contextvars import ContextVar
+
+test_context = ContextVar('test_context', default={})
+
+@task("Test with context")
+async def test_with_context(agent, session):
+    # Set context for this test
+    ctx = test_context.get().copy()
+    ctx['test_id'] = session.test_id
+    ctx['start_time'] = time.time()
+    test_context.set(ctx)
+    
+    response = await agent.generate_str("Test prompt")
+    
+    # Context is available throughout the test
+    duration = time.time() - ctx['start_time']
+    print(f"Test {ctx['test_id']} took {duration:.2f}s")
+```
+
+## Best practices
+
+<Tip>
+  **Name your tests clearly:** Use descriptive names that explain what the test validates. This helps when reviewing test reports.
+</Tip>
+
+<Warning>
+  **Avoid test interdependence:** Each test should be independent and not rely on side effects from other tests, unless explicitly using `depends_on`.
+</Warning>
+
+<Note>
+  **Use parametrize wisely:** While parametrization is powerful, too many parameter combinations can make tests slow. Consider grouping related parameters.
+</Note>
+
+## Common patterns
+
+### Testing error handling
+
+```python
+@with_agent("default")
+@task("Test error recovery")
+async def test_error_handling(agent):
+    # Trigger an error condition
+    response = await agent.generate_str("Divide 10 by 0")
+    
+    # Verify graceful handling
+    await agent.assert_that(
+        Expect.content.regex(r"(error|cannot|undefined|infinity)"),
+        name="handles_division_by_zero"
+    )
+    
+    # Verify no tool crashes
+    # Check tool success via success_rate, e.g., Expect.tools.success_rate(1.0)
+```
+
+### Testing multi-step workflows
+
+```python
+@with_agent("default")
+@task("Test complete workflow")
+async def test_workflow(agent, session):
+    # Step 1: Authentication
+    auth_response = await agent.generate_str("Authenticate as test_user")
+    await session.assert_that(
+        Expect.tools.was_called("auth"),
+        name="authentication_attempted"
+    )
+    
+    # Step 2: Fetch data
+    data_response = await agent.generate_str("Get my profile data")
+    await session.assert_that(
+        Expect.tools.was_called("fetch_profile"),
+        name="profile_fetched"
+    )
+    
+    # Step 3: Process
+    process_response = await agent.generate_str("Summarize my activity")
+    await session.assert_that(
+        Expect.content.contains("summary"),
+        response=process_response,
+        name="summary_generated"
+    )
+    
+    # Verify the complete sequence
+    await session.assert_that(
+        Expect.tools.sequence(["auth", "fetch_profile", "summarize"]),
+        name="correct_workflow_order"
+    )
+```
+
+## See also
+
+<CardGroup cols={2}>
+  <Card title="Expect API" href="./api-catalog" icon="list">
+    Available assertions for your tests
+  </Card>
+  
+  <Card title="Session API" href="./api-session" icon="cube">
+    Managing test sessions and agents
+  </Card>
+  
+  <Card title="Best Practices" href="./best-practices" icon="star">
+    Writing maintainable tests
+  </Card>
+  
+  <Card title="Examples" href="./examples" icon="code">
+    Complete test examples
+  </Card>
+</CardGroup>
+
+

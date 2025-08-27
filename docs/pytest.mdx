@@ -1,0 +1,75 @@
+---
+title: "Pytest"
+description: "Use native pytest with MCP‑Eval fixtures and markers."
+sidebarTitle: "Pytest"
+icon: "flask"
+keywords: ["pytest","fixtures","markers","parametrize"]
+---
+
+### Fixtures
+
+- `mcp_session`: access the session (metrics, assertions)
+- `mcp_agent`: a `TestAgent` bound to the session
+
+Source: [pytest_plugin.py](../src/mcp_eval/pytest_plugin.py)
+
+### Markers
+
+- `@pytest.mark.mcp_agent(<Agent|AgentSpec|name>)`: per‑test agent override
+- `@pytest.mark.network`, `@pytest.mark.slow`
+
+### Example
+
+```python
+import pytest
+from mcp_eval import Expect
+
+@pytest.mark.asyncio
+@pytest.mark.network
+async def test_basic_fetch(mcp_agent):
+    resp = await mcp_agent.generate_str("Fetch https://example.com")
+    await mcp_agent.session.assert_that(Expect.tools.was_called("fetch"), response=resp)
+    await mcp_agent.session.assert_that(Expect.content.contains("Example Domain"), response=resp)
+```
+
+Full examples: [test_pytest_style.py](../examples/mcp_server_fetch/tests/test_pytest_style.py)
+
+### Per-test agent override
+
+```python
+import pytest
+from mcp_eval import Expect
+from mcp_agent.agents.agent import Agent
+
+@pytest.mark.asyncio
+@pytest.mark.mcp_agent(Agent(name="custom", instruction="You fetch", server_names=["fetch"]))
+async def test_with_custom_agent(mcp_agent):
+    resp = await mcp_agent.generate_str("Fetch https://example.com")
+    await mcp_agent.session.assert_that(Expect.tools.was_called("fetch"), response=resp)
+```
+
+### Parametrization
+
+```python
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://example.com", "Example Domain"),
+        ("https://httpbin.org/html", "Herman Melville"),
+    ],
+)
+async def test_urls(mcp_agent, url, expected):
+    resp = await mcp_agent.generate_str(f"Fetch {url}")
+    await mcp_agent.session.assert_that(Expect.content.contains(expected, case_sensitive=False), response=resp)
+```
+
+<!-- TODO: Add a larger end-to-end pytest screenshot: network marker, slow marker, and verbose summary. -->
+
+#### Parametrization
+
+Use standard `@pytest.mark.parametrize` for breadth, or mix with MCP‑Eval’s `@parametrize` in decorator tests.
+
+<!-- TODO: Add a screenshot of a pytest run with markers, including skipped slow tests. -->
+
+

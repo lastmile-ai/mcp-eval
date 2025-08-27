@@ -1,0 +1,201 @@
+---
+title: "Building with Claude"
+description: "Use Claude subagents to accelerate MCP-Eval test development with specialized AI assistants"
+sidebarTitle: "Building with Claude"
+icon: "robot"
+keywords: ["claude", "subagents", "ai", "test writing", "debugging", "performance"]
+---
+
+MCP-Eval includes specialized Claude subagents that help you write, debug, and optimize tests. These subagents are AI assistants with deep knowledge of MCP-Eval patterns and best practices.
+
+## Available Subagents
+
+MCP-Eval ships with several specialized subagents in `src/mcp_eval/data/subagents/`:
+
+### Test Development
+- **`mcp-eval-test-writer`** - Expert at writing comprehensive MCP-Eval tests in all styles (decorator, pytest, dataset)
+- **`mcp-eval-debugger`** - Expert at debugging test failures and configuration issues
+- **`mcp-eval-config-expert`** - Expert at configuring MCP-Eval and managing mcpeval.yaml files
+
+### Test Generation
+- **`test-scenario-designer`** - Creates diverse, high-quality test scenarios for MCP servers
+- **`test-assertion-refiner`** - Refines and enhances test assertions for comprehensive coverage
+- **`test-code-emitter`** - Converts test scenarios into valid Python test code
+
+## Setup
+
+### Option 1: Reference from Package
+
+Find your package location:
+```bash
+python -c "import mcp_eval, os; print(os.path.join(os.path.dirname(mcp_eval.__file__), 'data', 'subagents'))"
+```
+
+Add to your `mcpeval.yaml`:
+```yaml
+agents:
+  enabled: true
+  search_paths:
+    # Add the path from the command above
+    - "/path/to/site-packages/mcp_eval/data/subagents"
+    # Standard locations
+    - ".claude/agents"
+    - "~/.claude/agents"
+  pattern: "*.md"
+```
+
+### Option 2: Copy to Project
+
+For Claude Code:
+```bash
+mkdir -p .claude/agents
+cp path/to/mcp_eval/data/subagents/*.md .claude/agents/
+```
+
+For mcp-agent:
+```bash
+mkdir -p .mcp-agent/agents
+cp path/to/mcp_eval/data/subagents/*.md .mcp-agent/agents/
+```
+
+### Option 3: Development Mode
+
+If running from source:
+```yaml
+agents:
+  enabled: true
+  search_paths:
+    - "./src/mcp_eval/data/subagents"
+  pattern: "*.md"
+```
+
+## Using Subagents in Claude Code
+
+Once configured, Claude Code will automatically discover and use these subagents when appropriate. You can also explicitly request them:
+
+### Writing Tests
+```
+"Use the mcp-eval-test-writer subagent to create comprehensive tests for my fetch server"
+```
+
+### Debugging Failures
+```
+"Use the mcp-eval-debugger subagent to help me understand why my tests are failing"
+```
+
+### Configuration Help
+```
+"Use the mcp-eval-config-expert subagent to set up my mcpeval.yaml correctly"
+```
+
+## Using Subagents for Test Generation
+
+The test generation subagents work together to create high-quality tests:
+
+1. **test-scenario-designer** - Designs comprehensive test scenarios
+2. **test-assertion-refiner** - Enhances assertions for better coverage
+3. **test-code-emitter** - Generates syntactically correct Python code
+
+These can be used manually or integrated into the `mcp-eval generate` workflow.
+
+## Subagent Examples
+
+### Test Writer Example
+
+The `mcp-eval-test-writer` subagent can help create tests in any style:
+
+```python
+# Decorator style
+@task("Fetch and validate")
+async def test_fetch_validate(agent: Agent, session: Session):
+    response = await agent.generate_str("Fetch example.com")
+    await session.assert_that(
+        Expect.tools.was_called("fetch"),
+        response=response
+    )
+```
+
+```python
+# Pytest style
+@pytest.mark.asyncio
+async def test_fetch_with_error(mcp_agent, mcp_session):
+    response = await mcp_agent.generate_str("Fetch invalid-url")
+    await mcp_session.assert_that(
+        Expect.content.contains("error"),
+        response=response
+    )
+```
+
+### Debugger Example
+
+The `mcp-eval-debugger` helps diagnose issues:
+
+- Analyzes OTEL traces to find performance bottlenecks
+- Identifies assertion failures and suggests fixes
+- Troubleshoots configuration problems
+- Explains error messages and stack traces
+
+### Config Expert Example
+
+The `mcp-eval-config-expert` helps with configuration:
+
+```yaml
+# Optimized configuration for parallel execution
+execution:
+  max_concurrency: 10
+  timeout_seconds: 60
+  fail_fast: true
+
+agents:
+  definitions:
+    - name: "fetch_agent"
+      provider: anthropic
+      model: claude-3-5-sonnet-20241022
+      instruction: "You are a helpful assistant that can fetch URLs"
+      server_names: ["fetch"]
+```
+
+## Best Practices
+
+1. **Use the right subagent for the task** - Each subagent is specialized for specific aspects of MCP-Eval
+2. **Combine subagents** - Use multiple subagents together for complex tasks
+3. **Provide context** - Give subagents information about your server's capabilities
+4. **Review generated code** - Subagents provide excellent starting points, but review and customize as needed
+5. **Keep subagents updated** - Pull the latest MCP-Eval version for improved subagents
+
+## Programmatic Access
+
+You can also access subagents programmatically:
+
+```python
+from importlib import resources
+
+def load_subagent(name: str) -> str:
+    """Load a subagent's content by name."""
+    subagents_path = resources.files("mcp_eval.data").joinpath("subagents")
+    agent_file = subagents_path.joinpath(f"{name}.md")
+    return agent_file.read_text()
+
+# Example: Load test writer subagent
+test_writer = load_subagent("mcp-eval-test-writer")
+```
+
+## Integration with mcp-agent
+
+If you're using [mcp-agent](https://github.com/modelcontextprotocol/mcp-agent), these subagents are compatible with its agent loading system. Configure your `mcp-agent.config.yaml` to include the MCP-Eval subagents search path.
+
+## Contributing Subagents
+
+To contribute new subagents:
+
+1. Create a markdown file following the format in `src/mcp_eval/data/subagents/`
+2. Include the frontmatter with name, description, and tools
+3. Write clear instructions for the subagent's expertise
+4. Test the subagent with real MCP-Eval tasks
+5. Submit a pull request
+
+## Related Resources
+
+- [Generating Tests with LLMs](/test-generation) - Automated test generation
+- [Agent Configuration](/agents) - Configure agents for testing
+- [Best Practices](/best-practices) - General MCP-Eval best practices

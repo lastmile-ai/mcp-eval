@@ -1,0 +1,36 @@
+title: "Generating Tests with LLMs"
+description: "Use the generator to discover tools, create scenarios, refine assertions, and emit tests or datasets."
+sidebarTitle: "Generating Tests with LLMs"
+icon: "magic"
+keywords: ["generate","update","scenarios","assertions","model selector"]
+---
+
+We recommend Anthropic Sonnet/Opus for higher‑quality generation and judging.
+
+### Generate
+
+```bash
+mcp-eval generate --style pytest --n-examples 8 --provider anthropic [--model ...]
+```
+
+What happens:
+- Detect credentials and write/update configs
+- Discover server tools
+- Generate scenarios with an LLM
+- Refine assertions (tool/judge/path)
+- Emit a single test file or dataset
+
+### Update an existing file
+
+```bash
+mcp-eval update --target-file tests/test_fetch_generated.py --style pytest --n-examples 4
+```
+
+### Implementation
+
+- Generator: [generator.py](../src/mcp_eval/cli/generator.py)
+- Scenario creation: [generation.py](../src/mcp_eval/generation.py)
+
+<!-- TODO: Add a short before/after snippet of generated tests, plus a terminal capture of the progress spinner. -->
+
+

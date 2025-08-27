@@ -1,0 +1,356 @@
+name: "Run MCP-Eval tests with uv"
+description: "Install with uv, run mcp-eval tests, generate reports, upload artifacts, and emit a summary."
+branding:
+  icon: check-circle
+  color: blue
+inputs:
+  python-version:
+    description: "Python version to use"
+    default: "3.11"
+    required: false
+  working-directory:
+    description: "Directory to run installation and tests from"
+    default: "."
+    required: false
+  tests:
+    description: "Test path(s) or selector passed to 'mcp-eval run'"
+    default: "tests/"
+    required: false
+  run-args:
+    description: "Extra args to pass to 'mcp-eval run' (e.g., '-v --max-concurrency 4')"
+    default: "-v"
+    required: false
+  reports-dir:
+    description: "Directory to write report files into"
+    default: "mcpeval-reports"
+    required: false
+  json-report:
+    description: "JSON report filename"
+    default: "mcpeval-results.json"
+    required: false
+  markdown-report:
+    description: "Markdown report filename"
+    default: "mcpeval-results.md"
+    required: false
+  html-report:
+    description: "HTML report filename"
+    default: "mcpeval-results.html"
+    required: false
+  requirements:
+    description: "Path to requirements file. If set, installs with 'uv pip install -r'."
+    required: false
+  install-args:
+    description: "Arguments to pass to 'uv pip install'. Defaults to editable install of current project."
+    default: "-e ."
+    required: false
+  include-pytest:
+    description: "Install pytest/pytest-asyncio (only needed if you run pytest)"
+    default: "false"
+    required: false
+  extra-packages:
+    description: "Extra packages to install with uv (space-separated)."
+    required: false
+  skip-install:
+    description: "Skip dependency installation"
+    default: "false"
+    required: false
+  use-cache:
+    description: "Enable uv cache restore/save"
+    default: "true"
+    required: false
+  artifact-name:
+    description: "Name for the uploaded artifact"
+    default: "mcpeval-artifacts"
+    required: false
+  upload-artifacts:
+    description: "Upload reports and traces as workflow artifacts"
+    default: "true"
+    required: false
+  set-summary:
+    description: "Append markdown report to GITHUB_STEP_SUMMARY"
+    default: "true"
+    required: false
+  pr-comment:
+    description: "Post a sticky PR comment with the Markdown report"
+    default: "false"
+    required: false
+  sticky-comment-tag:
+    description: "HTML tag used to identify/update the sticky PR comment"
+    default: "mcpeval-report"
+    required: false
+  commit-report:
+    description: "Commit the Markdown/HTML report into the repo"
+    default: "false"
+    required: false
+  commit-path:
+    description: "Directory in repo to write committed reports"
+    default: "docs/mcpeval"
+    required: false
+  commit-branch:
+    description: "Branch name to commit to (defaults to current)"
+    required: false
+  commit-message:
+    description: "Commit message when committing reports"
+    default: "chore(mcpeval): update CI report [skip ci]"
+    required: false
+  env-file:
+    description: "Path to a dotenv-style file (KEY=VALUE per line) to load"
+    required: false
+  extra-env:
+    description: "Additional KEY=VALUE lines to export to environment (newline-separated)"
+    required: false
+outputs:
+  results-json-path:
+    description: "Absolute path to JSON report"
+    value: ${{ steps.compute-paths.outputs.json_path }}
+  results-md-path:
+    description: "Absolute path to Markdown report"
+    value: ${{ steps.compute-paths.outputs.md_path }}
+  results-html-path:
+    description: "Absolute path to HTML report"
+    value: ${{ steps.compute-paths.outputs.html_path }}
+  reports-dir:
+    description: "Absolute path to reports directory"
+    value: ${{ steps.compute-paths.outputs.reports_dir_abs }}
+  test-reports-dir:
+    description: "Absolute path to mcp-eval trace directory"
+    value: ${{ steps.compute-paths.outputs.test_reports_abs }}
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install uv
+      id: setup-uv
+      uses: astral-sh/setup-uv@v4
+
+    - name: Compute report paths
+      id: compute-paths
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        reports_dir="${{ inputs.reports-dir }}"
+        mkdir -p "$reports_dir"
+        json_path="$(cd "$reports_dir" && pwd)/${{ inputs.json-report }}"
+        md_path="$(cd "$reports_dir" && pwd)/${{ inputs.markdown-report }}"
+        html_path="$(cd "$reports_dir" && pwd)/${{ inputs.html-report }}"
+        test_reports_abs="$(cd . && pwd)/test-reports"
+        reports_dir_abs="$(cd "$reports_dir" && pwd)"
+        echo "json_path=$json_path" >> "$GITHUB_OUTPUT"
+        echo "md_path=$md_path" >> "$GITHUB_OUTPUT"
+        echo "html_path=$html_path" >> "$GITHUB_OUTPUT"
+        echo "test_reports_abs=$test_reports_abs" >> "$GITHUB_OUTPUT"
+        echo "reports_dir_abs=$reports_dir_abs" >> "$GITHUB_OUTPUT"
+
+    - name: Apply extra environment variables
+      if: ${{ inputs.env-file || inputs.extra-env }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        if [[ -n "${{ inputs.env-file }}" && -f "${{ inputs.env-file }}" ]]; then
+          echo "Loading env-file: ${{ inputs.env-file }}"
+          # shellcheck disable=SC2046
+          while IFS= read -r line; do
+            [[ -z "$line" || "$line" =~ ^# ]] && continue
+            echo "$line" >> "$GITHUB_ENV"
+          done < "${{ inputs.env-file }}"
+        fi
+        if [[ -n "${{ inputs.extra-env }}" ]]; then
+          echo "Applying extra-env"
+          # Append each non-empty, non-comment line from extra-env to $GITHUB_ENV
+          printf '%s\n' "${{ inputs.extra-env }}" | while IFS= read -r line; do
+            [[ -z "$line" || "$line" =~ ^# ]] && continue
+            echo "$line" >> "$GITHUB_ENV"
+          done
+        fi
+
+    - name: Restore uv cache
+      if: ${{ inputs.use-cache == 'true' }}
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/uv
+          ~/.cache/pip
+        key: ${{ runner.os }}-uv-${{ inputs.python-version }}-${{ hashFiles('**/uv.lock') }}-${{ hashFiles('**/pyproject.toml') }}-${{ hashFiles('**/requirements.txt') }}
+
+    - name: Install dependencies (uv)
+      if: ${{ inputs.skip-install != 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        UV_NO_PROGRESS: "1"
+      run: |
+        set -euo pipefail
+        if [[ -n "${{ inputs.requirements }}" ]]; then
+          echo "Installing from requirements: ${{ inputs.requirements }}"
+          uv pip install -r "${{ inputs.requirements }}"
+        elif [[ -f pyproject.toml ]]; then
+          echo "Syncing project dependencies via uv"
+          uv sync
+        elif [[ -f requirements.txt ]]; then
+          echo "Installing from local requirements.txt"
+          uv pip install -r requirements.txt
+        else
+          echo "Bootstrapping minimal project and adding dependencies with uv add"
+          cat > pyproject.toml << 'PY'
+[project]
+name = "mcpeval-ci"
+version = "0.0.0"
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+PY
+          uv add mcpevals "mcp-agent[anthropic,openai]"
+          if [[ "${{ inputs.include-pytest }}" == "true" ]]; then
+            uv add pytest pytest-asyncio
+          fi
+          uv sync
+        fi
+        if [[ -n "${{ inputs.extra-packages }}" ]]; then
+          echo "Installing extra packages: ${{ inputs.extra-packages }}"
+          # Prefer uv add for named packages; fall back to uv pip for URLs/files
+          for pkg in ${{ inputs.extra-packages }}; do
+            if [[ "$pkg" == http* || "$pkg" == git+* || "$pkg" == *\.whl || "$pkg" == *\.tar.gz ]]; then
+              uv pip install "$pkg"
+            else
+              uv add "$pkg"
+            fi
+          done
+          uv sync
+        fi
+
+    - name: Show tool versions
+      shell: bash
+      run: |
+        set -euo pipefail
+        uv --version
+        python --version
+        uv run python -c "import mcp_eval, sys; print('mcp-eval import ok', mcp_eval.__version__ if hasattr(mcp_eval,'__version__') else 'dev')" || true
+
+    - name: Run MCP-Eval
+      id: run-tests
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        UV_NO_PROGRESS: "1"
+      run: |
+        set +e
+        echo "Running: mcp-eval run ${{ inputs.tests }} ${{ inputs.run-args }} --json \"${{ steps.compute-paths.outputs.json_path }}\" --markdown \"${{ steps.compute-paths.outputs.md_path }}\" --html \"${{ steps.compute-paths.outputs.html_path }}\""
+        uv run mcp-eval run ${{ inputs.tests }} ${{ inputs.run-args }} \
+          --json "${{ steps.compute-paths.outputs.json_path }}" \
+          --markdown "${{ steps.compute-paths.outputs.md_path }}" \
+          --html "${{ steps.compute-paths.outputs.html_path }}"
+        ec=$?
+        echo "exit_code=$ec" >> "$GITHUB_OUTPUT"
+        # Ensure report files exist even on failure
+        : > "${{ steps.compute-paths.outputs.md_path }}" || true
+        : > "${{ steps.compute-paths.outputs.json_path }}" || true
+        : > "${{ steps.compute-paths.outputs.html_path }}" || true
+        exit 0
+
+    - name: Append report to step summary
+      if: ${{ inputs.set-summary == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ -f "${{ steps.compute-paths.outputs.md_path }}" ]]; then
+          echo "## MCP-Eval Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "Reports dir: ${{ steps.compute-paths.outputs.reports_dir_abs }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ steps.compute-paths.outputs.md_path }}" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "No markdown report found at ${{ steps.compute-paths.outputs.md_path }}" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Upload artifacts
+      if: ${{ inputs.upload-artifacts == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        if-no-files-found: warn
+        retention-days: 14
+        path: |
+          ${{ steps.compute-paths.outputs.reports_dir_abs }}
+          ${{ steps.compute-paths.outputs.test_reports_abs }}
+
+    - name: Comment PR with MCP-Eval report
+      if: ${{ inputs.pr-comment == 'true' && github.event_name == 'pull_request' }}
+      uses: actions/github-script@v7
+      env:
+        REPORT_PATH: ${{ steps.compute-paths.outputs.md_path }}
+        STICKY_TAG: ${{ inputs.sticky-comment-tag }}
+      with:
+        script: |
+          const fs = require('fs');
+          const tag = process.env.STICKY_TAG || 'mcpeval-report';
+          const path = process.env.REPORT_PATH;
+          let body = `<!-- ${tag} -->\n`;
+          body += '## MCP-Eval Report\n\n';
+          try {
+            const content = fs.readFileSync(path, 'utf8');
+            body += content;
+          } catch (e) {
+            body += `_No report found at ${path}_\n`;
+          }
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+          const previous = comments.find(c => c.user.type === 'Bot' && c.body.startsWith(`<!-- ${tag} -->`));
+          if (previous) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }
+
+    - name: Commit reports to repository
+      if: ${{ inputs.commit-report == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        MD_PATH: ${{ steps.compute-paths.outputs.md_path }}
+        HTML_PATH: ${{ steps.compute-paths.outputs.html_path }}
+        DEST_DIR: ${{ inputs.commit-path }}
+        COMMIT_BRANCH: ${{ inputs.commit-branch }}
+        COMMIT_MSG: ${{ inputs.commit-message }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$DEST_DIR"
+        # Copy if files exist
+        [[ -f "$MD_PATH" ]] && cp "$MD_PATH" "$DEST_DIR/"
+        [[ -f "$HTML_PATH" ]] && cp "$HTML_PATH" "$DEST_DIR/"
+        # Resolve branch
+        branch="$COMMIT_BRANCH"
+        if [[ -z "$branch" ]]; then
+          branch="$(git rev-parse --abbrev-ref HEAD)"
+        fi
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        # Ensure we are on the branch
+        current="$(git rev-parse --abbrev-ref HEAD)"
+        if [[ "$current" != "$branch" ]]; then
+          git checkout "$branch"
+        fi
+        git add "$DEST_DIR"
+        if git diff --cached --quiet; then
+          echo "No report changes to commit."
+          exit 0
+        fi
+        git commit -m "$COMMIT_MSG"
+        git push origin "HEAD:$branch"
+
+    - name: Fail if tests failed
+      if: ${{ steps.run-tests.outputs.exit_code != '0' }}
+      shell: bash
+      run: |
+        echo "mcp-eval reported failures (exit code ${{ steps.run-tests.outputs.exit_code }})"
+        exit 1
+
+

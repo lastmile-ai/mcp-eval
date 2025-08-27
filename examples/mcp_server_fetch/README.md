@@ -4,7 +4,16 @@ A comprehensive test suite for the MCP fetch server using the mcp-eval framework
 
 ## Setup
 
-1. **Install dependencies:**
+1. **Install dependencies using uv (recommended):**
+   ```bash
+   # Install uv if you haven't already
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   
+   # Install the package
+   uv pip install -e .
+   ```
+   
+   Or with standard pip:
    ```bash
    pip install -e .
    ```
@@ -21,75 +30,122 @@ A comprehensive test suite for the MCP fetch server using the mcp-eval framework
 
 ## Running Tests
 
+> **Note:** All examples below show both `uv run` (recommended) and direct execution methods. Using `uv run` ensures dependencies are properly managed.
+
 ### Pytest Integration Tests
 ```bash
-# Run all pytest tests
-pytest tests/test_pytest_style.py -v
+# Run all pytest tests (with uv)
+uv run pytest tests/test_pytest_style.py -v
 
 # Run specific test
-pytest tests/test_pytest_style.py::test_basic_fetch_with_pytest -v
+uv run pytest tests/test_pytest_style.py::test_basic_fetch_with_pytest -v
 
 # Run with network marker
-pytest -m network tests/test_pytest_style.py
+uv run pytest -m network tests/test_pytest_style.py
 
 # Skip slow tests
-pytest -m "not slow" tests/
+uv run pytest -m "not slow" tests/
+
+# Or without uv:
+pytest tests/test_pytest_style.py -v
 ```
 
 ### Legacy Assertions Style
 ```bash
-# Run with mcp-eval CLI
-mcp-eval run tests/test_assertions_style.py
+# Run with mcpevals CLI (using uv)
+uv run mcpevals run tests/test_assertions_style.py
 
 # Or individual test
-python -c "
+uv run python -c "
 import asyncio
 from tests.test_assertions_style import test_basic_fetch_assertions
 asyncio.run(test_basic_fetch_assertions())
 "
+
+# Without uv:
+mcpevals run tests/test_assertions_style.py
 ```
 
 ### Modern Decorator Style
 ```bash
-# Run with mcp-eval CLI
-mcp-eval run tests/test_decorator_style.py
+# Run with mcpevals CLI (using uv)
+uv run mcpevals run tests/test_decorator_style.py
 
 # With verbose output
-mcp-eval run tests/test_decorator_style.py --verbose
+uv run mcpevals run tests/test_decorator_style.py --verbose
+
+# Without uv:
+mcpevals run tests/test_decorator_style.py --verbose
 ```
 
 ### Dataset Evaluation
 ```bash
-# Run dataset evaluation
-python tests/test_dataset_style.py
+# Run dataset evaluation (with uv)
+uv run python tests/test_dataset_style.py
 
 # Run from YAML dataset
-mcp-eval dataset datasets/basic_fetch_dataset.yaml
+uv run mcpevals run dataset datasets/basic_fetch_dataset.yaml
 
 # Generate reports
-mcp-eval run tests/test_dataset_style.py --json=results.json --markdown=results.md
+uv run mcpevals run tests/test_dataset_style.py --json=results.json --markdown=results.md
+
+# Without uv:
+python tests/test_dataset_style.py
+mcpevals run dataset datasets/basic_fetch_dataset.yaml
 ```
 
 ### Advanced Features
 ```bash
-# Run advanced analysis tests
-mcp-eval run tests/test_advanced_features.py
+# Run advanced analysis tests (with uv)
+uv run mcpevals run tests/test_advanced_features.py
 
 # With detailed reporting
-mcp-eval run tests/test_advanced_features.py --json=advanced_results.json
+uv run mcpevals run tests/test_advanced_features.py --json=advanced_results.json
+
+# Without uv:
+mcpevals run tests/test_advanced_features.py --json=advanced_results.json
 ```
 
 ### Run All Tests
 ```bash
-# Run everything with mcp-eval
-mcp-eval run tests/
+# Run everything with mcpevals (using uv)
+uv run mcpevals run tests/
 
 # Run everything with pytest
-pytest tests/ -v
+uv run pytest tests/ -v
 
 # Mixed approach
-mcp-eval run tests/test_decorator_style.py tests/test_dataset_style.py
-pytest tests/test_pytest_style.py
+uv run mcpevals run tests/test_decorator_style.py tests/test_dataset_style.py
+uv run pytest tests/test_pytest_style.py
+
+# Without uv:
+mcpevals run tests/
+pytest tests/ -v
+```
+
+## Quick Start Example
+
+Here's a complete example of running a test from scratch:
+
+```bash
+# 1. Clone and navigate to this example
+cd examples/mcp_server_fetch
+
+# 2. Install dependencies
+uv pip install -e .
+
+# 3. Set your API key
+export ANTHROPIC_API_KEY="your-key-here"
+
+# 4. Run a simple test
+uv run mcpevals run tests/test_decorator_style.py::test_basic_fetch_decorator -v
+
+# Expected output:
+# ✓ test_basic_fetch_decorator [4.123s]
+#   └─ Test basic URL fetching with decorator style
+#      ├─ fetch_tool_called: ✓ Tool 'fetch' was called at least 1 time(s)
+#      ├─ contains_domain_text: ✓ Response contains 'Example Domain'
+#      └─ fetch_success_rate: ✓ Tool success rate is at least 100.0%
 ```
 
 ## Test Categories
@@ -149,7 +205,7 @@ Optionally override timing with `when="now" | "end"`.
 
 ## Configuration
 
-The test suite uses `mcp-eval.yaml` for configuration:
+The test suite uses `mcpeval.yaml` for configuration ([view file](../../mcpeval.yaml)):
 
 - **Server**: MCP fetch server via uvx
 - **Agents**: Different agent configurations for various test types
@@ -178,7 +234,7 @@ Tests generate multiple output formats:
 ### Custom Evaluators
 
 ```python
-from mcp-eval.evaluators.base import SyncEvaluator
+from mcp_eval.evaluators.base import SyncEvaluator
 
 class CustomFetchEvaluator(SyncEvaluator):
     def evaluate_sync(self, ctx):
@@ -186,9 +242,11 @@ class CustomFetchEvaluator(SyncEvaluator):
         return True
 
 # Register the evaluator
-from mcp-eval.evaluators import register_evaluator
+from mcp_eval.evaluators import register_evaluator
 register_evaluator('CustomFetchEvaluator', CustomFetchEvaluator)
 ```
+
+See [evaluators module](../../src/mcp_eval/evaluators/) for more examples.
 
 ### Golden Path Analysis
 
@@ -207,10 +265,36 @@ Update `golden_paths/fetch_paths.json` to define expected tool sequences for dif
 
 ```bash
 # Enable debug logging
-mcp-eval_LOG_LEVEL=DEBUG mcp-eval run tests/
+MCPEVALS_LOG_LEVEL=DEBUG uv run mcpevals run tests/
 
 # Inspect specific test
-mcp-eval run tests/test_decorator_style.py::test_basic_fetch_decorator --verbose
+uv run mcpevals run tests/test_decorator_style.py::test_basic_fetch_decorator --verbose
+
+# View available commands
+uv run mcpevals --help
 ```
 
-This test suite serves as both a comprehensive evaluation of the MCP fetch server and a demonstration of mcp-eval's capabilities across all testing paradigms.
+## Expected Test Results
+
+When running the full test suite, you should see output similar to:
+
+```
+✓ test_basic_fetch_decorator [4.123s]
+✓ test_content_extraction_decorator [6.287s]
+✓ test_error_handling_decorator [3.142s]
+✓ test_concurrent_fetching_decorator [8.654s]
+✓ test_markdown_conversion_decorator [5.432s]
+
+Results: 5 passed, 0 failed, 0 skipped
+```
+
+Note: Some advanced tests may fail depending on network conditions or API availability.
+
+## Related Documentation
+
+- [Assertions Guide](../../docs/assertions.mdx) - Learn about the Expect catalog
+- [Common Workflows](../../docs/common-workflows.mdx) - Practical testing patterns
+- [Configuration Reference](../../docs/configuration.mdx) - Full configuration options
+- [Main README](../../README.md) - Project overview
+
+This test suite serves as both a comprehensive evaluation of the MCP fetch server and a demonstration of mcpevals capabilities across all testing paradigms.

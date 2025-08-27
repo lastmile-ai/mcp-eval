@@ -1,6 +1,6 @@
 """Data models for evaluation reports."""
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from dataclasses import dataclass
 
 from mcp_eval.metrics import TestMetrics
@@ -14,15 +14,15 @@ class CaseResult:
     case_name: str
     inputs: Any
     output: Any
-    expected_output: Optional[Any]
-    metadata: Optional[Dict[str, Any]]
+    expected_output: Any | None
+    metadata: Dict[str, Any] | None
     evaluation_results: List[EvaluationRecord]
     metrics: TestMetrics
     passed: bool
     duration_ms: float
-    error: Optional[str] = None
-    agent_name: Optional[str] = None
-    servers: Optional[List[str]] = None
+    error: str | None = None
+    agent_name: str | None = None
+    servers: List[str] | None = None
 
 
 @dataclass
@@ -32,8 +32,8 @@ class EvaluationReport:
     dataset_name: str
     task_name: str
     results: List[CaseResult]
-    metadata: Optional[Dict[str, Any]] = None
-    agent_name: Optional[str] = None
+    metadata: Dict[str, Any] | None = None
+    agent_name: str | None = None
 
     @property
     def total_cases(self) -> int:

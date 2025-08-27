@@ -1,7 +1,7 @@
 """MultiCriteriaJudge evaluator with multiple criteria and detailed rubrics."""
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 
@@ -30,7 +30,7 @@ class EvaluationCriterion:
     description: str
     weight: float = 1.0
     min_score: float = 0.7
-    examples: Optional[Dict[str, str]] = field(default=None)  # score -> example
+    examples: Dict[str, str] | None = field(default=None)  # score -> example
 
     def to_prompt(self) -> str:
         """Convert to prompt text."""
@@ -49,7 +49,7 @@ class MultiCriteriaJudge(Evaluator):
     criteria: List[EvaluationCriterion]
     require_all_pass: bool = False
     use_cot: bool = True  # Chain of thought reasoning
-    model: Optional[str] = None
+    model: str | None = None
     include_confidence: bool = True
     aggregate_method: str = "weighted"  # "weighted", "min", "harmonic_mean"
 

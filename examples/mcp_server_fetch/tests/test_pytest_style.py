@@ -178,18 +178,18 @@ class CustomMetricsValidationEvaluator(Evaluator):
 
         # Check that we have metrics
         assert metrics is not None, "Metrics should not be None"
-        assert isinstance(
-            metrics, TestMetrics
-        ), f"Expected TestMetrics, got {type(metrics)}"
+        assert isinstance(metrics, TestMetrics), (
+            f"Expected TestMetrics, got {type(metrics)}"
+        )
 
         # Validate tool calls were recorded
         assert len(metrics.tool_calls) > 0, "Should have recorded tool calls"
         assert len(metrics.unique_tools_used) > 0, "Should have unique tools recorded"
 
         # Check that fetch tool was used
-        assert (
-            "fetch" in metrics.unique_tools_used
-        ), "Fetch tool should be in unique tools"
+        assert "fetch" in metrics.unique_tools_used, (
+            "Fetch tool should be in unique tools"
+        )
 
         # Validate timing metrics
         assert metrics.total_duration_ms > 0, "Total duration should be positive"

@@ -1,7 +1,7 @@
 """Metrics collection and processing from OTEL traces."""
 
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from dataclasses import dataclass, field
 
 from mcp_agent.tracing.token_counter import TokenCounter
@@ -93,8 +93,8 @@ class ToolCall:
     start_time: float
     end_time: float
     is_error: bool = False
-    error_message: Optional[str] = None
-    server_name: Optional[str] = None
+    error_message: str | None = None
+    server_name: str | None = None
 
     @property
     def duration_ms(self) -> float:
@@ -174,7 +174,7 @@ class TraceSpan:
 
     name: str
     context: Dict[str, str]
-    parent: Optional[Dict[str, str]]
+    parent: Dict[str, str] | None
     start_time: int  # nanoseconds since epoch
     end_time: int  # nanoseconds since epoch
     attributes: Dict[str, Any] = field(default_factory=dict)
@@ -365,7 +365,7 @@ def _is_llm_span(span: TraceSpan) -> bool:
     )
 
 
-def _extract_tool_call(span: TraceSpan) -> Optional[ToolCall]:
+def _extract_tool_call(span: TraceSpan) -> ToolCall | None:
     """Extract tool call information from span."""
     try:
         # For MCPAggregator.call_tool spans, the parsed_tool_name contains the clean tool name

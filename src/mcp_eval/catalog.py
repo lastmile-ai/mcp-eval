@@ -13,7 +13,7 @@ themselves. Pair them with `session.assert_that(...)`.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Pattern, Union
+from typing import Any, Dict, List, Pattern
 
 from mcp_eval.evaluators import (
     ToolWasCalled,
@@ -66,9 +66,7 @@ class Tools:
         return ExactToolCount(tool_name, expected_count)
 
     @staticmethod
-    def success_rate(
-        min_rate: float, tool_name: Optional[str] = None
-    ) -> ToolSuccessRate:
+    def success_rate(min_rate: float, tool_name: str | None = None) -> ToolSuccessRate:
         return ToolSuccessRate(min_rate=min_rate, tool_name=tool_name)
 
     @staticmethod
@@ -78,9 +76,9 @@ class Tools:
     @staticmethod
     def output_matches(
         tool_name: str,
-        expected_output: Union[Dict[str, Any], str, Pattern, int, float, List[Any]],
+        expected_output: Dict[str, Any] | str | Pattern | int | float | List[Any],
         *,
-        field_path: Optional[str] = None,
+        field_path: str | None = None,
         match_type: str = "exact",
         case_sensitive: bool = True,
         call_index: int = -1,
@@ -139,7 +137,7 @@ class Judge:
         require_all_pass: bool = False,
         include_confidence: bool = True,
         use_cot: bool = True,
-        model: Optional[str] = None,
+        model: str | None = None,
     ) -> MultiCriteriaJudge:
         # If dict is provided, convert to EvaluationCriterion list with default weights/min_scores
         if isinstance(criteria, dict):
@@ -163,12 +161,12 @@ class Path:
     @staticmethod
     def efficiency(
         *,
-        optimal_steps: Optional[int] = None,
-        expected_tool_sequence: Optional[List[str]] = None,
+        optimal_steps: int | None = None,
+        expected_tool_sequence: List[str] | None = None,
         allow_extra_steps: int = 0,
         penalize_backtracking: bool = True,
         penalize_repeated_tools: bool = True,
-        tool_usage_limits: Optional[Dict[str, int]] = None,
+        tool_usage_limits: Dict[str, int] | None = None,
         default_tool_limit: int = 1,
     ) -> PathEfficiency:
         return PathEfficiency(

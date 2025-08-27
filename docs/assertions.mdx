@@ -1,0 +1,157 @@
+---
+title: "Assertions"
+description: "Unified assertion API with the Expect catalog: content, tools, performance, judges, path."
+sidebarTitle: "Assertions"
+icon: "check-double"
+keywords: ["assertions","Expect","tools","judge","path","performance"]
+---
+
+> Assertions use a single entrypoint and an expressive catalog. Prefer structural checks for stability, and combine them with judges only when necessary.
+
+Use one entrypoint:
+
+```python
+await session.assert_that(Expect.content.contains("Example"), response=resp)
+```
+
+Catalog source: [catalog.py](../src/mcp_eval/catalog.py)
+
+## Immediate vs deferred
+
+- Immediate: content and judge (given `response`)
+- Deferred (requires final metrics): tools, performance, path
+
+## Content
+
+- `Expect.content.contains(text, case_sensitive=False)`
+- `Expect.content.not_contains(text, case_sensitive=False)`
+- `Expect.content.regex(pattern, case_sensitive=False)`
+
+Examples:
+
+```python
+resp = await agent.generate_str("Fetch https://example.com")
+await session.assert_that(Expect.content.contains("Example Domain"), response=resp)
+await session.assert_that(Expect.content.not_contains("Stack trace"), response=resp)
+await session.assert_that(Expect.content.regex(r"Example\\s+Domain"), response=resp)
+```
+
+## Tools
+
+- `Expect.tools.was_called(name, min_times=1)`
+- `Expect.tools.called_with(name, {args})`
+- `Expect.tools.count(name, expected_count)`
+- `Expect.tools.success_rate(min_rate, tool_name=None)`
+- `Expect.tools.failed(name)`
+- `Expect.tools.output_matches(name, expected, field_path?, match_type?, case_sensitive?, call_index?)`
+- `Expect.tools.sequence([names], allow_other_calls=False)`
+
+Notes:
+- `field_path` supports nested dict/list access, e.g. `content[0].text` or `content.0.text`
+
+Examples:
+
+```python
+# Verify a fetch occurred with expected output pattern in first content block
+await session.assert_that(
+  Expect.tools.output_matches(
+    tool_name="fetch",
+    expected_output=r"use.*examples",
+    match_type="regex",
+    case_sensitive=False,
+    field_path="content[0].text",
+  ),
+  name="fetch_output_match",
+)
+
+# Verify sequence and counts
+await session.assert_that(Expect.tools.sequence(["fetch"], allow_other_calls=True))
+await session.assert_that(Expect.tools.count("fetch", 1))
+await session.assert_that(Expect.tools.success_rate(1.0, tool_name="fetch"))
+```
+
+## Performance
+
+- `Expect.performance.max_iterations(n)`
+- `Expect.performance.response_time_under(ms)`
+
+Example:
+
+```python
+await session.assert_that(Expect.performance.max_iterations(3))
+await session.assert_that(Expect.performance.response_time_under(10_000))
+```
+
+## Judge
+
+- `Expect.judge.llm(rubric, min_score=0.8, include_input=False, require_reasoning=True)`
+- `Expect.judge.multi_criteria(criteria, aggregate_method="weighted", require_all_pass=False, include_confidence=True, use_cot=True, model=None)`
+
+Examples:
+
+```python
+# Single-criterion rubric
+judge = Expect.judge.llm(
+  rubric="Response should identify JSON format and summarize main points",
+  min_score=0.8,
+  include_input=True,
+)
+await session.assert_that(judge, response=resp, name="quality_check")
+
+# Multi-criteria
+from mcp_eval.evaluators import EvaluationCriterion
+criteria = [
+  EvaluationCriterion(name="accuracy", description="Factual correctness", weight=2.0, min_score=0.8),
+  EvaluationCriterion(name="completeness", description="Covers key points", weight=1.5, min_score=0.7),
+]
+judge_mc = Expect.judge.multi_criteria(criteria, aggregate_method="weighted", use_cot=True)
+await session.assert_that(judge_mc, response=resp, name="multi_criteria")
+```
+
+## Path
+
+- `Expect.path.efficiency(optimal_steps?, expected_tool_sequence?, allow_extra_steps=0, penalize_backtracking=True, penalize_repeated_tools=True, tool_usage_limits?, default_tool_limit=1)`
+
+Evaluators source: [evaluators/](../src/mcp_eval/evaluators/)
+
+### Examples
+
+```python
+# Enforce exact order and single use of tools
+await session.assert_that(
+  Expect.path.efficiency(
+    expected_tool_sequence=["validate", "process", "save"],
+    tool_usage_limits={"validate": 1, "process": 1, "save": 1},
+    allow_extra_steps=0,
+    penalize_backtracking=True,
+  ),
+  name="golden_path",
+)
+
+# Allow a retry of a fragile step without failing the whole path
+await session.assert_that(
+  Expect.path.efficiency(
+    expected_tool_sequence=["fetch", "parse"],
+    tool_usage_limits={"fetch": 2, "parse": 1},
+    allow_extra_steps=1,
+    penalize_repeated_tools=False,
+  ),
+  name="robust_path",
+)
+```
+
+### Tips
+
+- Prefer structural checks (`output_matches`) for tool outputs when possible for stability
+- Use `name` in `assert_that(..., name="...")` to label checks in reports
+- Combine judge + structural checks for high confidence
+
+<Tip>
+Combine a minimal judge (e.g., rubric with `min_score=0.8`) with one or two structural checks (like `output_matches`) for resilient tests.
+</Tip>
+
+<Note>
+Deferred assertions are evaluated when the session ends or when `when="end"` is used. If an assertion depends on final metrics (e.g., success rate), defer it.
+</Note>
+
+

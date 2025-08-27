@@ -9,7 +9,7 @@ import shutil
 import logging
 import inspect
 from pathlib import Path
-from typing import Any, Callable, List, Literal, Dict, Optional, Union
+from typing import Any, Callable, List, Literal, Dict
 from datetime import datetime
 from contextlib import asynccontextmanager
 
@@ -49,7 +49,7 @@ class TestAgent:
     def __init__(self, agent: Agent, session: "TestSession"):
         self._agent = agent
         self._session = session
-        self._llm: Optional[AugmentedLLM] = None
+        self._llm: AugmentedLLM | None = None
 
     # Explicit attach_llm by factory/class is removed. LLMs are attached by session configuration.
     async def attach_llm(self, *args, **kwargs) -> AugmentedLLM:  # type: ignore[override]
@@ -97,8 +97,8 @@ class TestAgent:
     async def assert_that(
         self,
         evaluator: Evaluator,
-        name: Optional[str] = None,
-        response: Optional[str] = None,
+        name: str | None = None,
+        response: str | None = None,
         **kwargs,
     ) -> None:
         """Unified async assertion API delegated to the session."""
@@ -137,18 +137,16 @@ class TestSession:
         test_name: str,
         verbose: bool = False,
         *,
-        agent_override: Optional[
-            Union[Agent, AugmentedLLM, AgentSpec, str, Callable]
-        ] = None,
+        agent_override: Agent | AugmentedLLM | AgentSpec | str | Callable | None = None,
     ):
         self.test_name = test_name
         self.verbose = verbose
         self._agent_override = agent_override
 
         # Core objects
-        self.app: Optional[MCPApp] = None
-        self.agent: Optional[Agent] = None
-        self.test_agent: Optional[TestAgent] = None
+        self.app: MCPApp | None = None
+        self.agent: Agent | None = None
+        self.test_agent: TestAgent | None = None
 
         # OTEL as single source of truth
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -159,8 +157,8 @@ class TestSession:
         self._start_time = time.time()
 
         # Cached data (computed from OTEL traces)
-        self._metrics: Optional[TestMetrics] = None
-        self._span_tree: Optional[SpanTree] = None
+        self._metrics: TestMetrics | None = None
+        self._span_tree: SpanTree | None = None
         self._results: List[EvaluationRecord] = []
         self._available_tools_by_server: Dict[str, List[str]] = {}
 
@@ -202,9 +200,9 @@ class TestSession:
         # 3) Minimal default AgentSpec with default_servers
         eval_settings = get_settings()
         # Prefer provider/model from AgentSpec if present; fallback to settings
-        spec_provider: Optional[str] = None
-        spec_model: Optional[str] = None
-        pre_attached_llm: Optional[AugmentedLLM] = None
+        spec_provider: str | None = None
+        spec_model: str | None = None
+        pre_attached_llm: AugmentedLLM | None = None
 
         async def _agent_from_spec(spec: AgentSpec) -> Agent:
             return _agent_from_spec_factory(spec, context=self.app.context)
@@ -559,8 +557,8 @@ class TestSession:
     async def assert_that(
         self,
         evaluator: Evaluator,
-        name: Optional[str] = None,
-        response: Optional[str] = None,
+        name: str | None = None,
+        response: str | None = None,
         *,
         inputs: MessageTypes | None = None,
         when: Literal["auto", "now", "end"] = "auto",
@@ -675,7 +673,7 @@ class TestSession:
                 self._record_evaluation_result(name, error_result, str(e))
 
     def _record_evaluation_result(
-        self, name: str, result: "EvaluatorResult", error: Optional[str]
+        self, name: str, result: "EvaluatorResult", error: str | None
     ):
         """Record an evaluation result."""
         self._results.append(
@@ -706,7 +704,7 @@ class TestSession:
         except Exception as e:
             logger.warning(f"Error during session cleanup: {e}")
 
-    def get_span_tree(self) -> Optional[SpanTree]:
+    def get_span_tree(self) -> SpanTree | None:
         """Get span tree for advanced analysis."""
         if self._span_tree is None:
             self._process_otel_traces()  # This sets both metrics and span tree
@@ -864,7 +862,7 @@ class TestSession:
 @asynccontextmanager
 async def test_session(
     test_name: str,
-    agent: Optional[Union[Agent, AugmentedLLM, AgentSpec, str]] = None,
+    agent: Agent | AugmentedLLM | AgentSpec | str | None = None,
 ):
     """Context manager for creating test sessions.
 

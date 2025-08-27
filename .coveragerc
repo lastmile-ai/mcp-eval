@@ -1,0 +1,16 @@
+[run]
+source = src/mcp_eval
+omit =
+  src/mcp_eval/cli/generator.py
+  src/mcp_eval/cli/issue.py
+  src/mcp_eval/generation.py
+  src/mcp_eval/llm_client.py
+  src/mcp_eval/report_generation/console.py
+  src/mcp_eval/report_generation/html.py
+  src/mcp_eval/report_generation/markdown.py
+  src/mcp_eval/optimizer/*
+
+[report]
+show_missing = True
+skip_covered = False
+

@@ -1,0 +1,413 @@
+---
+title: "API: Session"
+description: "Master TestSession and TestAgent for orchestrating tests, assertions, and metrics collection."
+sidebarTitle: "API: Session"
+icon: "cube"
+keywords: ["TestSession","TestAgent","assert_that","evaluate_now","results","metrics","lifecycle"]
+---
+
+> The Session API is the heart of MCP-Eval testing. It manages your agent's lifecycle, collects metrics, runs assertions, and produces comprehensive test results.
+
+## Quick start
+
+The simplest way to create a test session:
+
+```python
+from mcp_eval.session import test_session
+from mcp_eval.catalog import Expect
+
+async with test_session("my-test") as agent:
+    # Agent is ready with MCP servers connected
+    response = await agent.generate_str("Fetch https://example.com")
+    
+    # Run assertions
+    await agent.assert_that(
+        Expect.content.contains("Example Domain"),
+        response=response
+    )
+```
+
+## Core concepts
+
+### TestSession
+
+The orchestrator that manages everything:
+
+- **Lifecycle management**: Starts/stops agents and MCP servers
+- **Tool discovery**: Automatically finds and registers MCP tools
+- **Metrics collection**: Tracks all interactions via OTEL
+- **Assertion execution**: Runs evaluators at the right time
+- **Report generation**: Produces test artifacts
+
+### TestAgent
+
+A thin, friendly wrapper around your LLM agent:
+
+- **Simple interface**: Just `generate()` and `assert_that()`
+- **Automatic tracking**: All interactions are recorded
+- **Context preservation**: Maintains conversation state
+
+## Creating sessions
+
+### Basic session creation
+
+```python
+# Using context manager (recommended)
+async with test_session("test-name") as agent:
+    # Your test code here
+    pass
+
+# Manual lifecycle (advanced)
+session = TestSession(test_name="test-name")
+agent = await session.__aenter__()
+try:
+    # Your test code
+    ...
+finally:
+    await session.__aexit__(None, None, None)
+    session.cleanup()
+```
+
+### Session with custom configuration
+
+```python
+from mcp_eval.session import test_session
+from mcp_agent.agents.agent_spec import AgentSpec
+
+spec = AgentSpec(
+    name="custom",
+    instruction="You are a helpful test assistant",
+    server_names=["my_server"],
+)
+async with test_session("custom-test", agent=spec) as agent:
+    # Your test code
+    pass
+```
+
+## Agent interactions
+
+### Generating responses
+
+```python
+# Simple string generation
+response = await agent.generate_str("What is 2+2?")
+print(response)  # "The answer is 4"
+
+# Full response object may be available depending on provider; prefer generate_str for portability
+```
+
+### Multi-turn conversations
+
+```python
+# Sessions maintain context
+response1 = await agent.generate_str("My name is Alice")
+response2 = await agent.generate_str("What's my name?")
+# response2 will correctly identify "Alice"
+```
+
+## Assertions in depth
+
+### Immediate vs. deferred assertions
+
+```python
+# Immediate: evaluated right away (content, judge)
+await session.assert_that(
+    Expect.content.contains("success"),
+    response=response,  # Required for immediate
+    name="has_success"
+)
+
+# Deferred: evaluated at session end (tools, performance, path)
+await session.assert_that(
+    Expect.tools.was_called("calculator"),
+    name="used_calculator"  # No response needed
+)
+
+# Force deferred evaluation at end
+await session.assert_that(
+    Expect.content.contains("final"),
+    response=response,
+    when="end"  # Defer even content checks
+)
+```
+
+### Assertion timing control
+
+```python
+# Evaluate specific assertions immediately
+result = await session.evaluate_now_async(
+    Expect.performance.response_time_under(5000),
+    response=response,
+    name="quick_response"
+)
+
+if not result.passed:
+    print(f"Too slow: {result.details}")
+    # Take corrective action
+
+# Batch evaluate multiple assertions
+results = await session.evaluate_now_async(
+    Expect.tools.success_rate(0.95),
+    Expect.performance.max_iterations(3)
+)
+```
+
+### Named assertions for better reporting
+
+```python
+# Always name your assertions for clarity
+await session.assert_that(
+    Expect.content.regex(r"\d+ items? found"),
+    response=response,
+    name="item_count_format"  # Appears in reports
+)
+```
+
+## Metrics and results
+
+### Accessing metrics during tests
+
+```python
+# Get current metrics
+metrics = session.get_metrics()
+
+print(f"Tool calls: {len(metrics.tool_calls)}")
+print(f"Total tokens: {metrics.total_tokens}")
+print(f"Duration so far: {metrics.total_duration_ms}ms")
+print(f"Estimated cost: ${metrics.total_cost_usd:.4f}")
+
+# Detailed tool information
+for call in metrics.tool_calls:
+    print(f"Tool: {call.name}")
+    print(f"Duration: {call.duration_ms}ms")
+    print(f"Success: {call.success}")
+    if not call.success:
+        print(f"Error: {call.error}")
+```
+
+### Getting test results
+
+```python
+# Check if all assertions passed
+if session.all_passed():
+    print("✅ All tests passed!")
+else:
+    print("❌ Some tests failed")
+
+# Get detailed results
+results = session.get_results()
+for result in results:
+    print(f"Assertion: {result.name}")
+    print(f"Passed: {result.passed}")
+    if not result.passed:
+        print(f"Reason: {result.details}")
+
+# Get pass/fail summary
+summary = session.get_summary()
+print(f"Passed: {summary['passed']}/{summary['total']}")
+print(f"Pass rate: {summary['pass_rate']:.1%}")
+```
+
+### Duration tracking
+
+```python
+# Get test duration
+duration_ms = session.get_duration_ms()
+print(f"Test took {duration_ms/1000:.2f} seconds")
+
+# Track specific operations
+from time import time
+
+start = time()
+response = await agent.generate_str("Complex task")
+operation_time = (time() - start) * 1000
+
+if operation_time > 5000:
+    print(f"Warning: Operation took {operation_time:.0f}ms")
+```
+
+## OpenTelemetry traces
+
+### Accessing trace data
+
+```python
+# Get structured span tree
+span_tree = session.get_span_tree()
+
+def print_spans(span, indent=0):
+    prefix = "  " * indent
+    print(f"{prefix}{span.name}: {span.duration_ms}ms")
+    for child in span.children:
+        print_spans(child, indent + 1)
+
+print_spans(span_tree)
+
+# Ensure traces are written to disk
+await session._ensure_traces_flushed()
+```
+
+### Custom span attributes
+
+```python
+# Add custom attributes to current span
+from opentelemetry import trace
+
+tracer = trace.get_tracer(__name__)
+
+with tracer.start_as_current_span("custom_operation") as span:
+    span.set_attribute("user_id", "123")
+    span.set_attribute("operation_type", "validation")
+    
+    response = await agent.generate_str("Validate user input")
+```
+
+## Artifacts and reporting
+
+### Session artifacts
+
+```python
+# Sessions automatically save artifacts
+session = await TestSession.create(
+    test_name="my-test",
+    output_dir="test-reports",  # Custom output location
+    save_artifacts=True  # Enable artifact saving
+)
+
+# After test completion, find artifacts at:
+# test-reports/my-test_[timestamp]/
+#   ├── trace.jsonl          # OTEL traces
+#   ├── results.json         # Test results
+#   ├── metrics.json         # Performance metrics
+#   └── conversation.json    # Full conversation log
+```
+
+### Programmatic report generation
+
+```python
+# Generate reports programmatically
+from mcp_eval.reports import ReportGenerator
+
+generator = ReportGenerator(session)
+
+# Generate different formats
+await generator.save_json("results.json")
+await generator.save_markdown("results.md")
+await generator.save_html("results.html")
+
+# Get report data for custom processing
+report_data = generator.get_report_data()
+print(f"Test: {report_data['test_name']}")
+print(f"Duration: {report_data['duration_ms']}ms")
+print(f"Passed: {report_data['passed']}/{report_data['total']}")
+```
+
+## Advanced patterns
+
+### Custom session hooks
+
+```python
+class CustomSession(TestSession):
+    async def on_tool_call(self, tool_name: str, args: dict):
+        """Hook called before each tool execution."""
+        print(f"About to call {tool_name} with {args}")
+        
+        # Validate tool usage
+        if tool_name == "dangerous_tool":
+            raise ValueError("Dangerous tool not allowed in tests")
+    
+    async def on_assertion_complete(self, result):
+        """Hook called after each assertion."""
+        if not result.passed:
+            # Log failures to external system
+            await self.log_to_monitoring(result)
+```
+
+### Session state management
+
+```python
+# Store custom state in session
+session.state["test_user_id"] = "user_123"
+session.state["test_context"] = {"environment": "staging"}
+
+# Access state in assertions or hooks
+user_id = session.state.get("test_user_id")
+```
+
+### Parallel session execution
+
+```python
+import asyncio
+
+async def run_test(test_name: str, prompt: str):
+    async with test_session(test_name) as agent:
+        response = await agent.generate_str(prompt)
+        await agent.assert_that(
+            Expect.content.contains("success"),
+            response=response
+        )
+        return agent.session.all_passed()
+
+# Run multiple tests in parallel
+results = await asyncio.gather(
+    run_test("test1", "Task 1"),
+    run_test("test2", "Task 2"),
+    run_test("test3", "Task 3")
+)
+
+print(f"All passed: {all(results)}")
+```
+
+## Best practices
+
+<Tip>
+  **Use context managers:** Always use `async with test_session()` to ensure proper cleanup, even if tests fail.
+</Tip>
+
+<Warning>
+  **Name your assertions:** Always provide descriptive names for assertions. This makes debugging much easier when reviewing test reports.
+</Warning>
+
+<Note>
+  **Monitor metrics:** Check metrics during long-running tests to catch performance issues early.
+</Note>
+
+## Error handling
+
+```python
+try:
+    async with test_session("error-test") as agent:
+        response = await agent.generate_str("Test prompt")
+        await agent.assert_that(
+            Expect.content.contains("expected"),
+            response=response
+        )
+except TimeoutError:
+    print("Test timed out - increase timeout_seconds")
+except AssertionError as e:
+    print(f"Assertion failed: {e}")
+except Exception as e:
+    print(f"Unexpected error: {e}")
+    # Session cleanup is still guaranteed
+```
+
+## See also
+
+<CardGroup cols={2}>
+  <Card title="Expect API Reference" href="./api-catalog" icon="list">
+    All available assertions
+  </Card>
+  
+  <Card title="Configuration" href="./configuration" icon="gear">
+    Session configuration options
+  </Card>
+  
+  <Card title="Reports" href="./reports" icon="chart-bar">
+    Understanding test reports
+  </Card>
+  
+  <Card title="Metrics & Tracing" href="./metrics-tracing" icon="chart-line">
+    Deep dive into metrics
+  </Card>
+</CardGroup>
+
+

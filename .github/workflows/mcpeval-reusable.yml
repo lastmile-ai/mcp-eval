@@ -1,0 +1,131 @@
+name: MCP-Eval Reusable
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        required: false
+        type: string
+        default: '3.11'
+      working-directory:
+        required: false
+        type: string
+        default: '.'
+      tests:
+        required: false
+        type: string
+        default: 'tests/'
+      run-args:
+        required: false
+        type: string
+        default: '-v'
+      reports-dir:
+        required: false
+        type: string
+        default: 'mcpeval-reports'
+      json-report:
+        required: false
+        type: string
+        default: 'mcpeval-results.json'
+      markdown-report:
+        required: false
+        type: string
+        default: 'mcpeval-results.md'
+      html-report:
+        required: false
+        type: string
+        default: 'mcpeval-results.html'
+      artifact-name:
+        required: false
+        type: string
+        default: 'mcpeval-artifacts'
+      deploy-pages:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+      OPENAI_API_KEY:
+        required: false
+
+jobs:
+  run:
+    name: Run MCP-Eval
+    runs-on: ubuntu-latest
+    outputs:
+      json: ${{ steps.mcpeval.outputs.results-json-path }}
+      md: ${{ steps.mcpeval.outputs.results-md-path }}
+      html: ${{ steps.mcpeval.outputs.results-html-path }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run MCP-Eval
+        id: mcpeval
+        uses: ./.github/actions/mcp-eval/run
+        with:
+          python-version: ${{ inputs.python-version }}
+          working-directory: ${{ inputs.working-directory }}
+          tests: ${{ inputs.tests }}
+          run-args: ${{ inputs.run-args }}
+          reports-dir: ${{ inputs.reports-dir }}
+          json-report: ${{ inputs.json-report }}
+          markdown-report: ${{ inputs.markdown-report }}
+          html-report: ${{ inputs.html-report }}
+          artifact-name: ${{ inputs.artifact-name }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Generate badges
+        run: |
+          set -euo pipefail
+          uv run scripts/generate_badges.py --report "${{ steps.mcpeval.outputs.results-json-path }}" --outdir mcpeval-reports/badges
+
+      - name: Upload badge artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcpeval-badges
+          path: mcpeval-reports/badges
+
+  pages:
+    name: Publish Report to Pages
+    needs: run
+    if: ${{ inputs.deploy-pages }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ./mcpeval-artifacts
+
+      - name: Prepare site
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          if [[ -f "mcpeval-artifacts/${{ inputs.reports-dir }}/${{ inputs.html-report }}" ]]; then
+            cp mcpeval-artifacts/${{ inputs.reports-dir }}/${{ inputs.html-report }} site/index.html
+          else
+            file=$(find mcpeval-artifacts -name "*.html" | head -n 1 || true)
+            if [[ -n "$file" ]]; then cp "$file" site/index.html; else echo '<h1>No report available</h1>' > site/index.html; fi
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+

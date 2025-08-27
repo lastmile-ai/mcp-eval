@@ -1,0 +1,37 @@
+---
+title: "Metrics & Tracing"
+description: "OTEL traces as source of truth — metrics, span tree, coverage, and where to find artifacts."
+sidebarTitle: "Metrics & Tracing"
+icon: "chart-line"
+keywords: ["otel","metrics","span tree","coverage","reports"]
+---
+
+### Traces → metrics
+
+The session writes OTEL spans to JSONL; MCP‑Eval converts them to rich metrics:
+- Tool calls (names, args, times, errors)
+- Iteration count, response latency
+- Token and cost estimates
+- Tool coverage by server (available vs used)
+
+Sources:
+- [session.py](../src/mcp_eval/session.py)
+- [metrics.py](../src/mcp_eval/metrics.py)
+- [span_tree.py](../src/mcp_eval/otel/span_tree.py)
+
+### Span tree analysis
+
+`SpanTree` enables:
+- LLM rephrasing loop detection
+- Inefficient tool paths analysis
+- Error recovery sequences
+
+### Artifacts
+
+- Traces: `./test-reports/*.jsonl`
+- Per‑test JSON results: `./test-reports/*_results.json`
+- Combined JSON/Markdown/HTML (via runner options)
+
+<!-- TODO: Add screenshot snippets of span tree and metrics table (LLM/tool time, token counts). -->
+
+

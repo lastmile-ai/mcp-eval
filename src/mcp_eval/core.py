@@ -4,7 +4,7 @@ import asyncio
 import inspect
 import traceback
 import hashlib
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Callable
+from typing import TYPE_CHECKING, Any, Dict, List, Callable
 from functools import wraps
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -34,10 +34,10 @@ class TestResult:
     parameters: Dict[str, Any]
     passed: bool
     evaluation_results: List["EvaluationRecord"]
-    metrics: Optional[Dict[str, Any]]
+    metrics: Dict[str, Any] | None
     duration_ms: float
     file: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 # Global test configuration state

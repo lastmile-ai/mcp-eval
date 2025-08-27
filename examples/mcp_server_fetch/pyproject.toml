@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Comprehensive test suite for MCP fetch server using mcp-eval"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp-eval[pytest]",
+    "mcpevals[pytest]",
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "httpx>=0.24.0",
@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-mcp-eval = { path = "../..", editable = true }
+mcpevals = { path = "../..", editable = true }
 
 [project.optional-dependencies]
 dev = [

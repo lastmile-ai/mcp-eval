@@ -1,6 +1,6 @@
 """PathEfficiency evaluator for checking optimal task completion paths."""
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 from dataclasses import dataclass
 from collections import defaultdict
 
@@ -12,10 +12,10 @@ from mcp_eval.evaluators.shared import EvaluatorResult
 class PathEfficiency(SyncEvaluator):
     """Evaluates if agent took the optimal path to complete task."""
 
-    optimal_steps: Optional[int] = None
+    optimal_steps: int | None = None
     """Expected optimal number of tool calls (auto-calculated if None)."""
 
-    expected_tool_sequence: Optional[List[str]] = None
+    expected_tool_sequence: List[str] | None = None
     """Expected sequence of tool calls."""
 
     allow_extra_steps: int = 0
@@ -27,13 +27,13 @@ class PathEfficiency(SyncEvaluator):
     penalize_repeated_tools: bool = True
     """Whether to penalize excessive tool repetition."""
 
-    tool_usage_limits: Optional[Dict[str, int]] = None
+    tool_usage_limits: Dict[str, int] | None = None
     """Custom limits per tool (e.g., {"read": 2, "write": 1})."""
 
     default_tool_limit: int = 1
     """Default limit for tools not in tool_usage_limits."""
 
-    golden_path: Optional[List[str]] = None
+    golden_path: List[str] | None = None
     """Golden path support (single path or named key in config)."""
 
     requires_final_metrics: bool = True

@@ -1,7 +1,7 @@
 """ToolOutputMatches evaluator for validating tool output against expected patterns."""
 
 import re
-from typing import Any, Dict, List, Literal, Optional, Pattern, Union
+from typing import Any, Dict, List, Literal, Pattern
 from dataclasses import dataclass
 
 from mcp_eval.evaluators.base import SyncEvaluator, EvaluatorContext
@@ -47,10 +47,10 @@ class ToolOutputMatches(SyncEvaluator):
     tool_name: str
     """Name of the tool whose output should be validated."""
 
-    expected_output: Union[Dict[str, Any], str, Pattern, int, float, List[Any]]
+    expected_output: Dict[str, Any] | str | Pattern | int | float | List[Any]
     """Expected output value or pattern to match against."""
 
-    field_path: Optional[str] = None
+    field_path: str | None = None
     """Optional path to extract nested field from tool output.
     
     Supports dot notation for nested objects and bracket notation for arrays:
@@ -82,6 +82,11 @@ class ToolOutputMatches(SyncEvaluator):
     - 0: First call
     - 1: Second call
     - etc.
+    """
+
+    contains_fallback_for_exact: bool = True
+    """If True and match_type is 'exact' for strings, treat containment as pass when
+    actual is a longer string that includes expected. Helpful for large tool payloads.
     """
 
     def evaluate_sync(self, ctx: EvaluatorContext) -> EvaluatorResult:
@@ -117,6 +122,13 @@ class ToolOutputMatches(SyncEvaluator):
                 actual=f"Error extracting field: {str(e)}",
                 error=f"Field extraction failed: {str(e)}",
             )
+
+        # Try to normalize common MCP tool result shapes into plain text for string comparisons
+        try:
+            actual_value = self._auto_normalize_actual(actual_value)
+        except Exception:
+            # Best-effort normalization; ignore if it fails
+            pass
 
         # Perform validation based on match type
         try:
@@ -168,7 +180,7 @@ class ToolOutputMatches(SyncEvaluator):
 
         return current
 
-    def _parse_field_path(self, path: str) -> List[Union[str, int]]:
+    def _parse_field_path(self, path: str) -> List[str | int]:
         """Parse field path into components."""
         parts = []
         current = ""
@@ -205,10 +217,104 @@ class ToolOutputMatches(SyncEvaluator):
 
         return parts
 
+    # ---------------- helpers: normalization -----------------
+
+    def _auto_normalize_actual(self, value: Any) -> Any:
+        """Best-effort normalization of common tool result shapes.
+
+        - If the expected output is a string or regex and the actual value is a structured
+          dict/list with content items, flatten to a single text string.
+        - Otherwise return the value unchanged.
+        """
+        expected_is_string_like = isinstance(self.expected_output, (str, int, float))
+        if not expected_is_string_like and not hasattr(self.expected_output, "pattern"):
+            return value
+
+        # Attempt to extract human-readable text
+        flattened = self._extract_text(value)
+        return flattened if flattened is not None else value
+
+    def _extract_text(self, obj: Any) -> str | None:
+        """Recursively extract text from common MCP content/result shapes.
+
+        Recognized patterns:
+        - { "content": [ {"type": "text", "text": "..."}, ... ] }
+        - { "text": "..." }
+        - ["...", {"text": "..."}, ...]
+        - Arbitrary nested dict/list with string leaves -> join with newlines
+        """
+        try:
+            # Direct string
+            if isinstance(obj, str):
+                return obj
+
+            # List: join extracted text parts
+            if isinstance(obj, list):
+                parts: List[str] = []
+                for item in obj:
+                    t = self._extract_text(item)
+                    if t:
+                        parts.append(t)
+                return "\n".join(parts) if parts else None
+
+            # Dict: handle well-known keys first
+            if isinstance(obj, dict):
+                # Explicit text key
+                if isinstance(obj.get("text"), str):
+                    return obj.get("text")
+
+                # Content list shape
+                content = obj.get("content")
+                if isinstance(content, list):
+                    parts: List[str] = []
+                    for item in content:
+                        # Common item shape: {type: "text", text: "..."}
+                        if isinstance(item, dict) and isinstance(item.get("text"), str):
+                            parts.append(item["text"])
+                        else:
+                            t = self._extract_text(item)
+                            if t:
+                                parts.append(t)
+                    if parts:
+                        return "\n".join(parts)
+                elif isinstance(content, str):
+                    return content
+
+                # Some tools may return {"output": "..."} or nested payloads
+                output = obj.get("output")
+                if isinstance(output, (str, list, dict)):
+                    t = self._extract_text(output)
+                    if t:
+                        return t
+
+                # Fallback: join all string leaf values
+                parts: List[str] = []
+                for v in obj.values():
+                    t = self._extract_text(v)
+                    if t:
+                        parts.append(t)
+                return "\n".join(parts) if parts else None
+        except Exception:
+            return None
+
+        return None
+
     def _validate_match(self, actual_value: Any) -> bool:
         """Validate actual value against expected output based on match type."""
         if self.match_type == "exact":
-            return actual_value == self.expected_output
+            if actual_value == self.expected_output:
+                return True
+            # Best-effort fallback for string comparisons on large payloads
+            if (
+                self.contains_fallback_for_exact
+                and isinstance(actual_value, str)
+                and isinstance(self.expected_output, str)
+            ):
+                if self.case_sensitive:
+                    return self.expected_output in actual_value
+                else:
+                    return self.expected_output.lower() in actual_value.lower()
+            return False
 
         elif self.match_type == "contains":
             if isinstance(actual_value, str) and isinstance(self.expected_output, str):
@@ -326,6 +432,7 @@ class ToolOutputMatches(SyncEvaluator):
             "match_type": self.match_type,
             "case_sensitive": self.case_sensitive,
             "call_index": self.call_index,
+            "contains_fallback_for_exact": self.contains_fallback_for_exact,
         }
 
         # Handle Pattern objects

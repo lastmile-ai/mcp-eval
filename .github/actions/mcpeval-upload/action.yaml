@@ -1,0 +1,120 @@
+name: "Upload MCP-Eval Report"
+description: "Upload reports as artifacts, post PR comment, and optionally commit reports."
+inputs:
+  reports-dir:
+    description: "Directory containing reports (Markdown/HTML/JSON)"
+    default: "mcpeval-reports"
+    required: false
+  artifact-name:
+    description: "Name for the uploaded artifact"
+    default: "mcpeval-artifacts"
+    required: false
+  upload-artifacts:
+    description: "Upload artifacts"
+    default: "true"
+    required: false
+  md-path:
+    description: "Path to Markdown report file"
+    required: false
+  html-path:
+    description: "Path to HTML report file"
+    required: false
+  pr-comment:
+    description: "Post a sticky PR comment with the Markdown report"
+    default: "true"
+    required: false
+  sticky-comment-tag:
+    description: "HTML tag used to identify/update the sticky PR comment"
+    default: "mcpeval-report"
+    required: false
+  commit-report:
+    description: "Commit the Markdown/HTML report into the repo"
+    default: "false"
+    required: false
+  commit-path:
+    description: "Directory in repo to write committed reports"
+    default: "docs/mcpeval"
+    required: false
+  commit-branch:
+    description: "Branch name to commit to (defaults to current)"
+    required: false
+  commit-message:
+    description: "Commit message"
+    default: "chore(mcpeval): update CI report [skip ci]"
+    required: false
+runs:
+  using: "composite"
+  steps:
+    - name: Upload artifacts
+      if: ${{ inputs.upload-artifacts == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        if-no-files-found: warn
+        retention-days: 14
+        path: |
+          ${{ inputs.reports-dir }}
+          test-reports
+
+    - name: Comment PR with MCP-Eval report
+      if: ${{ inputs.pr-comment == 'true' && github.event_name == 'pull_request' }}
+      uses: actions/github-script@v7
+      env:
+        REPORT_PATH: ${{ inputs.md-path }}
+        STICKY_TAG: ${{ inputs.sticky-comment-tag }}
+      with:
+        script: |
+          const fs = require('fs');
+          const tag = process.env.STICKY_TAG || 'mcpeval-report';
+          const path = process.env.REPORT_PATH;
+          let body = `<!-- ${tag} -->\n`;
+          body += '## MCP-Eval Report\n\n';
+          try {
+            const content = fs.readFileSync(path, 'utf8');
+            body += content;
+          } catch (e) {
+            body += `_No report found at ${path}_\n`;
+          }
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+          const previous = comments.find(c => c.user.type === 'Bot' && c.body.startsWith(`<!-- ${tag} -->`));
+          if (previous) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }
+
+    - name: Commit reports to repository
+      if: ${{ inputs.commit-report == 'true' }}
+      shell: bash
+      env:
+        MD_PATH: ${{ inputs.md-path }}
+        HTML_PATH: ${{ inputs.html-path }}
+        DEST_DIR: ${{ inputs.commit-path }}
+        COMMIT_BRANCH: ${{ inputs.commit-branch }}
+        COMMIT_MSG: ${{ inputs.commit-message }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$DEST_DIR"
+        [[ -n "$MD_PATH" && -f "$MD_PATH" ]] && cp "$MD_PATH" "$DEST_DIR/"
+        [[ -n "$HTML_PATH" && -f "$HTML_PATH" ]] && cp "$HTML_PATH" "$DEST_DIR/"
+        branch="$COMMIT_BRANCH"
+        if [[ -z "$branch" ]]; then
+          branch="$(git rev-parse --abbrev-ref HEAD)"
+        fi
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        current="$(git rev-parse --abbrev-ref HEAD)"
+        if [[ "$current" != "$branch" ]]; then
+          git checkout "$branch"
+        fi
+        git add "$DEST_DIR"
+        if git diff --cached --quiet; then
+          echo "No report changes to commit."
+          exit 0
+        fi
+        git commit -m "$COMMIT_MSG"
+        git push origin "HEAD:$branch"
+
+

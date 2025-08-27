@@ -1,7 +1,7 @@
 """Base evaluator classes and context."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Generic, Optional, TypeVar, TYPE_CHECKING
+from typing import Any, Dict, Generic, TypeVar, TYPE_CHECKING
 from dataclasses import dataclass
 
 from mcp_eval.metrics import TestMetrics
@@ -21,10 +21,10 @@ class EvaluatorContext(Generic[InputType, OutputType]):
 
     inputs: InputType
     output: OutputType
-    expected_output: Optional[OutputType]
-    metadata: Optional[Dict[str, Any]]
+    expected_output: OutputType | None
+    metadata: Dict[str, Any] | None
     metrics: TestMetrics
-    span_tree: Optional[SpanTree] = None
+    span_tree: SpanTree | None = None
 
     @property
     def tool_calls(self):

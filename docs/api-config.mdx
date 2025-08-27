@@ -1,0 +1,550 @@
+---
+title: "API: Config"
+description: "Complete guide to MCP-Eval configuration: settings, agents, providers, and programmatic control."
+sidebarTitle: "API: Config"
+icon: "gears"
+keywords: ["MCPEvalSettings","use_config","use_agent","ProgrammaticDefaults","settings","configuration"]
+---
+
+> Configuration is the foundation of flexible testing. MCP-Eval provides multiple ways to configure your tests, from simple YAML files to sophisticated programmatic control.
+
+## Configuration hierarchy
+
+MCP-Eval uses a layered configuration system (highest priority first):
+
+1. **Programmatic overrides** - Set in code
+2. **Environment variables** - Set in shell or CI
+3. **Config files** - `mcpeval.yaml` and `mcpeval.secrets.yaml`
+4. **Defaults** - Built-in sensible defaults
+
+## The MCPEvalSettings model
+
+The complete configuration structure:
+
+```python
+from mcp_eval.config import MCPEvalSettings
+
+# Full settings structure
+settings = MCPEvalSettings(
+    # Judge configuration
+    judge={
+        "provider": "anthropic",
+        "model": "claude-3-5-sonnet-20241022",
+        "min_score": 0.8,
+        "system_prompt": "You are a helpful test judge",
+        "max_tokens": 2000,
+        "temperature": 0.0
+    },
+    
+    # Metrics collection
+    metrics={
+        "collect_tool_calls": True,
+        "collect_tokens": True,
+        "collect_costs": True,
+        "collect_timings": True,
+        "include_thinking": False
+    },
+    
+    # Reporting configuration
+    reporting={
+        "formats": ["json", "markdown", "html"],
+        "output_dir": "test-reports",
+        "include_traces": True,
+        "include_conversation": True,
+        "timestamp_format": "%Y%m%d_%H%M%S"
+    },
+    
+    # Execution control
+    execution={
+        "max_concurrency": 5,
+        "timeout_seconds": 300,
+        "max_retries": 3,
+        "retry_delay_seconds": 5,
+        "fail_fast": False,
+        "verbose": True
+    },
+    
+    # Default provider settings
+    provider="anthropic",
+    model="claude-3-5-sonnet-20241022",
+    
+    # Default servers
+    default_servers=["fetch", "filesystem"],
+    
+    # Default agent
+    default_agent="default"
+)
+```
+
+## Loading configuration
+
+### Automatic discovery
+
+```python
+from mcp_eval.config import load_config
+
+# Discovers config files from current directory upward
+settings = load_config()
+
+# Or specify a path
+settings = load_config("/path/to/project")
+
+# Or pass a dict
+settings = load_config({
+    "provider": "openai",
+    "model": "gpt-4-turbo-preview"
+})
+```
+
+### Manual loading
+
+```python
+from mcp_eval.config import MCPEvalSettings
+import yaml
+
+# Load from YAML file
+with open("custom_config.yaml") as f:
+    config_dict = yaml.safe_load(f)
+    settings = MCPEvalSettings(**config_dict)
+
+# Load and merge multiple sources
+base_config = yaml.safe_load(open("base.yaml"))
+secrets = yaml.safe_load(open("secrets.yaml"))
+overrides = {"execution": {"verbose": True}}
+
+# Merge configurations
+full_config = {**base_config, **secrets, **overrides}
+settings = MCPEvalSettings(**full_config)
+```
+
+## Updating configuration
+
+### Global updates
+
+```python
+from mcp_eval.config import update_config, get_settings
+
+# Update specific fields
+update_config({
+    "execution": {
+        "max_concurrency": 10,
+        "timeout_seconds": 600
+    },
+    "reporting": {
+        "output_dir": "custom-reports"
+    }
+})
+
+# Get current settings
+current = get_settings()
+print(f"Timeout: {current.execution.timeout_seconds}s")
+```
+
+### Scoped configuration
+
+```python
+from mcp_eval.config import use_config
+import contextlib
+
+# Temporarily use different config
+with use_config(custom_settings):
+    # Tests here use custom_settings
+    await run_tests()
+# Original config restored
+
+# Or use context manager
+@contextlib.contextmanager
+def production_config():
+    original = get_settings()
+    try:
+        update_config({
+            "provider": "anthropic",
+            "model": "claude-3-opus-20240229",
+            "execution": {"max_retries": 5}
+        })
+        yield
+    finally:
+        use_config(original)
+
+with production_config():
+    await run_critical_tests()
+```
+
+## Agent configuration
+
+### Using named agents
+
+```python
+from mcp_eval.config import use_agent
+
+# Use agent defined in mcpeval.yaml
+use_agent("specialized_agent")
+
+# Agents are defined in config like:
+# agents:
+#   specialized_agent:
+#     model: claude-3-opus-20240229
+#     provider: anthropic
+#     instruction: "You are a specialized test agent"
+#     server_names: ["custom_server"]
+```
+
+### Agent factory pattern
+
+```python
+from mcp_eval.config import use_agent_factory
+from mcp_eval.agent import Agent
+
+def create_dynamic_agent():
+    """Create agent based on runtime conditions."""
+    if os.getenv("TEST_ENV") == "production":
+        return Agent(
+            model="claude-3-opus-20240229",
+            instruction="Be extremely thorough"
+        )
+    else:
+        return Agent(
+            model="claude-3-5-sonnet-20241022",
+            instruction="Standard testing"
+        )
+
+# Register the factory
+use_agent_factory(create_dynamic_agent)
+```
+
+### Direct agent objects
+
+```python
+from mcp_eval.config import use_agent_object
+from mcp_eval.agent import Agent
+
+# Create and configure agent
+my_agent = Agent(
+    model="claude-3-5-sonnet-20241022",
+    provider="anthropic",
+    instruction="""You are a security-focused test agent.
+    Always check for vulnerabilities and edge cases.""",
+    server_names=["security_scanner", "filesystem"],
+    temperature=0.0,  # Deterministic
+    max_tokens=4000
+)
+
+# Use this specific agent
+use_agent_object(my_agent)
+```
+
+### Agent configuration in tests
+
+```python
+from mcp_eval.core import task, with_agent
+from mcp_eval.agent import AgentConfig
+
+# Use different agents for different tests
+@with_agent("fast_agent")
+@task("Quick test")
+async def test_fast(agent):
+    # Uses fast_agent configuration
+    pass
+
+@with_agent(AgentConfig(
+    model="claude-3-opus-20240229",
+    instruction="Be extremely thorough",
+    max_iterations=10
+))
+@task("Thorough test")
+async def test_thorough(agent):
+    # Uses inline configuration
+    pass
+```
+
+## Programmatic defaults
+
+Set global defaults programmatically:
+
+```python
+from mcp_eval.config import ProgrammaticDefaults
+
+# Set default agent for all tests
+ProgrammaticDefaults.set_default_agent(my_agent)
+
+# Set default servers
+ProgrammaticDefaults.set_default_servers(["fetch", "calculator"])
+
+# Set default provider configuration
+ProgrammaticDefaults.set_provider_config({
+    "provider": "openai",
+    "model": "gpt-4-turbo-preview",
+    "api_key": os.getenv("OPENAI_API_KEY")
+})
+
+# Clear all programmatic defaults
+ProgrammaticDefaults.clear()
+```
+
+## Environment variables
+
+### Provider configuration
+
+```bash
+# API keys
+export ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."
+export GOOGLE_API_KEY="..."
+
+# Provider selection
+export MCPEVAL_PROVIDER="anthropic"
+export MCPEVAL_MODEL="claude-3-5-sonnet-20241022"
+
+# Provider-specific settings
+export ANTHROPIC_BASE_URL="https://api.anthropic.com"
+export OPENAI_ORG_ID="org-..."
+```
+
+### Execution control
+
+```bash
+# Timeouts and retries
+export MCPEVAL_TIMEOUT_SECONDS="600"
+export MCPEVAL_MAX_RETRIES="5"
+export MCPEVAL_RETRY_DELAY="10"
+
+# Concurrency
+export MCPEVAL_MAX_CONCURRENCY="10"
+
+# Verbosity
+export MCPEVAL_VERBOSE="true"
+export MCPEVAL_DEBUG="true"
+```
+
+### Reporting
+
+```bash
+# Output configuration
+export MCPEVAL_OUTPUT_DIR="/tmp/test-reports"
+export MCPEVAL_REPORT_FORMATS="json,html,markdown"
+export MCPEVAL_INCLUDE_TRACES="true"
+```
+
+## Configuration validation
+
+### Validate on load
+
+```python
+from mcp_eval.config import load_config, validate_config
+
+try:
+    settings = load_config()
+    validate_config(settings)
+except ValueError as e:
+    print(f"Invalid configuration: {e}")
+    # Handle invalid config
+```
+
+### Custom validation
+
+```python
+def validate_custom_settings(settings: MCPEvalSettings):
+    """Add custom validation rules."""
+    
+    # Ensure API key is set
+    if settings.provider == "anthropic":
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            raise ValueError("Anthropic API key required")
+    
+    # Validate model compatibility
+    if settings.judge.provider == "openai":
+        valid_models = ["gpt-4", "gpt-4-turbo-preview"]
+        if settings.judge.model not in valid_models:
+            raise ValueError(f"Judge model must be one of {valid_models}")
+    
+    # Ensure timeout is reasonable
+    if settings.execution.timeout_seconds > 3600:
+        raise ValueError("Timeout cannot exceed 1 hour")
+    
+    return True
+
+# Use in your test setup
+settings = load_config()
+if not validate_custom_settings(settings):
+    sys.exit(1)
+```
+
+## Advanced patterns
+
+### Dynamic configuration based on environment
+
+```python
+import os
+from mcp_eval.config import load_config, update_config
+
+def configure_for_environment():
+    """Adjust config based on environment."""
+    base_config = load_config()
+    
+    env = os.getenv("TEST_ENV", "development")
+    
+    if env == "production":
+        update_config({
+            "provider": "anthropic",
+            "model": "claude-3-opus-20240229",
+            "execution": {
+                "max_retries": 5,
+                "timeout_seconds": 600,
+                "fail_fast": True
+            },
+            "judge": {
+                "min_score": 0.9  # Stricter in production
+            }
+        })
+    elif env == "ci":
+        update_config({
+            "execution": {
+                "max_concurrency": 2,  # Limited resources in CI
+                "verbose": True
+            },
+            "reporting": {
+                "formats": ["json"],  # Machine-readable only
+                "output_dir": "/tmp/ci-reports"
+            }
+        })
+    else:  # development
+        update_config({
+            "execution": {
+                "verbose": True,
+                "max_retries": 1
+            },
+            "reporting": {
+                "formats": ["html"],  # Interactive reports
+            }
+        })
+
+configure_for_environment()
+```
+
+### Configuration inheritance
+
+```python
+class BaseTestConfig:
+    """Base configuration for all tests."""
+    BASE_SETTINGS = {
+        "provider": "anthropic",
+        "model": "claude-3-5-sonnet-20241022",
+        "execution": {
+            "timeout_seconds": 300,
+            "max_retries": 3
+        }
+    }
+
+class IntegrationTestConfig(BaseTestConfig):
+    """Config for integration tests."""
+    SETTINGS = {
+        **BaseTestConfig.BASE_SETTINGS,
+        "execution": {
+            **BaseTestConfig.BASE_SETTINGS["execution"],
+            "timeout_seconds": 600,  # Longer timeout
+        },
+        "default_servers": ["fetch", "database", "cache"]
+    }
+
+class UnitTestConfig(BaseTestConfig):
+    """Config for unit tests."""
+    SETTINGS = {
+        **BaseTestConfig.BASE_SETTINGS,
+        "execution": {
+            **BaseTestConfig.BASE_SETTINGS["execution"],
+            "timeout_seconds": 60,  # Quick tests
+        },
+        "default_servers": ["mock_server"]
+    }
+
+# Use in tests
+from mcp_eval.config import use_config
+
+if test_type == "integration":
+    use_config(IntegrationTestConfig.SETTINGS)
+else:
+    use_config(UnitTestConfig.SETTINGS)
+```
+
+### Config hot-reloading
+
+```python
+import watchdog.observers
+import watchdog.events
+
+class ConfigReloader(watchdog.events.FileSystemEventHandler):
+    """Reload config when files change."""
+    
+    def on_modified(self, event):
+        if event.src_path.endswith("mcpeval.yaml"):
+            print("Config changed, reloading...")
+            try:
+                new_config = load_config()
+                use_config(new_config)
+                print("✅ Config reloaded successfully")
+            except Exception as e:
+                print(f"❌ Failed to reload: {e}")
+
+# Watch for changes
+observer = watchdog.observers.Observer()
+observer.schedule(ConfigReloader(), ".", recursive=False)
+observer.start()
+```
+
+## Best practices
+
+<Tip>
+  **Separate secrets:** Always keep API keys and sensitive data in `mcpeval.secrets.yaml` or environment variables, never in your main config file.
+</Tip>
+
+<Warning>
+  **Validate early:** Validate your configuration at the start of your test runs to catch issues before tests begin executing.
+</Warning>
+
+<Note>
+  **Use environment-specific configs:** Different environments (dev, staging, prod) should have different configuration profiles for appropriate testing rigor.
+</Note>
+
+## Debugging configuration
+
+```python
+from mcp_eval.config import get_settings, print_config
+
+# Print current configuration
+print_config()
+
+# Or get as dict for inspection
+settings = get_settings()
+config_dict = settings.model_dump()
+
+import json
+print(json.dumps(config_dict, indent=2))
+
+# Check specific values
+print(f"Provider: {settings.provider}")
+print(f"Model: {settings.model}")
+print(f"Timeout: {settings.execution.timeout_seconds}s")
+print(f"Output dir: {settings.reporting.output_dir}")
+```
+
+## See also
+
+<CardGroup cols={2}>
+  <Card title="Configuration Guide" href="./configuration" icon="sliders">
+    Complete configuration reference
+  </Card>
+  
+  <Card title="Agent Setup" href="./agents" icon="robot">
+    Configuring test agents
+  </Card>
+  
+  <Card title="Environment Setup" href="./quickstart" icon="rocket">
+    Initial setup and configuration
+  </Card>
+  
+  <Card title="Best Practices" href="./best-practices" icon="star">
+    Configuration best practices
+  </Card>
+</CardGroup>
+
+

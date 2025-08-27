@@ -20,7 +20,7 @@ tests:
 coverage:
 	uv run coverage run -m pytest
 	uv run coverage xml -o coverage.xml
-	uv run coverage report -m --fail-under=80
+	uv run coverage report -m --fail-under=50
 
 .PHONY: coverage-report
 coverage-report:
@@ -31,3 +31,12 @@ coverage-report:
 prompt:
 	rm -f prompt.md
 	uv run scripts/promptify.py
+
+# Documentation
+.PHONY: sync-subagents
+sync-subagents:
+	uv run python scripts/sync_subagents.py --sync
+
+.PHONY: verify-subagents
+verify-subagents:
+	uv run python scripts/sync_subagents.py

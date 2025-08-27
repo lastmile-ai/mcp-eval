@@ -7,7 +7,7 @@ and consolidates configuration in a single typed object.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional, List, Union, Any, Callable
+from typing import Dict, List, Any, Callable
 from contextvars import ContextVar
 
 import yaml
@@ -31,8 +31,8 @@ class JudgeConfig(BaseSettings):
     If not specified, falls back to global provider/model settings.
     """
 
-    provider: Optional[str] = None  # Judge-specific provider (falls back to global)
-    model: Optional[str] = (
+    provider: str | None = None  # Judge-specific provider (falls back to global)
+    model: str | None = (
         None  # Judge-specific model (falls back to global or ModelSelector)
     )
     min_score: float = 0.8
@@ -87,8 +87,8 @@ class MCPEvalSettings(AgentSettings):
     )
 
     # Evaluation metadata
-    eval_name: str = "MCP-Eval Test Suite"
-    eval_description: str = "Comprehensive evaluation of MCP servers"
+    name: str = "MCP-Eval Test Suite"
+    description: str = "Comprehensive evaluation of MCP servers"
 
     # Evaluation components
     judge: JudgeConfig = Field(default_factory=JudgeConfig)
@@ -100,8 +100,8 @@ class MCPEvalSettings(AgentSettings):
     default_servers: List[str] | None = Field(default_factory=list)
 
     # LLM defaults for tests
-    provider: Optional[str] = "anthropic"
-    model: Optional[str] = "claude-sonnet-4-0"
+    provider: str | None = "anthropic"
+    model: str | None = "claude-sonnet-4-0"
 
     default_agent: AgentSpec | str | None = None
 
@@ -117,24 +117,24 @@ def _deep_merge(base: dict, update: dict) -> dict:
 
 
 # Global configuration state
-_current_settings: Optional[MCPEvalSettings] = None
-_programmatic_default_agent: ContextVar[Union[Agent, AugmentedLLM, None]] = ContextVar(
+_current_settings: MCPEvalSettings | None = None
+_programmatic_default_agent: ContextVar[Agent | AugmentedLLM | None] = ContextVar(
     "programmatic_default_agent", default=None
 )
 _programmatic_default_agent_factory: ContextVar[
-    Optional[Callable[[], Union[Agent, AugmentedLLM]]]
+    Callable[[], Agent | AugmentedLLM] | None
 ] = ContextVar("programmatic_default_agent_factory", default=None)
 
 
-def _search_upwards_for(paths: List[str]) -> Optional[Path]:
+def _search_upwards_for(paths: List[str], start_dir: Path | None = None) -> Path | None:
     """Search current and parent directories (including .mcp-eval subdir) for first matching path.
 
     Supports both direct filenames and subdir patterns like '.mcp-eval/config.yaml'.
     Also checks home-level fallback under '~/.mcp-eval/'.
     """
-    cwd = Path.cwd()
+    start = start_dir or Path.cwd()
     # Walk up
-    cur = cwd
+    cur = start
     while True:
         for p in paths:
             candidate = cur / p
@@ -161,10 +161,13 @@ def _search_upwards_for(paths: List[str]) -> Optional[Path]:
     return None
 
 
-def _find_eval_config() -> Optional[Path]:
+def find_eval_config(project_dir: Path | None = None) -> Path | None:
     """Locate an mcp-eval config file.
 
-    Looks for (in current dir upwards and ~/.mcp-eval):
+    Args:
+        project_dir: Optional starting directory for search. If None, uses current directory.
+
+    Looks for (in project_dir upwards and ~/.mcp-eval):
     - mcpeval.yaml | mcpeval.yml
     - mcpeval.config.yaml | mcpeval.config.yml
     - .mcp-eval/config.yaml | .mcp-eval/config.yml
@@ -180,29 +183,40 @@ def _find_eval_config() -> Optional[Path]:
         ".mcp-eval.config.yaml",
         ".mcp-eval.config.yml",
     ]
-    return _search_upwards_for(candidates)
+    return _search_upwards_for(candidates, project_dir)
 
 
-def _find_eval_secrets() -> Optional[Path]:
+def find_eval_secrets(project_dir: Path | None = None) -> Path | None:
     """Locate an mcp-eval secrets file.
 
-    Looks for (in current dir upwards and ~/.mcp-eval):
+    Args:
+        project_dir: Optional starting directory for search. If None, uses current directory.
+
+    Looks for (in project_dir upwards and ~/.mcp-eval):
     - mcpeval.secrets.yaml | mcpeval.secrets.yml
+    - mcpevals.secrets.json | mcpevals.secrets.jsonl
     - .mcp-eval/secrets.yaml | .mcp-eval/secrets.yml
     - .mcp-eval.secrets.yaml | .mcp-eval.secrets.yml
     """
     candidates = [
         "mcpeval.secrets.yaml",
         "mcpeval.secrets.yml",
+        "mcpevals.secrets.json",
+        "mcpevals.secrets.jsonl",
         ".mcp-eval/secrets.yaml",
         ".mcp-eval/secrets.yml",
         ".mcp-eval.secrets.yaml",
         ".mcp-eval.secrets.yml",
+        ".mcpevals/secrets.yaml",
+        ".mcpevals/secrets.yml",
+        ".mcpevals.secrets.yaml",
+        ".mcpevals.secrets.yml",
+
     ]
-    return _search_upwards_for(candidates)
+    return _search_upwards_for(candidates, project_dir)
 
 
-def load_config(config_path: Optional[Union[str, Path]] = None) -> MCPEvalSettings:
+def load_config(config_path: str | Path | None = None) -> MCPEvalSettings:
     """Load configuration with full validation.
 
     Priority overlay (later overrides earlier where fields overlap):
@@ -252,7 +266,7 @@ def load_config(config_path: Optional[Union[str, Path]] = None) -> MCPEvalSettin
         if p.exists():
             eval_cfg = p
     if not eval_cfg:
-        eval_cfg = _find_eval_config()
+        eval_cfg = find_eval_config()
     if eval_cfg and eval_cfg.exists():
         with open(eval_cfg, "r", encoding="utf-8") as f:
             eval_data = yaml.safe_load(f) or {}
@@ -260,7 +274,7 @@ def load_config(config_path: Optional[Union[str, Path]] = None) -> MCPEvalSettin
         # Merge mcp-eval secrets
         try:
             # Prefer a sibling secrets file if found
-            eval_secrets = _find_eval_secrets()
+            eval_secrets = find_eval_secrets()
             if eval_secrets and eval_secrets.exists():
                 with open(eval_secrets, "r", encoding="utf-8") as sf:
                     secrets_data = yaml.safe_load(sf) or {}
@@ -320,23 +334,21 @@ class ProgrammaticDefaults:
     """
 
     @staticmethod
-    def set_default_agent(value: Union[Agent, AugmentedLLM, None]) -> None:
+    def set_default_agent(value: Agent | AugmentedLLM | None) -> None:
         _programmatic_default_agent.set(value)
 
     @staticmethod
-    def get_default_agent() -> Union[Agent, AugmentedLLM, None]:
+    def get_default_agent() -> Agent | AugmentedLLM | None:
         return _programmatic_default_agent.get()
 
     @staticmethod
     def set_default_agent_factory(
-        value: Optional[Callable[[], Union[Agent, AugmentedLLM]]],
+        value: Callable[[], Agent | AugmentedLLM] | None,
     ) -> None:
         _programmatic_default_agent_factory.set(value)
 
     @staticmethod
-    def get_default_agent_factory() -> (
-        Optional[Callable[[], Union[Agent, AugmentedLLM]]]
-    ):
+    def get_default_agent_factory() -> Callable[[], Agent | AugmentedLLM] | None:
         return _programmatic_default_agent_factory.get()
 
 
@@ -352,7 +364,7 @@ def update_config(config: Dict[str, object]):
             setattr(_current_settings, key, value)
 
 
-def set_settings(settings: Union[MCPEvalSettings, Dict[str, Any]]):
+def set_settings(settings: MCPEvalSettings | Dict[str, Any]):
     """Programmatically set MCP‑Eval settings (bypass file discovery).
 
     Accepts either an MCPEvalSettings instance or a raw dict that will be
@@ -370,7 +382,7 @@ def set_settings(settings: Union[MCPEvalSettings, Dict[str, Any]]):
 # Deprecated helpers removed: prefer defining server_names on Agent/AgentSpec
 
 
-def use_config(config: Union[MCPEvalSettings, str]) -> MCPEvalSettings:
+def use_config(config: MCPEvalSettings | str) -> MCPEvalSettings:
     """Programmatically set MCP‑Eval configuration.
 
     Accepts either a fully-formed MCPEvalSettings object, or a string path to a
@@ -398,7 +410,7 @@ def use_config(config: Union[MCPEvalSettings, str]) -> MCPEvalSettings:
 
 
 def use_agent(
-    agent_or_config: Union[Agent, AugmentedLLM, AgentSpec, str],
+    agent_or_config: Agent | AugmentedLLM | AgentSpec | str,
 ):
     """Configure default agent for tests.
 
@@ -423,7 +435,7 @@ def use_agent(
     raise TypeError("Unsupported agent configuration type")
 
 
-def use_agent_factory(factory: Callable[[], Union[Agent, AugmentedLLM]]):
+def use_agent_factory(factory: Callable[[], Agent | AugmentedLLM]):
     """Configure a factory for creating a default Agent/AugmentedLLM per session.
 
     This is the concurrency-safe way to set a programmatic default when running
@@ -436,15 +448,9 @@ def use_agent_factory(factory: Callable[[], Union[Agent, AugmentedLLM]]):
     ProgrammaticDefaults.set_default_agent_factory(factory)
 
 
-def use_agent_object(obj: Union[Agent, AugmentedLLM]):
+def use_agent_object(obj: Agent | AugmentedLLM):
     """Explicitly set a programmatic agent or LLM instance for tests (strongly-typed)."""
     return use_agent(obj)
-
-
-def use_llm_factory(llm_factory: type):
-    raise NotImplementedError(
-        "use_llm_factory removed. Configure provider/model in settings."
-    )
 
 
 async def create_test_context():

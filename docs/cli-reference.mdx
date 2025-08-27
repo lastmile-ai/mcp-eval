@@ -1,0 +1,187 @@
+---
+title: "CLI Reference"
+description: "All commands for initializing projects, adding servers/agents, generating tests, running, validating, and diagnosing."
+sidebarTitle: "CLI Reference"
+icon: "terminal"
+keywords: ["cli","init","generate","run","validate","doctor","issue","list","add"]
+---
+
+Root CLI: [cli/__init__.py](../src/mcp_eval/cli/__init__.py)
+
+## run
+
+Run decorator tests and datasets; emit combined reports.
+
+```bash
+mcp-eval run <path|file|file::function> [-v] [--json out.json] [--markdown out.md] [--html out.html] [--max-concurrency N]
+```
+
+Examples:
+
+```bash
+# Run a single file of decorator tests with verbose output and reports
+mcp-eval run examples/mcp_server_fetch/tests/test_decorator_style.py -v --json results.json --markdown results.md --html results.html
+
+# Run a specific test function
+mcp-eval run examples/mcp_server_fetch/tests/test_decorator_style.py::test_basic_fetch_decorator
+
+# Run an entire tests/ directory
+mcp-eval run tests/ --max-concurrency 4
+```
+
+Dataset file runner:
+
+```bash
+mcp-eval run dataset datasets/basic_fetch_dataset.yaml
+```
+
+Combined reports example:
+
+```bash
+# Save JSON and Markdown reports from a mixed run
+mcp-eval run tests/ --json reports/combined.json --markdown reports/combined.md
+```
+
+Source: [runner.py](../src/mcp_eval/runner.py)
+
+## list
+
+```bash
+mcp-eval server list [-v]
+mcp-eval agent list [-v] [--name <agent>]
+mcp-eval list all [-v]
+```
+
+Examples:
+
+```bash
+mcp-eval server list --verbose | cat
+mcp-eval agent list --name default
+```
+
+Source: [list_command.py](../src/mcp_eval/cli/list_command.py)
+
+## init
+
+Interactive setup for provider/keys, servers, and default agent.
+
+```bash
+mcp-eval init
+```
+
+Prompts for provider/API key, lets you import servers from mcp.json or DXT, and configure a default agent.
+
+Source: [generator.py](../src/mcp_eval/cli/generator.py)
+
+## generate
+
+Discover tools, generate scenarios, refine assertions, emit tests/dataset.
+
+```bash
+mcp-eval generate --style pytest|decorators|dataset --n-examples 6 --provider anthropic [--model ...] [--output file]
+```
+
+Examples:
+
+```bash
+# Generate 10 pytest-style scenarios using Anthropic
+mcp-eval generate --style pytest --n-examples 10 --provider anthropic
+
+# Write directly to a file instead of default location
+mcp-eval generate --style decorators --output tests/test_fetch_generated.py
+```
+
+Source: [generator.py](../src/mcp_eval/cli/generator.py)
+
+## update
+
+Append generated tests to an existing file.
+
+```bash
+mcp-eval update --target-file tests/test_fetch_generated.py --style pytest --n-examples 4
+```
+
+Appends new generated tests to an existing file.
+
+Source: [generator.py](../src/mcp_eval/cli/generator.py)
+
+## server / agent
+
+```bash
+mcp-eval server add [--from-mcp-json path] [--from-dxt path]
+mcp-eval agent add
+```
+
+Examples:
+
+```bash
+mcp-eval server add --from-mcp-json .cursor/mcp.json
+mcp-eval server add --from-dxt ~/Desktop/manifest.dxt
+mcp-eval agent add
+```
+
+Source: [generator.py](../src/mcp_eval/cli/generator.py), [utils.py](../src/mcp_eval/cli/utils.py)
+
+## validate
+
+Checks API keys, judge config, and optionally connects to servers and spins agents.
+
+```bash
+# Quick checks only (no connections)
+mcp-eval validate --quick
+
+# Servers only
+mcp-eval validate --agents false
+
+# Agents only
+mcp-eval validate --servers false
+```
+
+Examples:
+
+```bash
+# Quick config checks only
+mcp-eval validate --quick
+
+# Full validation including server connections and agent spins
+mcp-eval validate
+```
+
+Source: [validate.py](../src/mcp_eval/cli/validate.py)
+
+## doctor
+
+System/config/env checks, test reports presence, suggested actions.
+
+```bash
+mcp-eval doctor [--full]
+```
+
+Examples:
+
+```bash
+mcp-eval doctor
+mcp-eval doctor --full
+```
+
+Source: [doctor.py](../src/mcp_eval/cli/doctor.py)
+
+## issue
+
+Prepares a GitHub issue URL prefilled with diagnostics and recent outputs.
+
+```bash
+mcp-eval issue [--title ...] [--no-open-browser]
+```
+
+Examples:
+
+```bash
+mcp-eval issue --title "Server connection fails" --no-open-browser
+```
+
+Source: [issue.py](../src/mcp_eval/cli/issue.py)
+
+<!-- TODO: Add screen captures of `mcp-eval server list`, `mcp-eval run` summaries, and a PR comment with embedded report. -->
+
+

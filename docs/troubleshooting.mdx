@@ -1,0 +1,641 @@
+---
+title: "Troubleshooting Guide"
+description: "Diagnose and fix common issues with MCP‑Eval. Learn debugging techniques, understand error messages, and get your tests running smoothly."
+sidebarTitle: "Troubleshooting"
+icon: "wrench"
+keywords: ["troubleshooting","debugging","errors","doctor","validate","common issues","fixes"]
+---
+
+> 🔧 **Having trouble?** Don't worry! This comprehensive guide will help you diagnose and fix common issues quickly. We've got your back!
+
+## Quick diagnostics
+
+Before diving into specific issues, let's run a quick health check:
+
+<CardGroup cols={3}>
+  <Card title="System Check" icon="stethoscope">
+    ```bash
+    mcp-eval doctor
+    ```
+    Comprehensive system diagnosis
+  </Card>
+  
+  <Card title="Validate Config" icon="check-circle">
+    ```bash
+    mcp-eval validate
+    ```
+    Verify configuration and API keys
+  </Card>
+  
+  <Card title="Test Connection" icon="plug">
+    ```bash
+    mcp-eval validate --servers
+    ```
+    Check server connectivity
+  </Card>
+</CardGroup>
+
+<!-- TODO: Screenshot of doctor command output showing system health status -->
+
+## Common error messages and solutions
+
+### 🔑 Authentication errors
+
+<Accordion title="Error: Invalid API key or authentication failed">
+  **Symptoms:**
+  ```
+  anthropic.AuthenticationError: Invalid API Key
+  openai.error.AuthenticationError: Incorrect API key provided
+  ```
+  
+  **Solutions:**
+  
+  1. **Check environment variables:**
+     ```bash
+     # Verify keys are set
+     echo $ANTHROPIC_API_KEY
+     echo $OPENAI_API_KEY
+     
+     # Set if missing
+     export ANTHROPIC_API_KEY="sk-ant-..."
+     export OPENAI_API_KEY="sk-..."
+     ```
+  
+  2. **Use secrets file:**
+     ```yaml
+     # mcpeval.secrets.yaml
+     anthropic:
+       api_key: "sk-ant-..."
+     openai:
+       api_key: "sk-..."
+     ```
+  
+  3. **Validate configuration:**
+     ```bash
+     mcp-eval validate --keys
+     ```
+  
+  **Pro tip:** Never commit API keys to version control! Use `.gitignore` for secrets files.
+</Accordion>
+
+<Accordion title="Error: Rate limit exceeded">
+  **Symptoms:**
+  ```
+  Rate limit reached for requests
+  Too many requests, please retry after X seconds
+  ```
+  
+  **Solutions:**
+  
+  1. **Reduce concurrency:**
+     ```yaml
+     # mcpeval.yaml
+     execution:
+       max_concurrency: 2  # Lower from default 5
+     ```
+  
+  2. **Add retry logic:**
+     ```yaml
+     execution:
+       retry_failed: true
+       retry_delay: 5  # seconds between retries
+     ```
+  
+  3. **Use different models for testing vs judging:**
+     ```yaml
+     # Use cheaper model for generation
+     provider: "anthropic"
+     model: "claude-3-haiku-20240307"
+     
+     # But keep good model for judging
+     judge:
+       model: "claude-3-5-sonnet-20241022"
+     ```
+</Accordion>
+
+### 🔌 Server connection issues
+
+<Accordion title="Error: MCP server not found or failed to start">
+  **Symptoms:**
+  ```
+  Server 'my_server' not found
+  Failed to start MCP server: Command not found
+  subprocess.CalledProcessError: returned non-zero exit status
+  ```
+  
+  **Solutions:**
+  
+  1. **Verify server configuration:**
+     ```yaml
+     # mcpeval.yaml or mcp-agent.config.yaml
+     mcp:
+       servers:
+         my_server:
+           command: "python"  # Ensure command exists
+           args: ["path/to/server.py"]  # Check path is correct
+           env:
+             PYTHONPATH: "."  # Add if needed
+     ```
+  
+  2. **Test server manually:**
+     ```bash
+     # Run the server command directly
+     python path/to/server.py
+     
+     # Check for errors or missing dependencies
+     ```
+  
+  3. **Debug with verbose output:**
+     ```bash
+     mcp-eval run tests/ -vv --debug
+     ```
+  
+  4. **Common fixes:**
+     - Install server dependencies: `pip install -r requirements.txt`
+     - Use absolute paths: `/full/path/to/server.py`
+     - Check file permissions: `chmod +x server.py`
+     - Verify Python version compatibility
+  
+  <!-- TODO: Screenshot showing server validation output -->
+</Accordion>
+
+<Accordion title="Error: No tools detected from server">
+  **Symptoms:**
+  ```
+  No tools found for server 'my_server'
+  Tool 'my_tool' was not called (expected at least 1 call)
+  ```
+  
+  **Solutions:**
+  
+  1. **Check server is listed in agent:**
+     ```python
+     from mcp_agent.agents.agent import Agent
+     
+     # Ensure server_names includes your server
+     agent = Agent(
+         name="test_agent",
+         server_names=["my_server"]  # Must match config
+     )
+     ```
+  
+  2. **Verify tool discovery:**
+     ```bash
+     # List available tools
+     mcp-eval list tools --server my_server
+     ```
+  
+  3. **Check MCP protocol implementation:**
+     - Server must implement `tools/list` method
+     - Tools must have proper schemas
+     - Server must be running when agent connects
+  
+  4. **Enable debug logging:**
+     ```yaml
+     # mcpeval.yaml
+     logging:
+       level: DEBUG
+       show_mcp_messages: true
+     ```
+</Accordion>
+
+### ⏱️ Timeout and performance issues
+
+<Accordion title="Error: Test execution timed out">
+  **Symptoms:**
+  ```
+  TimeoutError: Test exceeded 300 seconds
+  asyncio.TimeoutError
+  Test killed due to timeout
+  ```
+  
+  **Solutions:**
+  
+  1. **Increase timeout globally:**
+     ```yaml
+     # mcpeval.yaml
+     execution:
+       timeout_seconds: 600  # 10 minutes
+     ```
+  
+  2. **Set per-test timeout:**
+     ```python
+     @task("Long running test", timeout=600)
+     async def test_complex_operation(agent, session):
+         # Your test code
+     ```
+  
+  3. **Optimize test prompts:**
+     ```python
+     # Instead of vague prompts:
+     # "Do something with the data"
+     
+     # Use specific prompts:
+     "Fetch https://api.example.com/data and return the count"
+     ```
+  
+  4. **Add performance assertions:**
+     ```python
+     await session.assert_that(
+         Expect.performance.response_time_under(5000),  # 5 seconds
+         name="response_time_check"
+     )
+     ```
+  
+  5. **Profile slow tests:**
+     ```bash
+     # Generate performance report
+     mcp-eval run tests/ --profile --html reports/perf.html
+     ```
+</Accordion>
+
+<Accordion title="Error: High token usage or costs">
+  **Symptoms:**
+  ```
+  Warning: Test consumed 10,000+ tokens
+  Estimated cost: $X.XX exceeds budget
+  ```
+  
+  **Solutions:**
+  
+  1. **Use cheaper models for testing:**
+     ```yaml
+     # For basic tests
+     provider: "anthropic"
+     model: "claude-3-haiku-20240307"
+     ```
+  
+  2. **Limit response length:**
+     ```python
+     response = await agent.generate_str(
+         "Summarize this in 50 words or less",
+         max_tokens=200
+     )
+     ```
+  
+  3. **Cache responses during development:**
+     ```yaml
+     development:
+       cache_responses: true
+       cache_ttl: 3600  # 1 hour
+     ```
+  
+  4. **Monitor token usage:**
+     ```python
+     metrics = session.get_metrics()
+     print(f"Tokens used: {metrics.total_tokens}")
+     print(f"Estimated cost: ${metrics.estimated_cost}")
+     ```
+</Accordion>
+
+### 🧪 Test execution problems
+
+<Accordion title="Error: Assertion failed but seems correct">
+  **Symptoms:**
+  ```
+  AssertionError: Expected content to contain "example"
+  Content was: "This is an Example page"  # Note the capital E
+  ```
+  
+  **Solutions:**
+  
+  1. **Check case sensitivity:**
+     ```python
+     # Case-insensitive matching
+     await session.assert_that(
+         Expect.content.contains("example", case_sensitive=False),
+         response=response
+     )
+     ```
+  
+  2. **Use regex for flexible matching:**
+     ```python
+     await session.assert_that(
+         Expect.content.regex(r"exam\w+", case_sensitive=False),
+         response=response
+     )
+     ```
+  
+  3. **Debug actual output:**
+     ```python
+     # Temporarily add debug output
+     print(f"Actual response: {response!r}")
+     
+     # Or use the test report
+     mcp-eval run tests/ --debug --json debug.json
+     ```
+  
+  4. **Use partial matching for tools:**
+     ```python
+     await session.assert_that(
+         Expect.tools.output_matches(
+             tool_name="fetch",
+             expected_output="example",
+             match_type="contains"  # Instead of "exact"
+         )
+     )
+     ```
+</Accordion>
+
+<Accordion title="Error: Flaky or inconsistent test results">
+  **Symptoms:**
+  ```
+  Test passes sometimes, fails others
+  Different results on each run
+  Works locally but fails in CI
+  ```
+  
+  **Solutions:**
+  
+  1. **Set deterministic model parameters:**
+     ```python
+     response = await agent.generate_str(
+         prompt,
+         temperature=0,  # Deterministic
+         seed=42  # Fixed seed if supported
+     )
+     ```
+  
+  2. **Use objective assertions:**
+     ```python
+     # Instead of LLM judge for deterministic checks
+     await session.assert_that(
+         Expect.tools.was_called("fetch"),
+         Expect.tools.count("fetch", 1),
+         Expect.content.contains("specific_string")
+     )
+     ```
+  
+  3. **Add retry logic for network calls:**
+     ```python
+     @task("Network test", retry=3)
+     async def test_external_api(agent, session):
+         # Will retry up to 3 times on failure
+     ```
+  
+  4. **Isolate test environment:**
+     ```yaml
+     # CI-specific configuration
+     execution:
+       parallel: false  # Run tests sequentially
+       reset_between_tests: true  # Clean state
+     ```
+</Accordion>
+
+## Debug mode walkthrough
+
+When tests fail mysteriously, enable debug mode for detailed insights:
+
+### Step 1: Enable debug output
+
+```bash
+# Maximum verbosity
+mcp-eval run tests/ -vvv --debug
+
+# Or set in config
+```
+
+```yaml
+# mcpeval.yaml
+debug:
+  enabled: true
+  log_level: DEBUG
+  save_traces: true
+  save_llm_calls: true
+```
+
+### Step 2: Examine the debug output
+
+Look for these key sections:
+
+```
+[DEBUG] Starting test: test_fetch_example
+[DEBUG] Agent configuration: {name: "test_agent", servers: ["fetch"]}
+[DEBUG] Sending prompt: "Fetch https://example.com"
+[DEBUG] LLM Response: "I'll fetch that URL for you..."
+[DEBUG] Tool call: fetch(url="https://example.com")
+[DEBUG] Tool response: {"content": "Example Domain..."}
+[DEBUG] Final response: "The page contains..."
+[DEBUG] Assertion 'content_check' passed
+```
+
+<!-- TODO: Screenshot of debug output with color-coded sections -->
+
+### Step 3: Inspect OTEL traces
+
+```bash
+# View trace for specific test
+cat test-reports/traces/test_fetch_example.jsonl | jq '.'
+
+# Or use the trace viewer
+mcp-eval trace view test-reports/traces/test_fetch_example.jsonl
+```
+
+Key things to look for in traces:
+- Tool call sequences
+- Error spans
+- Timing information
+- Token usage per call
+
+<!-- TODO: Screenshot of trace viewer showing span hierarchy -->
+
+## Network and connectivity debugging
+
+### Testing behind a proxy
+
+```yaml
+# mcpeval.yaml
+network:
+  proxy:
+    http: "http://proxy.company.com:8080"
+    https: "https://proxy.company.com:8080"
+  timeout: 30
+  retry_on_connection_error: true
+```
+
+### Debugging SSL/TLS issues
+
+```bash
+# Disable SSL verification (development only!)
+export CURL_CA_BUNDLE=""
+export REQUESTS_CA_BUNDLE=""
+
+# Or configure trusted certificates
+export SSL_CERT_FILE="/path/to/cacert.pem"
+```
+
+### Testing with local servers
+
+```yaml
+# For localhost servers
+mcp:
+  servers:
+    local_server:
+      command: "python"
+      args: ["server.py"]
+      env:
+        HOST: "127.0.0.1"
+        PORT: "8080"
+      startup_timeout: 10  # Wait for server to start
+```
+
+## Performance troubleshooting
+
+### Identifying bottlenecks
+
+```bash
+# Generate performance profile
+mcp-eval run tests/ --profile --output profile.json
+
+# Analyze the profile
+mcp-eval analyze profile.json
+```
+
+Key metrics to watch:
+- `llm_time_ms`: Time spent in LLM calls
+- `tool_time_ms`: Time in tool execution  
+- `idle_time_ms`: Wasted time between operations
+- `max_concurrent_operations`: Parallelism level
+
+### Optimization strategies
+
+<CardGroup cols={2}>
+  <Card title="Reduce LLM calls" icon="brain">
+    ```python
+    # Batch multiple checks
+    response = await agent.generate_str(
+        "Fetch A, analyze it, then fetch B"
+    )
+    ```
+  </Card>
+  
+  <Card title="Parallel execution" icon="layer-group">
+    ```python
+    # Run tests concurrently
+    @pytest.mark.parametrize("url", urls)
+    @pytest.mark.parallel
+    ```
+  </Card>
+  
+  <Card title="Cache results" icon="database">
+    ```yaml
+    cache:
+      enabled: true
+      ttl: 3600
+    ```
+  </Card>
+  
+  <Card title="Optimize prompts" icon="file-alt">
+    ```python
+    # Be specific to reduce iterations
+    "Get the title from example.com"
+    # Not: "Tell me about example.com"
+    ```
+  </Card>
+</CardGroup>
+
+## Platform-specific issues
+
+### macOS
+
+<Accordion title="Command not found errors">
+  ```bash
+  # Add Python to PATH
+  export PATH="/usr/local/bin:$PATH"
+  
+  # Or use full paths in config
+  command: "/usr/local/bin/python3"
+  ```
+</Accordion>
+
+### Windows
+
+<Accordion title="Path and encoding issues">
+  ```yaml
+  # Use forward slashes or escaped backslashes
+  command: "python"
+  args: ["C:/path/to/server.py"]
+  # Or
+  args: ["C:\\path\\to\\server.py"]
+  
+  # Set encoding
+  env:
+    PYTHONIOENCODING: "utf-8"
+  ```
+</Accordion>
+
+### Linux/Docker
+
+<Accordion title="Permission and container issues">
+  ```bash
+  # Fix permissions
+  chmod +x server.py
+  
+  # For Docker
+  docker run --network=host mcp-eval
+  ```
+</Accordion>
+
+## Getting help
+
+### Self-service debugging
+
+1. **Run diagnostics:**
+   ```bash
+   mcp-eval doctor --full > diagnosis.txt
+   ```
+
+2. **Check logs:**
+   ```bash
+   # View recent test logs
+   tail -f test-reports/logs/mcp-eval.log
+   ```
+
+3. **Validate everything:**
+   ```bash
+   mcp-eval validate --all
+   ```
+
+<!-- TODO: Screenshot of doctor --full output with annotations -->
+
+### Prepare an issue report
+
+If you're still stuck, let's gather information for a bug report:
+
+```bash
+# Automatically collect diagnostics
+mcp-eval issue
+
+# This will:
+# 1. Run system diagnostics
+# 2. Collect configuration (sanitized)
+# 3. Get recent error logs
+# 4. Generate issue template
+# 5. Open GitHub issue page
+```
+
+<!-- TODO: Screenshot of the generated issue template -->
+
+### Community support
+
+- 💬 **Discord:** [Join our community](https://discord.gg/mcp-eval)
+- 🐛 **GitHub Issues:** [Report bugs](https://github.com/lastmile-ai/mcp-eval/issues)
+- 💡 **Discussions:** [Ask questions](https://github.com/lastmile-ai/mcp-eval/discussions)
+- 📚 **FAQ:** Check our [frequently asked questions](./faq)
+
+## Quick reference: Error codes
+
+| Code | Meaning | Quick Fix |
+|------|---------|-----------|
+| `AUTH001` | Invalid API key | Check environment variables |
+| `SRV001` | Server not found | Verify server name in config |
+| `SRV002` | Server failed to start | Check command and dependencies |
+| `TOOL001` | Tool not found | Verify server implements tool |
+| `TIMEOUT001` | Test timeout | Increase timeout_seconds |
+| `ASSERT001` | Assertion failed | Check expected vs actual values |
+| `NET001` | Network error | Check connectivity and proxy |
+| `RATE001` | Rate limited | Reduce concurrency or add delays |
+
+---
+
+**Still stuck?** Don't hesitate to reach out! We're here to help you succeed with MCP‑Eval. Remember, every great developer has faced these issues - you're in good company! 🚀

@@ -1,0 +1,135 @@
+---
+title: "MCP‑Eval Documentation"
+description: "The comprehensive testing framework for MCP servers and tool-using agents. Build confidence in your AI integrations with production-grade evaluation tools."
+icon: "house"
+sidebarTitle: "Home"
+mode: "custom"
+---
+
+<div style={{textAlign:'center', marginTop: 32, marginBottom: 32}}>
+  <h1>MCP‑Eval</h1>
+  <p style={{fontSize: '1.25rem', marginBottom: 24}}>Your flight simulator for tool‑using LLMs</p>
+  <p style={{fontSize: '1rem', opacity: 0.9}}>Connect agents to real MCP servers • Run realistic scenarios • Assert behavior with confidence</p>
+</div>
+
+<Note>
+  **New to MCP?** The Model Context Protocol enables AI assistants to connect with external tools and data sources. MCP‑Eval ensures these connections work reliably in production.
+</Note>
+
+## Get started in 30 seconds
+
+We recommend using [uv](https://docs.astral.sh/uv/) to manage your Python projects:
+
+```bash
+# Install MCP-Eval
+uv add mcpevals
+
+# Initialize your project
+mcp-eval init
+
+# Run your first test
+mcp-eval run examples/fetch_test.py
+```
+
+That's it! You're ready to start testing. [Continue with the Quickstart →](./quickstart.mdx)
+
+## What MCP‑Eval does for you
+
+<CardGroup cols={2}>
+  <Card title="Test MCP Servers" icon="server">
+    Ensure your MCP servers respond correctly to agent requests and handle edge cases gracefully
+  </Card>
+  <Card title="Evaluate Agents" icon="robot">
+    Measure how effectively agents use tools, follow instructions, and recover from errors
+  </Card>
+  <Card title="Track Performance" icon="chart-line">
+    Monitor latency, token usage, cost, and success rates with OpenTelemetry-backed metrics
+  </Card>
+  <Card title="Assert Quality" icon="check-circle">
+    Use structural checks, LLM judges, and path efficiency validators to ensure high quality
+  </Card>
+</CardGroup>
+
+## Why teams choose MCP‑Eval
+
+* **Production-ready**: Built on OpenTelemetry for enterprise-grade observability
+* **Multiple test styles**: Choose between decorators, pytest, or dataset-driven testing
+* **Rich assertions**: Content checks, tool verification, performance gates, and LLM judges
+* **CI/CD friendly**: GitHub Actions support, JSON/HTML reports, and regression detection
+* **Language agnostic**: Test MCP servers written in any language
+
+## Quick navigation
+
+<CardGroup cols={3}>
+  <Card title="Quickstart" icon="rocket" href="./quickstart">
+    Get up and running in 5 minutes
+  </Card>
+  <Card title="Common Workflows" icon="graduation-cap" href="./common-workflows">
+    Step-by-step guides for typical tasks
+  </Card>
+  <Card title="API Reference" icon="code" href="./api-catalog">
+    Complete assertion catalog and APIs
+  </Card>
+</CardGroup>
+
+## Learning path
+
+### 🚀 Getting Started
+* [Overview](./overview.mdx) - Understand MCP‑Eval's architecture and philosophy
+* [Quickstart](./quickstart.mdx) - Your first test in 5 minutes
+* [Concepts](./concepts.mdx) - Core concepts and terminology
+
+### 🧪 Writing Tests
+* [Assertions](./assertions.mdx) - The unified Expect API for all assertions
+* [Common Workflows](./common-workflows.mdx) - Practical testing patterns
+* [Test Generation](./test-generation.mdx) - AI-powered test creation
+
+### 📊 Evaluation Types
+* [Server Evaluation](./server-evaluation.mdx) - Testing MCP server implementations
+* [Agent Evaluation](./agent-evaluation.mdx) - Measuring agent effectiveness
+* [Datasets](./datasets.mdx) - Systematic evaluation suites
+
+### 🔧 Configuration & Integration
+* [Configuration](./configuration.mdx) - Settings and customization
+* [CI/CD](./ci-cd.mdx) - GitHub Actions and automation
+* [Reports](./reports.mdx) - Understanding test outputs
+
+### 📚 Reference
+* [CLI Reference](./cli-reference.mdx) - Complete command documentation
+* [API Reference](./api-catalog.mdx) - Detailed API documentation
+* [Troubleshooting](./troubleshooting.mdx) - Common issues and solutions
+* [FAQ](./faq.mdx) - Frequently asked questions
+
+## Example: Your first test
+
+```python
+from mcp_eval import task, Expect
+
+@task("Verify fetch server works correctly")
+async def test_fetch(agent, session):
+    # Ask the agent to fetch a webpage
+    response = await agent.generate_str("Fetch https://example.com and summarize it")
+    
+    # Assert the right tool was called
+    await session.assert_that(Expect.tools.was_called("fetch"))
+    
+    # Verify the content is correct
+    await session.assert_that(Expect.content.contains("Example Domain"), response=response)
+    
+    # Check performance
+    await session.assert_that(Expect.performance.response_time_under(5000))
+```
+
+[See more examples →](./examples.mdx)
+
+## Join the community
+
+<CardGroup cols={2}>
+  <Card title="GitHub" icon="github" href="https://github.com/lastmile-ai/mcp-eval">
+    Report issues and contribute
+  </Card>
+  <Card title="Discord" icon="discord" href="https://discord.gg/mcp-eval">
+    Get help and share experiences
+  </Card>
+</CardGroup>
+

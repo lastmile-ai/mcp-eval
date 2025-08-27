@@ -134,10 +134,10 @@ async def dataset_with_enhanced_features():
     report = await dataset.evaluate(enhanced_fetch_task, max_concurrency=2)
 
     # Print results manually since there's no print method
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Evaluation Report: {report.dataset_name}")
     print(f"Task: {report.task_name}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     for result in report.results:
         print(f"\nCase: {result.case_name}")
@@ -153,12 +153,12 @@ async def dataset_with_enhanced_features():
             if eval_result.error:
                 print(f"      Error: {eval_result.error}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(
         f"Results: {report.passed_cases}/{report.total_cases} cases passed ({report.success_rate:.1%})"
     )
     print(f"Average duration: {report.average_duration_ms:.0f}ms")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":
