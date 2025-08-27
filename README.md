@@ -1,4 +1,4 @@
-# MCP-Eval
+# mcp-eval
 
 [![Documentation](https://img.shields.io/badge/docs-mcp--eval.ai-blue)](https://mcp-eval.ai)
 [![PyPI](https://img.shields.io/pypi/v/mcpevals?color=%2334D058&label=pypi)](https://pypi.org/project/mcpevals/)
@@ -8,7 +8,7 @@ A testing and evaluation framework for Model Context Protocol (MCP) servers and 
 
 ## Overview
 
-MCP-Eval addresses the core challenge of testing AI systems that use MCP servers: ensuring that agents correctly use tools, produce accurate outputs, and meet performance requirements. It uses OpenTelemetry (OTEL) tracing as the single source of truth for all metrics and assertions.
+`mcp-eval` addresses the core challenge of testing AI systems that use MCP servers: ensuring that agents correctly use tools, produce accurate outputs, and meet performance requirements. It uses OpenTelemetry (OTEL) tracing as the single source of truth for all metrics and assertions.
 
 ### Key Capabilities
 
@@ -607,4 +607,4 @@ Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for:
 
 ## License
 
-MIT - see [LICENSE](./LICENSE) for details.
+Apache 2.0 - see [LICENSE](./LICENSE) for details.
