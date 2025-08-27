@@ -888,32 +888,17 @@ async def init_project(
     # Ensure mcpeval.yaml and secrets exist
     ensure_mcpeval_yaml(project)
 
-    # Create a simple README if one is not present
+    # Copy packaged sample README if none exists
     readme_path = project / "README.md"
     if not readme_path.exists():
         try:
-            lines = [
-                "# MCP-Eval Quick Start\n",
-                "\n",
-                "This project was bootstrapped by mcp-eval.\n",
-                "\n",
-                "## Run the example\n",
-                "\n",
-                "1. Set your API key (example for Anthropic):\n",
-                "```bash\nexport ANTHROPIC_API_KEY=your_key_here\n```\n",
-                "\n",
-                "2. (Optional) Run the sample server in this directory:\n",
-                "```bash\nuv run python sample_server.py\n```\n",
-                "\n",
-                "3. Run the example evaluation:\n",
-                "```bash\nuv run mcp-eval run usage_example.py\n```\n",
-                "\n",
-                "> Tip: The first run may take a moment while uv prepares an environment.\n",
-            ]
-            readme_path.write_text("".join(lines), encoding="utf-8")
+            from importlib import resources
+            src = resources.files("mcp_eval.data.sample").joinpath("README.md")
+            with resources.as_file(src) as src_path:
+                readme_path.write_bytes(Path(src_path).read_bytes())
             console.print(f"[green]✓[/] Wrote {readme_path}")
         except Exception as e:
-            console.print(f"[yellow]Warning: Could not write README.md: {e}[/yellow]")
+            console.print(f"[yellow]Warning: Could not copy README.md: {e}[/yellow]")
 
     # Create a lightweight context for ModelSelector to avoid global fallback
     context = Context()
