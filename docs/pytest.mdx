@@ -11,7 +11,7 @@ keywords: ["pytest","fixtures","markers","parametrize"]
 - `mcp_session`: access the session (metrics, assertions)
 - `mcp_agent`: a `TestAgent` bound to the session
 
-Source: [pytest_plugin.py](../src/mcp_eval/pytest_plugin.py)
+Source: [pytest_plugin.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/pytest_plugin.py)
 
 ### Markers
 
@@ -32,7 +32,7 @@ async def test_basic_fetch(mcp_agent):
     await mcp_agent.session.assert_that(Expect.content.contains("Example Domain"), response=resp)
 ```
 
-Full examples: [test_pytest_style.py](../examples/mcp_server_fetch/tests/test_pytest_style.py)
+Full examples: [test_pytest_style.py](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/tests/test_pytest_style.py)
 
 ### Per-test agent override
 
@@ -64,12 +64,12 @@ async def test_urls(mcp_agent, url, expected):
     await mcp_agent.session.assert_that(Expect.content.contains(expected, case_sensitive=False), response=resp)
 ```
 
-<!-- TODO: Add a larger end-to-end pytest screenshot: network marker, slow marker, and verbose summary. -->
+{/* TODO: Add a larger end-to-end pytest screenshot: network marker, slow marker, and verbose summary. */}
 
 #### Parametrization
 
 Use standard `@pytest.mark.parametrize` for breadth, or mix with MCP‑Eval’s `@parametrize` in decorator tests.
 
-<!-- TODO: Add a screenshot of a pytest run with markers, including skipped slow tests. -->
+{/* TODO: Add a screenshot of a pytest run with markers, including skipped slow tests. */}
 
 

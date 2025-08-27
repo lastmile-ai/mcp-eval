@@ -17,7 +17,7 @@ import mcp_eval
 from mcp_agent.agents.agent_spec import AgentSpec
 
 mcp_eval.use_agent(
-    AgentSpec(name="Fetcher", instruction="You fetch.", server_names=["fetch"])  # see [Settings](../src/mcp_eval/config.py)
+    AgentSpec(name="Fetcher", instruction="You fetch.", server_names=["fetch"])  # see [Settings](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/config.py)
 )
 ```
 
@@ -27,7 +27,7 @@ mcp_eval.use_agent(
 from mcp_eval.core import with_agent, task
 from mcp_agent.agents.agent import Agent
 
-@with_agent(Agent(name="Custom", instruction="Custom", server_names=["fetch"]))  # see [Core](../src/mcp_eval/core.py)
+@with_agent(Agent(name="Custom", instruction="Custom", server_names=["fetch"]))  # see [Core](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/core.py)
 @task("Custom agent test")
 async def test_custom(agent, session):
     resp = await agent.generate_str("Fetch https://example.com")
@@ -40,12 +40,12 @@ from mcp_eval.config import use_agent_factory
 from mcp_agent.agents.agent import Agent
 
 def make_agent():
-    return Agent(name="Isolated", instruction="...", server_names=["fetch"])  # see [Settings](../src/mcp_eval/config.py)
+    return Agent(name="Isolated", instruction="...", server_names=["fetch"])  # see [Settings](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/config.py)
 
 use_agent_factory(make_agent)
 ```
 
-More patterns: [agent_definition_examples.py](../examples/mcp_server_fetch/agent_definition_examples.py).
+More patterns: [agent_definition_examples.py](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/agent_definition_examples.py).
 
 ### What to measure
 
@@ -69,9 +69,9 @@ await session.assert_that(Expect.path.efficiency(expected_tool_sequence=["fetch"
 
 ### Styles for agent evals
 
-- Decorator tests: [test_decorator_style.py](../examples/mcp_server_fetch/tests/test_decorator_style.py)
-- Pytest style: [test_pytest_style.py](../examples/mcp_server_fetch/tests/test_pytest_style.py)
-- Datasets: [test_dataset_style.py](../examples/mcp_server_fetch/tests/test_dataset_style.py)
+- Decorator tests: [test_decorator_style.py](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/tests/test_decorator_style.py)
+- Pytest style: [test_pytest_style.py](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/tests/test_pytest_style.py)
+- Datasets: [test_dataset_style.py](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/tests/test_dataset_style.py)
 
 ### Inspecting spans and metrics
 
@@ -81,10 +81,10 @@ span_tree = session.get_span_tree()
 ```
 
 Sources:
-- Session/agent: [session.py](../src/mcp_eval/session.py)
-- Catalog: [catalog.py](../src/mcp_eval/catalog.py)
-- Evaluators: [evaluators/](../src/mcp_eval/evaluators/)
+- Session/agent: [session.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/session.py)
+- Catalog: [catalog.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/catalog.py)
+- Evaluators: [evaluators/](https://github.com/lastmile-ai/mcp-eval/tree/main/src/mcp_eval/evaluators/)
 
-<!-- TODO: Add example screenshots of an agent’s failed vs passed run with metrics breakdown and tool coverage. -->
+{/* TODO: Add example screenshots of an agent’s failed vs passed run with metrics breakdown and tool coverage. */}
 
 

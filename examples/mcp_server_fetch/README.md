@@ -4,16 +4,15 @@ A comprehensive test suite for the MCP fetch server using the mcp-eval framework
 
 ## Setup
 
-1. **Install dependencies using uv (recommended):**
+1. **Install uv (if you haven't already):**
    ```bash
-   # Install uv if you haven't already
+   # Install uv
    curl -LsSf https://astral.sh/uv/install.sh | sh
-   
-   # Install the package
-   uv pip install -e .
    ```
    
-   Or with standard pip:
+   > **Note:** With uv, you don't need to manually install dependencies - `uv run` will handle this automatically!
+
+   Alternatively, install with pip:
    ```bash
    pip install -e .
    ```
@@ -86,12 +85,12 @@ uv run python tests/test_dataset_style.py
 # Run from YAML dataset
 uv run mcpevals run dataset datasets/basic_fetch_dataset.yaml
 
-# Generate reports
-uv run mcpevals run tests/test_dataset_style.py --json=results.json --markdown=results.md
+# Generate reports (note: arguments go before the test path)
+uv run mcpevals run --json results.json --markdown results.md tests/test_dataset_style.py
 
 # Without uv:
 python tests/test_dataset_style.py
-mcpevals run dataset datasets/basic_fetch_dataset.yaml
+mcpevals run --json results.json tests/test_dataset_style.py
 ```
 
 ### Advanced Features
@@ -99,11 +98,11 @@ mcpevals run dataset datasets/basic_fetch_dataset.yaml
 # Run advanced analysis tests (with uv)
 uv run mcpevals run tests/test_advanced_features.py
 
-# With detailed reporting
-uv run mcpevals run tests/test_advanced_features.py --json=advanced_results.json
+# With detailed reporting (arguments before test path)
+uv run mcpevals run --json advanced_results.json tests/test_advanced_features.py
 
 # Without uv:
-mcpevals run tests/test_advanced_features.py --json=advanced_results.json
+mcpevals run --json advanced_results.json tests/test_advanced_features.py
 ```
 
 ### Run All Tests
@@ -113,6 +112,9 @@ uv run mcpevals run tests/
 
 # Run everything with pytest
 uv run pytest tests/ -v
+
+# Generate comprehensive reports
+uv run mcpevals run --json results.json --html report.html tests/
 
 # Mixed approach
 uv run mcpevals run tests/test_decorator_style.py tests/test_dataset_style.py
@@ -131,14 +133,11 @@ Here's a complete example of running a test from scratch:
 # 1. Clone and navigate to this example
 cd examples/mcp_server_fetch
 
-# 2. Install dependencies
-uv pip install -e .
-
-# 3. Set your API key
+# 2. Set your API key
 export ANTHROPIC_API_KEY="your-key-here"
 
-# 4. Run a simple test
-uv run mcpevals run tests/test_decorator_style.py::test_basic_fetch_decorator -v
+# 3. Run a simple test (uv will handle dependencies automatically)
+uv run mcpevals run tests/test_decorator_style.py
 
 # Expected output:
 # ✓ test_basic_fetch_decorator [4.123s]
@@ -147,6 +146,8 @@ uv run mcpevals run tests/test_decorator_style.py::test_basic_fetch_decorator -v
 #      ├─ contains_domain_text: ✓ Response contains 'Example Domain'
 #      └─ fetch_success_rate: ✓ Tool success rate is at least 100.0%
 ```
+
+> **Tip:** The first run with `uv run` may take a moment as it sets up dependencies. Subsequent runs will be faster!
 
 ## Test Categories
 
@@ -267,11 +268,12 @@ Update `golden_paths/fetch_paths.json` to define expected tool sequences for dif
 # Enable debug logging
 MCPEVALS_LOG_LEVEL=DEBUG uv run mcpevals run tests/
 
-# Inspect specific test
-uv run mcpevals run tests/test_decorator_style.py::test_basic_fetch_decorator --verbose
+# Inspect specific test with verbose output
+uv run mcpevals run --verbose tests/test_decorator_style.py
 
-# View available commands
+# View available commands and options
 uv run mcpevals --help
+uv run mcpevals run --help
 ```
 
 ## Expected Test Results
