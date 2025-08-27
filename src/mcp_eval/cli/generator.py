@@ -338,9 +338,9 @@ def _convert_servers_to_mcp_settings(
     return result
 
 
-def _load_existing_provider() -> tuple[
-    str | None, str | None, Dict[str, str], MCPEvalSettings
-]:
+def _load_existing_provider() -> (
+    tuple[str | None, str | None, Dict[str, str], MCPEvalSettings]
+):
     """Load existing provider configuration from environment and config files.
 
     Returns:
@@ -1608,6 +1608,14 @@ def list_agents_command(
 def init_project_cli(
     out_dir: str = typer.Option(".", help="Project directory for configs"),
 ):
+    """Initialize an mcp-eval project with configuration files and API keys.
+
+    Sets up mcpeval.yaml, mcpeval.secrets.yaml, configures LLM provider,
+    imports servers, and defines a default agent.
+
+    Examples:
+        $ mcp-eval init
+    """
     return asyncio.run(init_project(out_dir=out_dir))
 
 
@@ -1625,6 +1633,15 @@ def run_generator_cli(
         None, help="Explicit output path for the generated file (.py or .yaml)"
     ),
 ):
+    """Generate test scenarios and write a test file for an MCP server.
+
+    Discovers server tools, generates test scenarios with assertions,
+    and outputs as pytest, decorator, or dataset format.
+
+    Examples:
+        $ mcp-eval generate
+        $ mcp-eval generate --style pytest --n-examples 10
+    """
     return asyncio.run(
         run_generator(
             out_dir=out_dir,
@@ -1654,6 +1671,13 @@ def update_tests_cli(
     provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
     model: str | None = typer.Option(None, help="Model id (optional)"),
 ):
+    """Append newly generated tests to an existing test file.
+
+    Generates additional test scenarios and appends them to the specified file.
+
+    Examples:
+        $ mcp-eval update --target-file tests/test_fetch.py --n-examples 4
+    """
     return asyncio.run(
         update_tests(
             out_dir=out_dir,
