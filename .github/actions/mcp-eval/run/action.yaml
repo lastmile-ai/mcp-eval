@@ -197,17 +197,17 @@ runs:
           uv pip install -r requirements.txt
         else
           echo "Bootstrapping minimal project and adding dependencies with uv add"
-          cat > pyproject.toml << 'PY'
-[project]
-name = "mcpeval-ci"
-version = "0.0.0"
-requires-python = ">=3.10"
-dependencies = []
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-PY
+          printf '%s\n' \
+            '[project]' \
+            'name = "mcpeval-ci"' \
+            'version = "0.0.0"' \
+            'requires-python = ">=3.10"' \
+            'dependencies = []' \
+            '' \
+            '[build-system]' \
+            'requires = ["hatchling"]' \
+            'build-backend = "hatchling.build"' \
+            > pyproject.toml
           uv add mcpevals "mcp-agent[anthropic,openai]"
           if [[ "${{ inputs.include-pytest }}" == "true" ]]; then
             uv add pytest pytest-asyncio

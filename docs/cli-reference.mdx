@@ -6,7 +6,7 @@ icon: "terminal"
 keywords: ["cli","init","generate","run","validate","doctor","issue","list","add"]
 ---
 
-Root CLI: [cli/__init__.py](../src/mcp_eval/cli/__init__.py)
+Root CLI: [cli/__init__.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/cli/__init__.py)
 
 ## run
 
@@ -42,7 +42,7 @@ Combined reports example:
 mcp-eval run tests/ --json reports/combined.json --markdown reports/combined.md
 ```
 
-Source: [runner.py](../src/mcp_eval/runner.py)
+Source: [runner.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/runner.py)
 
 ## list
 
@@ -59,7 +59,7 @@ mcp-eval server list --verbose | cat
 mcp-eval agent list --name default
 ```
 
-Source: [list_command.py](../src/mcp_eval/cli/list_command.py)
+Source: [list_command.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/cli/list_command.py)
 
 ## init
 
@@ -71,7 +71,7 @@ mcp-eval init
 
 Prompts for provider/API key, lets you import servers from mcp.json or DXT, and configure a default agent.
 
-Source: [generator.py](../src/mcp_eval/cli/generator.py)
+Source: [generator.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/cli/generator.py)
 
 ## generate
 
@@ -91,7 +91,7 @@ mcp-eval generate --style pytest --n-examples 10 --provider anthropic
 mcp-eval generate --style decorators --output tests/test_fetch_generated.py
 ```
 
-Source: [generator.py](../src/mcp_eval/cli/generator.py)
+Source: [generator.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/cli/generator.py)
 
 ## update
 
@@ -103,7 +103,7 @@ mcp-eval update --target-file tests/test_fetch_generated.py --style pytest --n-e
 
 Appends new generated tests to an existing file.
 
-Source: [generator.py](../src/mcp_eval/cli/generator.py)
+Source: [generator.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/cli/generator.py)
 
 ## server / agent
 
@@ -120,7 +120,7 @@ mcp-eval server add --from-dxt ~/Desktop/manifest.dxt
 mcp-eval agent add
 ```
 
-Source: [generator.py](../src/mcp_eval/cli/generator.py), [utils.py](../src/mcp_eval/cli/utils.py)
+Source: [generator.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/cli/generator.py), [utils.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/cli/utils.py)
 
 ## validate
 
@@ -147,7 +147,7 @@ mcp-eval validate --quick
 mcp-eval validate
 ```
 
-Source: [validate.py](../src/mcp_eval/cli/validate.py)
+Source: [validate.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/cli/validate.py)
 
 ## doctor
 
@@ -164,7 +164,7 @@ mcp-eval doctor
 mcp-eval doctor --full
 ```
 
-Source: [doctor.py](../src/mcp_eval/cli/doctor.py)
+Source: [doctor.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/cli/doctor.py)
 
 ## issue
 
@@ -180,8 +180,8 @@ Examples:
 mcp-eval issue --title "Server connection fails" --no-open-browser
 ```
 
-Source: [issue.py](../src/mcp_eval/cli/issue.py)
+Source: [issue.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/cli/issue.py)
 
-<!-- TODO: Add screen captures of `mcp-eval server list`, `mcp-eval run` summaries, and a PR comment with embedded report. -->
+{/* TODO: Add screen captures of `mcp-eval server list`, `mcp-eval run` summaries, and a PR comment with embedded report. */}
 
 

@@ -1,39 +1,128 @@
 {
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "mcp-eval",
+  "theme": "willow",
+  "colors": {
+    "primary": "#3B2E24",
+    "light": "#60A5FA",
+    "dark": "#3B2E24"
+  },
+  "background": {
+    "color": {
+       "light": "#F5F4ED",
+       "dark": "#3B2E24"
+    },
+    "decoration": "grid"
+  },
   "navigation": {
-    "pages": [
-      "index",
-      "overview",
-      "quickstart",
-      "common-workflows",
-      "detailed_guide",
-      "concepts",
-      "reports",
-      "metrics-tracing",
-      "agent-evaluation",
-      "server-evaluation",
-      "assertions",
-      "pytest",
-      "datasets",
-      "agents",
-      "connect-servers",
-      "integrations",
-      "configuration",
-      "cli-reference",
-      "api-session",
-      "api-core",
-      "api-catalog",
-      "api-config",
-      "test-generation",
-      "examples",
-      "examples-mcp-server-fetch",
-      "ci-cd",
-      "troubleshooting",
-      "faq",
-      "changelog"
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "icon": "book",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "index",
+              "overview",
+              "quickstart",
+              "common-workflows",
+              "examples"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts",
+              "detailed_guide"
+            ]
+          },
+          {
+            "group": "Writing Tests",
+            "pages": [
+              "assertions",
+              "datasets",
+              "pytest",
+              "best-practices"
+            ]
+          },
+          {
+            "group": "Building with LLMs",
+            "pages": [
+              "test-generation",
+              "building-with-claude"
+            ]
+          },
+          {
+            "group": "Evaluation Guides",
+            "pages": [
+              "server-evaluation",
+              "agent-evaluation"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration",
+              "connect-servers",
+              "security"
+            ]
+          },
+          {
+            "group": "CI/CD & Deployment",
+            "pages": [
+              "ci-cd"
+            ]
+          },
+          {
+            "group": "Test Reporting",
+            "pages": [
+              "reports",
+              "metrics-tracing",
+              "integrations"
+            ]
+          },
+          {
+            "group": "API Reference",
+            "pages": [
+              "api-catalog",
+              "api-session",
+              "api-core",
+              "api-config"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli-reference"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "examples-mcp-server-fetch",
+              "troubleshooting",
+              "faq",
+              "changelog"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "GitHub",
+        "icon": "github",
+        "href": "https://github.com/lastmile-ai/mcp-eval"
+      }
     ]
   },
   "styling": {
     "eyebrows": "breadcrumbs"
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/lastmile-ai/mcp-eval",
+      "discord": "https://lmai.link/discord/mcp-agent"
+    }
   }
 }
 

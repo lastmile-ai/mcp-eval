@@ -25,9 +25,9 @@ await session.assert_that(judge, name="quality_summary", response=resp)
 
 ### Examples
 
-- Decorators: [test_decorator_style.py](../examples/mcp_server_fetch/tests/test_decorator_style.py)
-- Pytest: [test_pytest_style.py](../examples/mcp_server_fetch/tests/test_pytest_style.py)
-- Dataset: [test_dataset_style.py](../examples/mcp_server_fetch/tests/test_dataset_style.py), [datasets/](../examples/mcp_server_fetch/datasets/)
+- Decorators: [test_decorator_style.py](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/tests/test_decorator_style.py)
+- Pytest: [test_pytest_style.py](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/tests/test_pytest_style.py)
+- Dataset: [test_dataset_style.py](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/tests/test_dataset_style.py), [datasets/](https://github.com/lastmile-ai/mcp-eval/tree/main/examples/mcp_server_fetch/datasets/)
 
 ### Golden paths & sequences
 
@@ -52,9 +52,9 @@ await session.assert_that(Expect.tools.sequence(["fetch"], allow_other_calls=Tru
 - Combined JSON/Markdown/HTML via runner options
 
 Sources:
-- Unified assertions: [catalog.py](../src/mcp_eval/catalog.py)
-- Session/metrics: [session.py](../src/mcp_eval/session.py), [metrics.py](../src/mcp_eval/metrics.py), [span_tree.py](../src/mcp_eval/otel/span_tree.py)
+- Unified assertions: [catalog.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/catalog.py)
+- Session/metrics: [session.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/session.py), [metrics.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/metrics.py), [span_tree.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/otel/span_tree.py)
 
-<!-- TODO: Add a diagram illustrating golden path vs actual path, highlighting backtracking or repeated tools. -->
+{/* TODO: Add a diagram illustrating golden path vs actual path, highlighting backtracking or repeated tools. */}
 
 

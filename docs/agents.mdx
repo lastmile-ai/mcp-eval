@@ -14,7 +14,7 @@ keywords: ["AgentSpec","Agent","AugmentedLLM","with_agent","discovery"]
 - Programmatic AugmentedLLM
 - Factory (safe for parallel tests)
 
-APIs: [config.py](../src/mcp_eval/config.py), [core.py](../src/mcp_eval/core.py)
+APIs: [config.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/config.py), [core.py](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/core.py)
 
 ### Decorator order
 
@@ -24,12 +24,12 @@ When combining, place `@with_agent(...)` above `@task(...)`.
 
 Define AgentSpecs in `mcp-agent.config.yaml` or enable `subagents` search paths. Reference by name with `use_agent("SpecName")` or `@pytest.mark.mcp_agent("SpecName")`.
 
-Examples: [agent_definition_examples.py](../examples/mcp_server_fetch/agent_definition_examples.py)
+Examples: [agent_definition_examples.py](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/agent_definition_examples.py)
 
 #### Per‑Agent provider/model
 
 Prefer attaching provider/model at the AgentSpec level if an agent should use a distinct model from global defaults.
 
-<!-- TODO: Add a short code sample showing AgentSpec with provider/model override and a screenshot of an agent detail view in `mcp-eval agent list --verbose`. -->
+{/* TODO: Add a short code sample showing AgentSpec with provider/model override and a screenshot of an agent detail view in `mcp-eval agent list --verbose`. */}
 
 
