@@ -4,116 +4,151 @@
 [![PyPI](https://img.shields.io/pypi/v/mcpevals?color=%2334D058&label=pypi)](https://pypi.org/project/mcpevals/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/lastmile-ai/mcp-eval/blob/main/LICENSE)
 
-A testing and evaluation framework for Model Context Protocol (MCP) servers and agents. MCP-Eval provides automated testing, performance metrics, and quality assurance for MCP integrations.
+mcp-eval is an evaluation framework for testing Model Context Protocol (MCP) servers and the agents that use them. Unlike traditional testing approaches that mock interactions or test components in isolation, mcp-eval exercises your complete system in the environment it actually runs in: an LLM/agent calling real MCP tools.
 
-## Overview
+## Why mcp-eval exists
 
-`mcp-eval` addresses the core challenge of testing AI systems that use MCP servers: ensuring that agents correctly use tools, produce accurate outputs, and meet performance requirements. It uses OpenTelemetry (OTEL) tracing as the single source of truth for all metrics and assertions.
+### The challenge
 
-### Key Capabilities
+As AI agents become more sophisticated and MCP servers proliferate, teams face critical questions:
 
-- **Automated Testing**: Define tests as async functions with an agent and session. Tests can verify tool usage, response content, performance metrics, and execution paths.
-- **Unified Assertion API**: All assertions follow the `Expect` pattern with namespaces for content, tools, performance, judge, and path evaluations.
-- **OTEL-Based Metrics**: Every interaction is traced through OpenTelemetry, providing detailed metrics on latency, token usage, tool calls, and costs.
-- **Multiple Test Styles**: Supports decorator-based (`@task`), pytest integration, dataset-driven testing, and legacy assertion patterns.
-- **LLM Judge Evaluation**: Use LLMs to evaluate response quality against rubrics or multi-criteria assessments when deterministic checks aren't sufficient.
-- **Golden Path Enforcement**: Define expected tool sequences and verify agents follow optimal execution paths without redundancy or backtracking.
-- **Comprehensive Reporting**: Generate HTML, JSON, and Markdown reports with pass/fail status, metrics, traces, and detailed assertion results.
+* **For MCP server developers**: "Will my server handle real agent requests correctly? What about edge cases?"
+* **For agent developers**: "Is my agent using tools effectively? Does it recover from errors?"
+* **For both**: "How do we measure quality, performance, and reliability before production?"
+
+### The solution
+
+mcp-eval addresses these challenges by providing:
+
+1. **Real environment testing** - No mocks, actual agent-to-server communication
+2. **Full observability** - OpenTelemetry traces capture detailed agent execution to run evals over
+3. **Rich assertion library** - From tool checks to sophisticated path analysis
+4. **Multiple test styles** - Choose what fits your workflow -- pytest, datasets or @task decorators
+5. **Language agnostic** - Test MCP servers written in any language
+
+## How it works
+
+```mermaid
+sequenceDiagram
+    participant Test
+    participant mcp-eval
+    participant Agent
+    participant MCP Server
+    participant OpenTelemetry
+    
+    Test->>mcp-eval: Define test scenario
+    mcp-eval->>Agent: Initialize with tools
+    Test->>Agent: Send prompt
+    Agent->>MCP Server: Call tool
+    MCP Server->>Agent: Return result
+    Agent->>OpenTelemetry: Emit traces
+    Agent->>Test: Return response
+    Test->>mcp-eval: Assert expectations
+    mcp-eval->>OpenTelemetry: Analyze traces
+    mcp-eval->>Test: Pass/fail with metrics
+```
+
+> **[Model Context Protocol](https://modelcontextprotocol.io/docs/getting-started/intro)** standardizes how applications provide context to large language models (LLMs). Think of MCP like a USB-C port for AI applications.
+> 
+> **`mcp-eval`** ensures your MCP servers, and agents built with them, work reliably in production.
+
+> **Test any MCP server:** It doesn't matter what language your MCP server is written in - Python, TypeScript, Go, Rust, Java, or any other. As long as it implements the MCP protocol, `mcp-eval` can test it!
+
 
 ## Installation
 
-We recommend using [uv](https://docs.astral.sh/uv/) to manage your Python projects:
+We recommend using [uv](https://docs.astral.sh/uv/) to install `mcp-eval` as a global tool:
 
 ```bash
+# Install mcp-eval globally (for CLI)
+uv tool install mcpevals
+
+# Add mcp-eval dependency to your project
 uv add mcpevals
-```
 
-Alternatively:
-
-```bash
-pip install mcpevals
-```
-
-For development:
-```bash
-git clone https://github.com/lastmile-ai/mcp-eval
-cd mcp-eval
-pip install -e .
-```
-
-Requirements:
-- Python 3.10+
-- An LLM API key (Anthropic, OpenAI, or Google)
-- MCP servers to test (can be any language)
-
-## Quick Start
-
-### 1. Initialize Configuration
-
-```bash
+# Initialize your project (interactive setup)
 mcp-eval init
+
+# Add your MCP server to test
+mcp-eval server add
+
+# Auto-generate tests with an LLM
+mcp-eval generate
+
+# Run tests
+mcp-eval run tests/
 ```
 
-This creates:
-- `mcpeval.yaml` - Main configuration file
-- `mcpeval.secrets.yaml` - API keys (gitignored)
+Alternatively with pip:
 
-Minimal configuration:
+```bash
+# Install mcp-eval
+pip install mcpevals
 
-```yaml
-# mcpeval.yaml
-provider: anthropic
-model: claude-3-5-sonnet-20241022
+# Initialize your project
+mcp-eval init
 
-mcp:
-  servers:
-    calculator:
-      command: "python"
-      args: ["calculator_server.py"]
+# Add your MCP server
+mcp-eval server add
+
+# Run tests
+mcp-eval run tests/
 ```
 
-### 2. Write Your First Test
+
+**Requirements:**
+- Python 3.10+
+- Any MCP server to test
+
+---
+
+**📚 Ready to dive deeper? Follow our complete [Getting Started Guide](https://mcp-eval.ai/quickstart) →**
+
+---
+
+
+## What mcp-eval Does for You
+
+- **Test MCP Servers**: Ensure your MCP servers respond correctly to agent requests and handle edge cases gracefully
+- **Evaluate Agents**: Measure how effectively agents use tools, follow instructions, and recover from errors  
+- **Track Performance**: Monitor latency, token usage, cost, and success rates with OpenTelemetry-backed metrics
+- **Assert Quality**: Use structural checks, LLM judges, and path efficiency validators to ensure high quality
+
+## Why Teams Choose mcp-eval
+
+- **Production-ready**: Built on OpenTelemetry for enterprise-grade observability
+- **Multiple test styles**: Choose between decorators, pytest, or dataset-driven testing
+- **Rich assertions**: Content checks, tool verification, performance gates, and LLM judges
+- **CI/CD friendly**: GitHub Actions support, JSON/HTML reports, and regression detection
+- **Language agnostic**: Test MCP servers written in any language
+- **Built on [mcp-agent](https://mcp-agent.com)**: Leverage sophisticated agent patterns from Anthropic's [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents)
+
+## Quick Example
 
 ```python
 from mcp_eval import task, Expect
 
-@task("Test calculator addition")
-async def test_addition(agent, session):
-    response = await agent.generate_str("Calculate 15 + 27")
+@task("Verify fetch server works correctly")
+async def test_fetch(agent, session):
+    # Ask the agent to fetch a webpage
+    response = await agent.generate_str("Fetch https://example.com and summarize it")
     
-    # Verify tool was called
-    await session.assert_that(
-        Expect.tools.was_called("add")
-    )
+    # Assert the right tool was called
+    await session.assert_that(Expect.tools.was_called("fetch"))
     
-    # Check the result
+    # Verify the content is correct
     await session.assert_that(
-        Expect.content.contains("42"),
+        Expect.content.contains("Example Domain"), 
         response=response
     )
     
-    # Ensure efficiency  
-    await session.assert_that(
-        Expect.performance.max_iterations(1)
-    )
+    # Check performance
+    await session.assert_that(Expect.performance.response_time_under(5000))
 ```
 
-### 3. Run Tests
-
+Run with:
 ```bash
-mcp-eval run test_calculator.py -v
-```
-
-Output:
-```
-✓ Test calculator addition [1.2s]
-  ✓ add_tool_called: Tool 'add' was called
-  ✓ has_result: Content contains "42"
-  ✓ efficient: Completed in 1 iteration
-
-Results: 1 passed, 0 failed
-Total duration: 1.2s
-Total cost: $0.0012
+mcp-eval run test_fetch.py -v
 ```
 
 ## Core Features

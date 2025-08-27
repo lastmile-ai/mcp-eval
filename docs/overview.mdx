@@ -1,22 +1,22 @@
 ---
-title: "MCP‑Eval Overview"
-description: "Learn about MCP‑Eval, the comprehensive framework for testing MCP servers and tool-using agents in production-like environments."
+title: "mcp-eval Overview"
+description: "Learn about mcp-eval, the comprehensive framework for testing MCP servers and tool-using agents in production-like environments."
 sidebarTitle: "Overview"
 icon: "book-open"
 keywords: ["overview","mcp-eval","testing framework","agents","mcp servers","otel","evaluation"]
 ---
 
-> MCP‑Eval is your "flight simulator" for tool-using LLMs. Connect agents to real MCP servers, run realistic scenarios, and get production-grade insights into behavior and performance.
+> mcp-eval is your "flight simulator" for tool-using LLMs. Connect agents to real MCP servers, run realistic scenarios, and get production-grade insights into behavior and performance.
 
-## What is MCP‑Eval?
+## What is mcp-eval?
 
-MCP‑Eval is a developer-first evaluation framework designed specifically for testing Model Context Protocol (MCP) servers and the agents that use them. Unlike traditional testing approaches that mock interactions or test components in isolation, MCP‑Eval exercises your complete system in the environment it actually runs in: an LLM/agent calling real MCP tools.
+mcp-eval is a developer-first evaluation framework designed specifically for testing Model Context Protocol (MCP) servers and the agents that use them. Unlike traditional testing approaches that mock interactions or test components in isolation, mcp-eval exercises your complete system in the environment it actually runs in: an LLM/agent calling real MCP tools.
 
 <Note>
-  **Think of it this way**: If unit tests are like testing car parts on a bench, MCP‑Eval is like taking the whole car to a test track. You see how everything works together under realistic conditions.
+  **Think of it this way**: If unit tests are like testing car parts on a bench, mcp-eval is like taking the whole car to a test track. You see how everything works together under realistic conditions.
 </Note>
 
-## Why MCP‑Eval exists
+## Why mcp-eval exists
 
 ### The challenge
 
@@ -28,13 +28,13 @@ As AI agents become more sophisticated and MCP servers proliferate, teams face c
 
 ### The solution
 
-MCP‑Eval addresses these challenges by providing:
+mcp-eval addresses these challenges by providing:
 
 1. **Real environment testing** - No mocks, actual agent-to-server communication
-2. **Production-grade observability** - OpenTelemetry traces capture everything
-3. **Rich assertion library** - From simple content checks to sophisticated path analysis
-4. **Multiple test styles** - Choose what fits your workflow
-5. **Language agnostic** - Test servers written in any language
+2. **Full observability** - OpenTelemetry traces capture detailed agent execution to run evals over
+3. **Rich assertion library** - From tool checks to sophisticated path analysis
+4. **Multiple test styles** - Choose what fits your workflow -- `pytest`, datasets or `@task` decorators.
+5. **Language agnostic** - Test MCP servers written in any language
 
 ## Core capabilities
 
@@ -88,7 +88,7 @@ MCP‑Eval addresses these challenges by providing:
   </Card>
 </CardGroup>
 
-## How MCP‑Eval works
+## How mcp-eval works
 
 ### Architecture overview
 
@@ -118,7 +118,7 @@ graph LR
   </Step>
   
   <Step title="Execute tests">
-    MCP‑Eval orchestrates the agent, captures all interactions via OpenTelemetry, and records comprehensive traces.
+    mcp-eval orchestrates the agent, captures all interactions via OpenTelemetry, and records comprehensive traces.
   </Step>
   
   <Step title="Process traces into metrics">
@@ -136,7 +136,7 @@ graph LR
 
 ## A complete example
 
-Here's a real-world test that showcases MCP‑Eval's capabilities:
+Here's a real-world test that showcases mcp-eval's capabilities:
 
 ```python
 from mcp_eval import task, setup, Expect
@@ -290,7 +290,7 @@ Generate reports in multiple formats:
 
 All reports include links to detailed OTEL traces for debugging.
 
-## When to use MCP‑Eval
+## When to use mcp-eval
 
 ### Perfect for
 
@@ -338,7 +338,7 @@ Ready to start testing? Here's your path:
 
 ## Technical foundations
 
-MCP‑Eval is built on solid technical foundations:
+mcp-eval is built on solid technical foundations:
 
 * **Async-first Python** for performance and concurrency
 * **OpenTelemetry** for vendor-neutral observability

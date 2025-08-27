@@ -196,23 +196,6 @@ agents:
 4. **Review generated code** - Subagents provide excellent starting points, but review and customize as needed
 5. **Keep subagents updated** - Pull the latest mcp-eval version for improved subagents
 
-## Programmatic Access
-
-You can also access subagents programmatically:
-
-```python
-from importlib import resources
-
-def load_subagent(name: str) -> str:
-    """Load a subagent's content by name."""
-    subagents_path = resources.files("mcp_eval.data").joinpath("subagents")
-    agent_file = subagents_path.joinpath(f"{name}.md")
-    return agent_file.read_text()
-
-# Example: Load test writer subagent
-test_writer = load_subagent("mcp-eval-test-writer")
-```
-
 ## Integration with mcp-agent
 
 If you're using [mcp-agent](https://github.com/modelcontextprotocol/mcp-agent), these subagents are compatible with its agent loading system. Configure your `mcp-agent.config.yaml` to include the mcp-eval subagents search path.

@@ -1,16 +1,16 @@
 ---
 title: "Core Concepts"
-description: "Understand the fundamental concepts and architecture of MCP‑Eval for effective testing."
+description: "Understand the fundamental concepts and architecture of mcp-eval for effective testing."
 sidebarTitle: "Concepts"
 icon: "lightbulb"
 keywords: ["concepts","architecture","agents","servers","sessions","assertions","metrics"]
 ---
 
-> Master these core concepts to write effective tests with MCP‑Eval. Each concept builds on the previous ones to create a complete testing framework.
+> Master these core concepts to write effective tests with mcp-eval. Each concept builds on the previous ones to create a complete testing framework.
 
 ## Overview
 
-MCP‑Eval orchestrates interactions between three key components:
+mcp-eval orchestrates interactions between three key components:
 
 1. **Agents** - AI models that can use tools
 2. **MCP Servers** - Tool providers implementing the Model Context Protocol
@@ -64,7 +64,7 @@ Source: [TestAgent](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_ev
 
 ## Unified assertion API
 
-MCP‑Eval uses a single, discoverable API pattern for all assertions:
+mcp-eval uses a single, discoverable API pattern for all assertions:
 
 ```python
 await session.assert_that(Expect.category.check(...), response=?, when=?)
@@ -89,7 +89,7 @@ Catalog source: [Expect catalog](https://github.com/lastmile-ai/mcp-eval/blob/ma
 
 ## Test styles
 
-MCP‑Eval supports three testing approaches to fit different workflows:
+mcp-eval supports three testing approaches to fit different workflows:
 
 ### Decorator style
 

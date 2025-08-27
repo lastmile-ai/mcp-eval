@@ -1,12 +1,12 @@
 ---
 title: "Configuration Guide"
-description: "Master MCP‑Eval configuration. Learn file structures, precedence rules, environment variables, and programmatic APIs for complete control over your testing environment."
+description: "Master mcp-eval configuration. Learn file structures, precedence rules, environment variables, and programmatic APIs for complete control over your testing environment."
 sidebarTitle: "Configuration"
 icon: "gear"
 keywords: ["configuration","mcpeval.yaml","mcp-agent.config.yaml","secrets","settings","providers","environment"]
 ---
 
-> ⚙️ **Configure with confidence!** This comprehensive guide covers every configuration option, from basic setup to advanced customization. You'll learn exactly how to tune MCP‑Eval for your specific needs.
+> ⚙️ **Configure with confidence!** This comprehensive guide covers every configuration option, from basic setup to advanced customization. You'll learn exactly how to tune mcp-eval for your specific needs.
 
 ## Quick configuration finder
 
@@ -40,7 +40,7 @@ What do you need to configure?
 
 ## Configuration overview
 
-MCP‑Eval uses a layered configuration system that gives you flexibility and control:
+mcp-eval uses a layered configuration system that gives you flexibility and control:
 
 {/* TODO: Diagram showing configuration file hierarchy and precedence */}
 
@@ -48,14 +48,14 @@ MCP‑Eval uses a layered configuration system that gives you flexibility and co
 
 1. **`mcp-agent.config.yaml`** - Base configuration for servers and providers
 2. **`mcp-agent.secrets.yaml`** - Secure API keys and credentials
-3. **`mcpeval.yaml`** - MCP‑Eval specific settings
-4. **`mcpeval.secrets.yaml`** - MCP‑Eval specific secrets
+3. **`mcpeval.yaml`** - mcp-eval specific settings
+4. **`mcpeval.secrets.yaml`** - mcp-eval specific secrets
 5. **Environment variables** - Runtime overrides
 6. **Programmatic configuration** - Code-level settings
 
 ### File discovery
 
-MCP‑Eval searches for configuration files in this order:
+mcp-eval searches for configuration files in this order:
 
 ```
 Current directory:
@@ -662,7 +662,7 @@ alerting:
 
 ## Programmatic configuration
 
-Configure MCP‑Eval from code:
+Configure mcp-eval from code:
 
 ### Basic programmatic setup
 
@@ -888,4 +888,4 @@ configs/
 
 ---
 
-**You're now a configuration expert!** With this knowledge, you can tune MCP‑Eval to work perfectly for your specific testing needs. Remember: start simple and add complexity as needed! 🎯
+**You're now a configuration expert!** With this knowledge, you can tune mcp-eval to work perfectly for your specific testing needs. Remember: start simple and add complexity as needed! 🎯

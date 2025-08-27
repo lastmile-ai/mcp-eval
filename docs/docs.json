@@ -112,6 +112,11 @@
         "tab": "GitHub",
         "icon": "github",
         "href": "https://github.com/lastmile-ai/mcp-eval"
+      },
+      {
+        "tab": "mcp-agent",
+        "icon": "robot",
+        "href": "https://mcp-agent.com"
       }
     ]
   },
@@ -128,7 +133,26 @@
     "socials": {
       "github": "https://github.com/lastmile-ai/mcp-eval",
       "discord": "https://lmai.link/discord/mcp-agent"
-    }
+    },
+    "links": [
+      {
+        "header": "Resources",
+        "items": [
+          {
+            "label": "mcp-agent",
+            "href": "https://mcp-agent.com"
+          },
+          {
+            "label": "mcp-agent GitHub",
+            "href": "https://github.com/lastmile-ai/mcp-agent"
+          },
+          {
+            "label": "mcp-agent Examples",
+            "href": "https://github.com/lastmile-ai/mcp-agent/tree/main/examples"
+          }
+        ]
+      }
+    ]
   }
 }
 

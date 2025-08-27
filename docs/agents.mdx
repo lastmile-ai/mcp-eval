@@ -3,8 +3,32 @@ title: "Agents"
 description: "Define agents via config or code: AgentSpec, Agent, AugmentedLLM, and factories; discovery and overrides."
 sidebarTitle: "Agents"
 icon: "user-gear"
-keywords: ["AgentSpec","Agent","AugmentedLLM","with_agent","discovery"]
+keywords: ["AgentSpec","Agent","AugmentedLLM","with_agent","discovery","mcp-agent"]
 ---
+
+<Note>
+**mcp-eval is built on [mcp-agent](https://mcp-agent.com)** — a simple, composable framework for building effective agents with Model Context Protocol using patterns from Anthropic's [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents) guide.
+</Note>
+
+## Understanding mcp-agent
+
+[mcp-agent](https://github.com/lastmile-ai/mcp-agent) provides the core agent infrastructure that powers mcp-eval's testing capabilities:
+
+- **Simple & Composable**: Build agents using proven patterns like Parallel, Router, Evaluator-Optimizer, and Swarm workflows
+- **Full MCP Support**: Agents can use any MCP tools, resources, and prompts from connected servers
+- **Production-Ready**: The same agent patterns you test can be deployed to production
+- **Model-Agnostic**: Works with OpenAI, Anthropic, and other LLM providers
+
+Your test agents can leverage all of mcp-agent's sophisticated capabilities:
+- Multi-server connections
+- Complex workflow orchestration  
+- Human-in-the-loop interactions
+- Durable execution with state management
+
+Learn more:
+- [mcp-agent Documentation](https://docs.mcp-agent.com)
+- [mcp-agent Examples](https://github.com/lastmile-ai/mcp-agent/tree/main/examples) - Production-ready agent patterns
+- [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents) - Anthropic's guide
 
 ### Ways to define
 
