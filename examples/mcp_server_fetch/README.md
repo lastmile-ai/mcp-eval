@@ -51,8 +51,8 @@ pytest tests/test_pytest_style.py -v
 
 ### Legacy Assertions Style
 ```bash
-# Run with mcpevals CLI (using uv)
-uv run mcpevals run tests/test_assertions_style.py
+# Run with mcp-eval CLI (using uv)
+uv run mcp-eval run tests/test_assertions_style.py
 
 # Or individual test
 uv run python -c "
@@ -62,19 +62,19 @@ asyncio.run(test_basic_fetch_assertions())
 "
 
 # Without uv:
-mcpevals run tests/test_assertions_style.py
+mcp-eval run tests/test_assertions_style.py
 ```
 
 ### Modern Decorator Style
 ```bash
-# Run with mcpevals CLI (using uv)
-uv run mcpevals run tests/test_decorator_style.py
+# Run with mcp-eval CLI (using uv)
+uv run mcp-eval run tests/test_decorator_style.py
 
 # With verbose output
-uv run mcpevals run tests/test_decorator_style.py --verbose
+uv run mcp-eval run tests/test_decorator_style.py --verbose
 
 # Without uv:
-mcpevals run tests/test_decorator_style.py --verbose
+mcp-eval run tests/test_decorator_style.py --verbose
 ```
 
 ### Dataset Evaluation
@@ -83,45 +83,45 @@ mcpevals run tests/test_decorator_style.py --verbose
 uv run python tests/test_dataset_style.py
 
 # Run from YAML dataset
-uv run mcpevals run dataset datasets/basic_fetch_dataset.yaml
+uv run mcp-eval run dataset datasets/basic_fetch_dataset.yaml
 
 # Generate reports (note: arguments go before the test path)
-uv run mcpevals run --json results.json --markdown results.md tests/test_dataset_style.py
+uv run mcp-eval run --json results.json --markdown results.md tests/test_dataset_style.py
 
 # Without uv:
 python tests/test_dataset_style.py
-mcpevals run --json results.json tests/test_dataset_style.py
+mcp-eval run --json results.json tests/test_dataset_style.py
 ```
 
 ### Advanced Features
 ```bash
 # Run advanced analysis tests (with uv)
-uv run mcpevals run tests/test_advanced_features.py
+uv run mcp-eval run tests/test_advanced_features.py
 
 # With detailed reporting (arguments before test path)
-uv run mcpevals run --json advanced_results.json tests/test_advanced_features.py
+uv run mcp-eval run --json advanced_results.json tests/test_advanced_features.py
 
 # Without uv:
-mcpevals run --json advanced_results.json tests/test_advanced_features.py
+mcp-eval run --json advanced_results.json tests/test_advanced_features.py
 ```
 
 ### Run All Tests
 ```bash
-# Run everything with mcpevals (using uv)
-uv run mcpevals run tests/
+# Run everything with mcp-eval (using uv)
+uv run mcp-eval run tests/
 
 # Run everything with pytest
 uv run pytest tests/ -v
 
 # Generate comprehensive reports
-uv run mcpevals run --json results.json --html report.html tests/
+uv run mcp-eval run --json results.json --html report.html tests/
 
 # Mixed approach
-uv run mcpevals run tests/test_decorator_style.py tests/test_dataset_style.py
+uv run mcp-eval run tests/test_decorator_style.py tests/test_dataset_style.py
 uv run pytest tests/test_pytest_style.py
 
 # Without uv:
-mcpevals run tests/
+mcp-eval run tests/
 pytest tests/ -v
 ```
 
@@ -137,7 +137,7 @@ cd examples/mcp_server_fetch
 export ANTHROPIC_API_KEY="your-key-here"
 
 # 3. Run a simple test (uv will handle dependencies automatically)
-uv run mcpevals run tests/test_decorator_style.py
+uv run mcp-eval run tests/test_decorator_style.py
 
 # Expected output:
 # ✓ test_basic_fetch_decorator [4.123s]
@@ -264,16 +264,12 @@ Update `golden_paths/fetch_paths.json` to define expected tool sequences for dif
 
 ### Debug Mode
 
-```bash
-# Enable debug logging
-MCPEVALS_LOG_LEVEL=DEBUG uv run mcpevals run tests/
-
 # Inspect specific test with verbose output
-uv run mcpevals run --verbose tests/test_decorator_style.py
+uv run mcp-eval run --verbose tests/test_decorator_style.py
 
 # View available commands and options
-uv run mcpevals --help
-uv run mcpevals run --help
+uv run mcp-eval --help
+uv run mcp-eval run --help
 ```
 
 ## Expected Test Results
@@ -299,4 +295,4 @@ Note: Some advanced tests may fail depending on network conditions or API availa
 - [Configuration Reference](../../docs/configuration.mdx) - Full configuration options
 - [Main README](../../README.md) - Project overview
 
-This test suite serves as both a comprehensive evaluation of the MCP fetch server and a demonstration of mcpevals capabilities across all testing paradigms.
+This test suite serves as both a comprehensive evaluation of the MCP fetch server and a demonstration of mcp-eval capabilities across all testing paradigms.
