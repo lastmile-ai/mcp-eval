@@ -1,30 +1,71 @@
 ---
 title: "Building with Claude"
-description: "Use Claude subagents to accelerate MCP-Eval test development with specialized AI assistants"
+description: "Use Claude subagents to accelerate mcp-eval test development with specialized AI assistants"
 sidebarTitle: "Building with Claude"
 icon: "robot"
 keywords: ["claude", "subagents", "ai", "test writing", "debugging", "performance"]
 ---
 
-MCP-Eval includes specialized Claude subagents that help you write, debug, and optimize tests. These subagents are AI assistants with deep knowledge of MCP-Eval patterns and best practices.
+mcp-eval includes specialized Claude subagents that help you write, debug, and optimize tests. These subagents are AI assistants with deep knowledge of mcp-eval patterns and best practices.
 
 ## Available Subagents
 
-MCP-Eval ships with several specialized subagents in `src/mcp_eval/data/subagents/`:
+mcp-eval ships with several specialized subagents in [`src/mcp_eval/data/subagents/`](https://github.com/lastmile-ai/mcp-eval/tree/main/src/mcp_eval/data/subagents). You can view and copy the complete definitions below. Save these as `.md` files in your `.claude/agents` directory:
 
-### Test Development
-- **`mcp-eval-test-writer`** - Expert at writing comprehensive MCP-Eval tests in all styles (decorator, pytest, dataset)
-- **`mcp-eval-debugger`** - Expert at debugging test failures and configuration issues
-- **`mcp-eval-config-expert`** - Expert at configuring MCP-Eval and managing mcpeval.yaml files
-
-### Test Generation
-- **`test-scenario-designer`** - Creates diverse, high-quality test scenarios for MCP servers
-- **`test-assertion-refiner`** - Refines and enhances test assertions for comprehensive coverage
-- **`test-code-emitter`** - Converts test scenarios into valid Python test code
+<Tabs>
+  <Tab title="Core Subagents">
+    ### Test Writer
+    View the complete [MCP-Eval Test Writer](/subagents/mcp-eval-test-writer) subagent definition.
+    
+    Expert at writing comprehensive mcp-eval tests in all styles (decorator, pytest, dataset).
+    
+    ### Test Generator
+    View the complete [MCP-Eval Test Generator](/subagents/mcp-eval-test-generator) subagent definition.
+    
+    Generates complete test suites with diverse scenarios and comprehensive coverage.
+    
+    ### Debugger
+    View the complete [MCP-Eval Debugger](/subagents/mcp-eval-debugger) subagent definition.
+    
+    Expert at debugging test failures, analyzing OTEL traces, and troubleshooting configuration issues.
+    
+    ### Config Expert
+    View the complete [MCP-Eval Config Expert](/subagents/mcp-eval-config-expert) subagent definition.
+    
+    Expert at configuring mcp-eval and managing mcpeval.yaml files for optimal performance.
+  </Tab>
+  
+  <Tab title="Test Generation Pipeline">
+    ### Scenario Designer
+    View the complete [Test Scenario Designer](/subagents/test-scenario-designer) subagent definition.
+    
+    Creates diverse, high-quality test scenarios for MCP servers (Step 1 of generation pipeline).
+    
+    ### Assertion Refiner
+    View the complete [Test Assertion Refiner](/subagents/test-assertion-refiner) subagent definition.
+    
+    Refines and enhances test assertions for comprehensive coverage (Step 2 of generation pipeline).
+    
+    ### Code Emitter
+    View the complete [Test Code Emitter](/subagents/test-code-emitter) subagent definition.
+    
+    Converts test scenarios into valid Python test code with proper syntax (Step 3 of generation pipeline).
+  </Tab>
+</Tabs>
 
 ## Setup
 
-### Option 1: Reference from Package
+<Tabs>
+<Tab title="Option 1: Copy to Project">
+
+For Claude Code:
+```bash
+mkdir -p .claude/agents
+cp path/to/mcp_eval/data/subagents/*.md .claude/agents/
+```
+</Tab>
+
+<Tab title="Option 2: Reference from Package">
 
 Find your package location:
 ```bash
@@ -44,30 +85,22 @@ agents:
   pattern: "*.md"
 ```
 
-### Option 2: Copy to Project
+</Tab>
 
-For Claude Code:
-```bash
-mkdir -p .claude/agents
-cp path/to/mcp_eval/data/subagents/*.md .claude/agents/
-```
-
-For mcp-agent:
-```bash
-mkdir -p .mcp-agent/agents
-cp path/to/mcp_eval/data/subagents/*.md .mcp-agent/agents/
-```
-
-### Option 3: Development Mode
+<Tab title="Option 3: Development Mode">
 
 If running from source:
 ```yaml
 agents:
   enabled: true
   search_paths:
-    - "./src/mcp_eval/data/subagents"
+    - "./src/mcp_eval/data/subagents"  # See: https://github.com/lastmile-ai/mcp-eval/tree/main/src/mcp_eval/data/subagents
   pattern: "*.md"
 ```
+
+</Tab>
+
+</Tabs>
 
 ## Using Subagents in Claude Code
 
@@ -157,11 +190,11 @@ agents:
 
 ## Best Practices
 
-1. **Use the right subagent for the task** - Each subagent is specialized for specific aspects of MCP-Eval
+1. **Use the right subagent for the task** - Each subagent is specialized for specific aspects of mcp-eval
 2. **Combine subagents** - Use multiple subagents together for complex tasks
 3. **Provide context** - Give subagents information about your server's capabilities
 4. **Review generated code** - Subagents provide excellent starting points, but review and customize as needed
-5. **Keep subagents updated** - Pull the latest MCP-Eval version for improved subagents
+5. **Keep subagents updated** - Pull the latest mcp-eval version for improved subagents
 
 ## Programmatic Access
 
@@ -182,20 +215,21 @@ test_writer = load_subagent("mcp-eval-test-writer")
 
 ## Integration with mcp-agent
 
-If you're using [mcp-agent](https://github.com/modelcontextprotocol/mcp-agent), these subagents are compatible with its agent loading system. Configure your `mcp-agent.config.yaml` to include the MCP-Eval subagents search path.
+If you're using [mcp-agent](https://github.com/modelcontextprotocol/mcp-agent), these subagents are compatible with its agent loading system. Configure your `mcp-agent.config.yaml` to include the mcp-eval subagents search path.
 
 ## Contributing Subagents
 
 To contribute new subagents:
 
-1. Create a markdown file following the format in `src/mcp_eval/data/subagents/`
+1. Create a markdown file following the format in [`src/mcp_eval/data/subagents/`](https://github.com/lastmile-ai/mcp-eval/tree/main/src/mcp_eval/data/subagents)
 2. Include the frontmatter with name, description, and tools
 3. Write clear instructions for the subagent's expertise
-4. Test the subagent with real MCP-Eval tasks
+4. Test the subagent with real mcp-eval tasks
 5. Submit a pull request
 
 ## Related Resources
 
 - [Generating Tests with LLMs](/test-generation) - Automated test generation
 - [Agent Configuration](/agents) - Configure agents for testing
-- [Best Practices](/best-practices) - General MCP-Eval best practices
+- [Best Practices](/best-practices) - General mcp-eval best practices
+- [GitHub: Subagents Source](https://github.com/lastmile-ai/mcp-eval/tree/main/src/mcp_eval/data/subagents) - View all subagent definitions on GitHub

@@ -300,7 +300,7 @@ Ensure your agent follows the optimal execution path:
     Create `.github/workflows/mcp-eval.yml`:
     
     ```yaml
-    name: MCP-Eval Tests
+    name: mcp-eval Tests
     
     on:
       pull_request:
@@ -327,7 +327,7 @@ Ensure your agent follows the optimal execution path:
             # Or from your repo:
             # pip install -e .
         
-        - name: Run MCP-Eval tests
+        - name: Run mcp-eval tests
           env:
             ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           run: |
@@ -355,7 +355,7 @@ Ensure your agent follows the optimal execution path:
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: `## MCP-Eval Test Results\n\n${markdown}`
+                body: `## mcp-eval Test Results\n\n${markdown}`
               });
     ```
   </Step>
@@ -364,7 +364,7 @@ Ensure your agent follows the optimal execution path:
     In your README.md:
     
     ```markdown
-    ![MCP-Eval Tests](https://github.com/YOUR_ORG/YOUR_REPO/actions/workflows/mcp-eval.yml/badge.svg)
+    ![mcp-eval Tests](https://github.com/YOUR_ORG/YOUR_REPO/actions/workflows/mcp-eval.yml/badge.svg)
     ```
   </Step>
   

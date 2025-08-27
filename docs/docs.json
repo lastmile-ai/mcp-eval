@@ -118,6 +118,12 @@
   "styling": {
     "eyebrows": "breadcrumbs"
   },
+  "contextual": {
+    "options": [
+      "copy",
+      "view"
+    ]
+  },
   "footer": {
     "socials": {
       "github": "https://github.com/lastmile-ai/mcp-eval",
