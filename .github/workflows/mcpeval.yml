@@ -1,7 +1,6 @@
 name: MCP-Eval CI
 
 on:
-  pull_request:
   push:
     branches: [ main, master, trunk ]
   workflow_dispatch:

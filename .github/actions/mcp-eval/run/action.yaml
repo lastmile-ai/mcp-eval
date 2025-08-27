@@ -162,10 +162,11 @@ runs:
         fi
         if [[ -n "${{ inputs.extra-env }}" ]]; then
           echo "Applying extra-env"
-          # Use a YAML-safe block scalar with EOF marker at column 0 to avoid parse issues
-          cat >> "$GITHUB_ENV" << 'EOF_ENV'
-${{ inputs.extra-env }}
-EOF_ENV
+          # Append each non-empty, non-comment line from extra-env to $GITHUB_ENV
+          printf '%s\n' "${{ inputs.extra-env }}" | while IFS= read -r line; do
+            [[ -z "$line" || "$line" =~ ^# ]] && continue
+            echo "$line" >> "$GITHUB_ENV"
+          done
         fi
 
     - name: Restore uv cache
