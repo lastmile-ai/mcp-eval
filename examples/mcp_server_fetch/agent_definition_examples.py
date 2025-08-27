@@ -37,6 +37,7 @@ async def test_config_agent(agent: TestAgent, session: TestSession):
     - mcp-agent.config.yaml (under 'agents' section)
     - .claude/agents/*.yaml (discovered subagents)
     - .mcp-agent/agents/*.yaml
+    - package-provided examples via `mcp_eval.data.sample` (use `mcp-eval init --template sample`)
 
     Example mcpeval.yaml:
     ```yaml
@@ -212,9 +213,7 @@ async def test_agent_factory(agent: TestAgent, session: TestSession):
     """
     await agent.generate_str("Summarize https://example.com in one sentence")
 
-    await session.assert_that(
-        Expect.tools.was_called("fetch"), name="fetch_called"
-    )
+    await session.assert_that(Expect.tools.was_called("fetch"), name="fetch_called")
     await session.assert_that(
         Expect.performance.max_iterations(2), name="efficient_execution"
     )
@@ -310,7 +309,9 @@ async def test_default_fallback(agent: TestAgent, session: TestSession):
     await agent.generate_str("Hello, can you fetch https://example.com?")
 
     # Even the default agent should work if servers are configured
-    await session.assert_that(Expect.tools.was_called("fetchIMadeUpTheToolName"), name="fetch_attempted")
+    await session.assert_that(
+        Expect.tools.was_called("fetchIMadeUpTheToolName"), name="fetch_attempted"
+    )
 
 
 # =============================================================================

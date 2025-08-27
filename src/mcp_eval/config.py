@@ -211,7 +211,6 @@ def find_eval_secrets(project_dir: Path | None = None) -> Path | None:
         ".mcpevals/secrets.yml",
         ".mcpevals.secrets.yaml",
         ".mcpevals.secrets.yml",
-
     ]
     return _search_upwards_for(candidates, project_dir)
 

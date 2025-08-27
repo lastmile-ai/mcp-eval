@@ -1,6 +1,6 @@
 ---
 title: "Detailed Guide"
-description: "A comprehensive, single-page guide to MCP‑Eval: concepts, setup, styles, assertions, metrics, CLI, and best practices."
+description: "A comprehensive, single-page guide to `mcp-eval`: concepts, setup, styles, assertions, metrics, CLI, and best practices."
 sidebarTitle: "Detailed Guide"
 icon: "book-open"
 mode: "wide"
@@ -9,9 +9,9 @@ keywords: ["guide","deep dive","how it works","best practices"]
 
 This is a long-form guide adapted from and expanding on [GUIDE.md](https://github.com/lastmile-ai/mcp-eval/blob/main/GUIDE.md). It’s organized for readers who prefer a single page.
 
-## What is MCP‑Eval?
+## What is `mcp-eval`?
 
-Think of MCP‑Eval as your “flight simulator” for tool‑using LLMs. You plug in an agent, connect it to real MCP servers (tools), and run realistic scenarios. The framework captures OTEL traces as the single source of truth, turns them into metrics, and gives you expressive assertions for both content and behavior.
+Think of `mcp-eval` as your “flight simulator” for tool‑using LLMs. You plug in an agent, connect it to real MCP servers (tools), and run realistic scenarios. The framework captures OTEL traces as the single source of truth, turns them into metrics, and gives you expressive assertions for both content and behavior.
 
 ### Core pieces
 
@@ -24,7 +24,16 @@ Think of MCP‑Eval as your “flight simulator” for tool‑using LLMs. You pl
 
 ## Getting Started
 
-Install (uv or pip), set API keys, then `mcp-eval init` to configure provider, secrets, servers, and a default agent. See the [Quickstart](./quickstart.mdx) page.
+1. **Install mcp-eval globally**: `uv tool install mcpevals` (recommended) or `pip install mcpevals`
+2. **Initialize your project**: `mcp-eval init` - interactive setup for API keys and configuration
+3. **Add your MCP server**: `mcp-eval server add` - configure the server you want to test
+4. **Run tests**: `mcp-eval run tests/` - execute your test suite
+
+<Note>
+  **Test servers written in any language:** Your MCP server can be written in Python, TypeScript, Go, Rust, Java, or any other language. `mcp-eval` connects to it via the MCP protocol, making testing completely language-agnostic.
+</Note>
+
+See the [Quickstart](./quickstart) page for detailed setup instructions.
 
 {/* TODO: Insert screenshots of init prompts and the first run summary. */}
 
@@ -77,31 +86,31 @@ Full example: [test_dataset_style.py](https://github.com/lastmile-ai/mcp-eval/bl
 
 ## Assertions and Timing
 
-Immediate vs deferred execution of evaluators is handled automatically based on whether final metrics are required. See [Assertions](./assertions.mdx).
+Immediate vs deferred execution of evaluators is handled automatically based on whether final metrics are required. See [Assertions](./assertions).
 
 ## Agent Evaluation
 
-Define your agent as the system under test via [use_agent and with_agent](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/config.py). See [Agent Evaluation](./agent-evaluation.mdx) for patterns and metrics to watch.
+Define your agent as the system under test via [use_agent and with_agent](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/config.py). See [Agent Evaluation](./agent-evaluation) for patterns and metrics to watch.
 
 ## Server Evaluation
 
-Connect an MCP server, then write scenarios that exercise it through an agent. Use tool/path/efficiency assertions. See [Server Evaluation](./server-evaluation.mdx).
+Connect an MCP server, then write scenarios that exercise it through an agent. Use tool/path/efficiency assertions. See [Server Evaluation](./server-evaluation).
 
 ## Metrics & Tracing
 
-OTEL is the source of truth. After a run, explore metrics and the span tree for loops, path inefficiency, and recovery. See [Metrics & Tracing](./metrics-tracing.mdx).
+OTEL is the source of truth. After a run, explore metrics and the span tree for loops, path inefficiency, and recovery. See [Metrics & Tracing](./metrics-tracing).
 
 ## Test Generation with LLMs
 
-Use `mcp-eval generate` to bootstrap comprehensive tests. We recommend Anthropic Sonnet/Opus. See [Test Generation](./test-generation.mdx).
+Use `mcp-eval generate` to bootstrap comprehensive tests. We recommend Anthropic Sonnet/Opus. See [Test Generation](./test-generation).
 
 ## CI/CD
 
-Run in GitHub Actions and publish artifacts/badges. See [CI/CD](./ci-cd.mdx).
+Run in GitHub Actions and publish artifacts/badges. See [CI/CD](./ci-cd).
 
 ## Troubleshooting
 
-Use `mcp-eval doctor`, `validate`, and `issue` for diagnosis. See [Troubleshooting](./troubleshooting.mdx).
+Use `mcp-eval doctor`, `validate`, and `issue` for diagnosis. See [Troubleshooting](./troubleshooting).
 
 ## Best Practices
 
@@ -110,6 +119,6 @@ Use `mcp-eval doctor`, `validate`, and `issue` for diagnosis. See [Troubleshooti
 - Use parametrization to widen coverage
 - Keep servers in mcp‑agent config; use `mcpeval.yaml` for eval knobs
 
-{/* TODO: Add a closing diagram summarizing the MCP‑Eval lifecycle (init → write tests → run → metrics → reports). */}
+{/* TODO: Add a closing diagram summarizing the `mcp-eval` lifecycle (init → write tests → run → metrics → reports). */}
 
 

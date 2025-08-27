@@ -1,5 +1,5 @@
 ---
-title: "MCP-Eval Documentation"
+title: "`mcp-eval` Documentation"
 description: "The comprehensive testing framework for MCP servers and tool-using agents."
 icon: "house"
 sidebarTitle: "Home"
@@ -13,40 +13,56 @@ sidebarTitle: "Home"
   [Model Context Protocol](https://modelcontextprotocol.io/docs/getting-started/intro)  standardizes how applications provide context to large language models (LLMs). Think of MCP like a USB-C port for AI applications. 
   
   
-  **MCP-Eval** ensures your MCP servers, and agents built with them, work reliably in production.
+  **`mcp-eval`** ensures your MCP servers, and agents built with them, work reliably in production.
 </Info>
 
 ## Get Started in 30 Seconds
 
-We recommend using [uv](https://docs.astral.sh/uv/) to manage your Python projects:
+We recommend using [uv](https://docs.astral.sh/uv/) to install `mcp-eval` as a global tool:
 
 <CodeGroup>
-```bash uv
-# Install MCP-Eval
+```bash uv (recommended)
+# Install mcp-eval globally (for CLI)
+uv tool install mcpevals
+
+# Add mcp-eval dependency to your project
 uv add mcpevals
 
-# Initialize your project
+# Initialize your project (interactive setup)
 mcp-eval init
 
-# Run your first test
-mcp-eval run examples/fetch_test.py
+# Add your MCP server to test
+mcp-eval server add
+
+# Auto-generate tests with an LLM
+mcp-eval generate
+
+# Run tests
+mcp-eval run tests/
 ```
 
 ```bash pip
-# Install MCP-Eval
+# Install mcp-eval
 pip install mcpevals
 
 # Initialize your project
 mcp-eval init
 
-# Run your first test
-mcp-eval run examples/fetch_test.py
+# Add your MCP server
+mcp-eval server add
+
+# Run tests
+mcp-eval run tests/
 ```
 </CodeGroup>
 
+<Info>
+  **Test any MCP server:** It doesn't matter what language your MCP server is written in - Python, TypeScript, Go, Rust, Java, or any other. As long as it implements the MCP protocol, `mcp-eval` can test it!
+</Info>
+
 <Check>You're ready to start testing! [Continue with the Quickstart →](./quickstart)</Check>
 
-## What MCP-Eval Does for You
+## What `mcp-eval` Does for You
 
 <Columns cols={2}>
   <Card title="Test MCP Servers" icon="server">
@@ -63,7 +79,7 @@ mcp-eval run examples/fetch_test.py
   </Card>
 </Columns>
 
-## Why Teams Choose MCP-Eval
+## Why Teams Choose `mcp-eval`
 
 - **Production-ready**: Built on OpenTelemetry for enterprise-grade observability
 - **Multiple test styles**: Choose between decorators, pytest, or dataset-driven testing
@@ -91,7 +107,7 @@ mcp-eval run examples/fetch_test.py
   <Tab title="Getting Started">
     <Columns cols={1}>
       <Card title="Overview" icon="map" href="./overview">
-        Understand MCP-Eval's architecture and philosophy
+        Understand `mcp-eval`'s architecture and philosophy
       </Card>
       <Card title="Quickstart" icon="rocket" href="./quickstart">
         Your first test in 5 minutes

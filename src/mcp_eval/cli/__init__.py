@@ -35,7 +35,7 @@ def version():
     try:
         import importlib.metadata
 
-        version = importlib.metadata.version("mcp-eval")
+        version = importlib.metadata.version("mcpevals")
     except importlib.metadata.PackageNotFoundError:
         version = "unknown (development)"
     console.print(f"MCP-Eval {version}")

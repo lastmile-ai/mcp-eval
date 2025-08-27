@@ -56,6 +56,7 @@ from mcp_eval.cli.utils import (
     write_server_to_mcpeval,
     write_agent_to_mcpeval,
 )
+from mcp_eval.data.utils import copy_sample_template
 from mcp_eval.cli.list_command import (
     list_servers as _list_servers_cmd,
     list_agents as _list_agents_cmd,
@@ -338,9 +339,9 @@ def _convert_servers_to_mcp_settings(
     return result
 
 
-def _load_existing_provider() -> (
-    tuple[str | None, str | None, Dict[str, str], MCPEvalSettings]
-):
+def _load_existing_provider() -> tuple[
+    str | None, str | None, Dict[str, str], MCPEvalSettings
+]:
     """Load existing provider configuration from environment and config files.
 
     Returns:
@@ -827,6 +828,10 @@ async def _emit_tests(
 
 async def init_project(
     out_dir: str = typer.Option(".", help="Project directory for configs"),
+    template: str = typer.Option(
+        "basic",
+        help="Bootstrap template: empty (no files), basic (config only), sample (examples + config)",
+    ),
 ):
     """Initialize an mcp-eval project.
 
@@ -848,7 +853,53 @@ async def init_project(
     """
     project = Path(out_dir)
     project.mkdir(parents=True, exist_ok=True)
+
+    # Copy template files first so ensure_mcpeval_yaml does not overwrite
+    tpl = (template or "").strip().lower()
+    if tpl not in ("empty", "basic", "sample"):
+        tpl = "basic"
+
+    if tpl == "sample":
+        console.print("[cyan]Bootstrapping sample project files...[/cyan]")
+        try:
+            copied = copy_sample_template(project)
+            if copied:
+                for p in copied:
+                    console.print(f"[dim]  wrote {p}[/dim]")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to copy sample files: {e}[/yellow]")
+    elif tpl == "basic":
+        console.print("[cyan]Bootstrapping basic config files...[/cyan]")
+        try:
+            copy_sample_template(
+                project,
+                files_to_copy=[
+                    "mcpeval.yaml",
+                    "mcpeval.secrets.yaml.example",
+                    "usage_example.py",
+                    "sample_server.py",
+                ],
+                overwrite=False,
+            )
+        except Exception:
+            # Fall through to ensure minimal config
+            pass
+
+    # Ensure mcpeval.yaml and secrets exist
     ensure_mcpeval_yaml(project)
+
+    # Copy packaged sample README if none exists
+    readme_path = project / "README.md"
+    if not readme_path.exists():
+        try:
+            from importlib import resources
+
+            src = resources.files("mcp_eval.data.sample").joinpath("README.md")
+            with resources.as_file(src) as src_path:
+                readme_path.write_bytes(Path(src_path).read_bytes())
+            console.print(f"[green]✓[/] Wrote {readme_path}")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not copy README.md: {e}[/yellow]")
 
     # Create a lightweight context for ModelSelector to avoid global fallback
     context = Context()
@@ -1607,16 +1658,12 @@ def list_agents_command(
 @app.command("init")
 def init_project_cli(
     out_dir: str = typer.Option(".", help="Project directory for configs"),
+    template: str = typer.Option(
+        "basic",
+        help="Bootstrap template: empty (no files), basic (config only), sample (examples + config)",
+    ),
 ):
-    """Initialize an mcp-eval project with configuration files and API keys.
-
-    Sets up mcpeval.yaml, mcpeval.secrets.yaml, configures LLM provider,
-    imports servers, and defines a default agent.
-
-    Examples:
-        $ mcp-eval init
-    """
-    return asyncio.run(init_project(out_dir=out_dir))
+    return asyncio.run(init_project(out_dir=out_dir, template=template))
 
 
 @app.command("generate")

@@ -1,4 +1,3 @@
-$schema: ../schema/mcpeval.config.schema.json
 eval_name: "MCP Fetch Server Test Suite"
 eval_description: "Comprehensive evaluation of the MCP fetch server capabilities"
 
@@ -16,3 +15,5 @@ mcp:
       env: {
         "UV_NO_PROGRESS": "1"
       }
+
+

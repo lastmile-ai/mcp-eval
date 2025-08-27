@@ -1,17 +1,17 @@
 ---
 title: "Quickstart Guide"
-description: "Get MCP‑Eval up and running in 5 minutes. Learn to install, configure, and run your first tests for MCP servers and agents."
+description: "Get `mcp-eval` up and running in 5 minutes. Learn to install, configure, and run your first tests for MCP servers and agents."
 sidebarTitle: "Quickstart"
 icon: "rocket"
 keywords: ["quickstart","installation","getting started","first test","mcp.json","setup"]
 ---
 
-> 🚀 **Welcome to MCP‑Eval!** You're about to supercharge your MCP development with powerful testing capabilities. This guide will have you testing MCP servers and agents in just 5 minutes!
+> 🚀 **Welcome to `mcp-eval`!** You're about to supercharge your MCP development with powerful testing capabilities. This guide will have you testing MCP servers and agents in just 5 minutes!
 
 ## What you'll learn
 
 By the end of this quickstart, you'll be able to:
-- ✅ Install and configure MCP‑Eval for your project
+- ✅ Install and configure `mcp-eval` for your project
 - ✅ Connect your MCP servers for testing
 - ✅ Write and run your first test
 - ✅ Understand test reports and iterate on failures
@@ -27,7 +27,7 @@ Let's make sure you have everything ready:
 
 <CardGroup cols={3}>
   <Card title="Python 3.10+" icon="python">
-    Required for running MCP‑Eval
+    Required for running `mcp-eval`
     
     [Download Python →](https://www.python.org/downloads/)
   </Card>
@@ -54,10 +54,24 @@ Let's make sure you have everything ready:
 {/* TODO: Add animated GIF showing the entire quickstart flow from install to first passing test */}
 
 <Steps>
-  <Step title="Install MCP‑Eval and configure API keys">
-    First, let's get MCP‑Eval installed in your project.
+  <Step title="Install `mcp-eval` and configure API keys">
+    First, let's get `mcp-eval` installed for your project.
     
-    We recommend using [uv](https://docs.astral.sh/uv/) to manage your Python projects:
+    We recommend using [uv](https://docs.astral.sh/uv/) to install `mcp-eval` as a global tool:
+    
+    ```bash
+    uv tool install mcpevals
+    ```
+    
+    This makes the `mcp-eval` CLI available globally on your system.
+    
+    <Info>
+      **Language agnostic testing:** `mcp-eval` can test MCP servers written in **any language** - Python, TypeScript, Go, Rust, Java, etc. As long as your server implements the MCP protocol, mcp-eval can test it!
+    </Info>
+
+    Next, add mcp-eval as a dependency for your project:
+
+    # Using uv in a project
     
     ```bash
     uv add mcpevals
@@ -67,11 +81,6 @@ Let's make sure you have everything ready:
     
     ```bash
     pip install mcpevals
-    ```
-    
-    For development:
-    ```bash
-    pip install -e .
     ```
     
     Now set up your API key for the best experience:
@@ -124,10 +133,43 @@ Let's make sure you have everything ready:
 {/* TODO: Screenshot showing the created files in the project directory */}
   </Step>
 
-  <Step title="Add your MCP server">
-    Now let's connect the server you want to test. You have several options:
+  <Step title="Configure MCP servers">
+    Before we can test an MCP server, you need to tell mcp-eval how to connect to it.
+    
+    <Info>
+      Connection works over any supported [transport](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports) (stdio, websocket, sse, streamable_http).
+      You can import server configurations from [`mcp.json`](https://code.visualstudio.com/docs/copilot/customization/mcp-servers) or [`dxt`](https://github.com/anthropics/dxt/blob/main/README.md) files,
+      or specify them interactively using the `mcp-eval server add` command.
+    </Info>
+    
+    ### Adding your MCP server
+    
+    You have several ways to add a server to your configuration:
     
     <Tabs>
+      <Tab title="Interactive Add">
+        The easiest way - let mcp-eval guide you:
+        
+        ```bash
+        mcp-eval server add
+        ```
+        
+        This will prompt you for:
+        - How to add (interactive, from-mcp-json, or from-dxt)
+        - Server name (e.g., "fetch")
+        - Command to run (e.g., "uvx mcp-server-fetch")
+        - Any arguments or environment variables
+        
+        Example interaction:
+        ```
+        ? How would you like to add the server? interactive
+        ? Server name: fetch  
+        ? Command: uvx mcp-server-fetch
+        ? Add environment variables? No
+        ✓ Added server 'fetch'
+        ```
+      </Tab>
+      
       <Tab title="From mcp.json">
         If you're using Cursor or VS Code with MCP:
         
@@ -135,12 +177,13 @@ Let's make sure you have everything ready:
         mcp-eval server add --from-mcp-json .cursor/mcp.json
         ```
         
-        This imports all servers from your IDE's MCP configuration.
+        This imports servers from your IDE's MCP configuration. The tool will:
+        1. Read the mcp.json file
+        2. Show you available servers
+        3. Let you choose which ones to add
       </Tab>
       
       <Tab title="From DXT">
-        For Anthropic Desktop users:
-        
         ```bash
         mcp-eval server add --from-dxt ~/Desktop/my-server.dxt
         ```
@@ -148,44 +191,81 @@ Let's make sure you have everything ready:
         This imports servers from DXT manifest files.
       </Tab>
       
-      <Tab title="Interactive">
-        Add a server step-by-step:
-        
-        ```bash
-        mcp-eval server add
-        ```
-        
-        The wizard will guide you through:
-        - Server name
-        - Command to run
-        - Arguments
-        - Environment variables
-      </Tab>
-      
-      <Tab title="Manual">
+      <Tab title="Manual Edit">
         Edit `mcpeval.yaml` directly:
         
         ```yaml
         mcp:
           servers:
+            # Example: fetch server
             fetch:
               command: "uvx"
               args: ["mcp-server-fetch"]
               env: 
                 UV_NO_PROGRESS: "1"
+            
+            # Example: filesystem server
+            filesystem:
+              command: "npx"
+              args: ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"]
+            
+            # Example: custom streamable http server
+            local_http:
+              description: "A streamable HTTP server."
+              transport: streamable_http
+              url: http://0.0.0.0:3156/mcp
+              headers:
+                my-header: "some_value"
         ```
+        
+        See the [Configuration Guide](./configuration#server-configuration) for all options.
       </Tab>
     </Tabs>
     
-    <Info>
-      **About server connections:** MCP‑Eval can test any MCP server regardless of implementation language. As long as it speaks the MCP protocol, we can test it!
-    </Info>
+    ### Common server examples
+    
+    Here are some popular MCP servers you might want to test:
+    
+    <CodeGroup>
+    ```bash fetch
+    # Fetch server (web content)
+    uvx mcp-server-fetch
+    ```
+    
+    ```bash filesystem
+    # Filesystem server
+    npx -y @modelcontextprotocol/server-filesystem /path/to/directory
+    ```
+    
+    ```bash github  
+    # GitHub server
+    npx -y @modelcontextprotocol/server-github
+    ```
+    </CodeGroup>
+    
+    <Note>
+      **Verify your server configuration:** After adding a server, you can verify it's working:
+      
+      ```bash
+      # List all configured servers
+      mcp-eval server list
+      
+      # Validate server connectivity
+      mcp-eval validate
+      ```
+    </Note>
     
 {/* TODO: Screenshot showing successful server import with list of discovered tools */}
   </Step>
 
   <Step title="Run your first test">
-    Time for the exciting part - running your first test! Let's use the included fetch example:
+    Time for the exciting part - running your first test! We'll use the included fetch server example to demonstrate.
+    
+    <Warning>
+      **Example structure:** The examples assume you have the fetch server configured. If you're testing a different server, you'll need to adjust the test code accordingly.
+    </Warning>
+    
+    First, let's make sure we have an example test. If you used `mcp-eval init`, you might already have one. Otherwise, let's run:
     
     ```bash
     mcp-eval run examples/mcp_server_fetch/tests/test_decorator_style.py \
@@ -415,7 +495,7 @@ mcp-eval run tests/test_my_server.py -v --html reports/my_test.html
 
 ## Resources to level up
 
-Ready to become an MCP‑Eval expert? Here's your learning path:
+Ready to become a `mcp-eval` expert? Here's your learning path:
 
 <CardGroup cols={2}>
   <Card title="Complete Examples" href="./examples" icon="code">
@@ -443,4 +523,4 @@ Ready to become an MCP‑Eval expert? Here's your learning path:
 
 ---
 
-**Congratulations!** 🎉 You've successfully set up MCP‑Eval and run your first tests. You're now ready to ensure your MCP servers and agents work flawlessly. Happy testing!
+**Congratulations!** 🎉 You've successfully set up `mcp-eval` and run your first tests. You're now ready to ensure your MCP servers and agents work flawlessly. Happy testing!

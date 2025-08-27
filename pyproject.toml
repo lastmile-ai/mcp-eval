@@ -1,6 +1,6 @@
 [project]
 name = "mcpevals"
-version = "0.1.3"
+version = "0.1.5"
 description = "Pytest-style framework for evaluating Model Context Protocol (MCP) servers."
 license = { file = "LICENSE" }
 readme = "README.md"
@@ -95,6 +95,7 @@ packages = ["src/mcp_eval"]
 [tool.setuptools.package-data]
 mcp_eval = [
     "data/**/*.md",
+    "data/**/*.py",
     "data/**/*.yaml",
     "data/**/*.yml",
     "data/**/*.json",

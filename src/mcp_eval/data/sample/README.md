@@ -78,3 +78,5 @@ async def test_fetch_with_spec_name(mcp_agent, mcp_session):
 async def test_fetch_with_custom_agent(mcp_agent, mcp_session):
     resp = await mcp_agent.generate_str("Fetch https://example.com")
 ```
+
+
