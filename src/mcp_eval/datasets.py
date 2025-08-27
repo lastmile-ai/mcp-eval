@@ -321,7 +321,10 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
             evaluators=global_evaluators,
             server_name=data.get("server_name"),
             metadata=data.get("metadata", {}),
-            agent_spec=data.get("agent_spec"),
+            # Inline dict AgentSpec overrides were removed. Accept only a spec name (str) or None.
+            agent_spec=(
+                data.get("agent_spec") if isinstance(data.get("agent_spec"), str) else None
+            ),
         )
 
 

@@ -336,6 +336,13 @@ def process_spans(spans: List[TraceSpan]) -> TestMetrics:
 
     # Cost estimation
     metrics.cost_estimate = _estimate_cost(metrics.llm_metrics)
+    # Keep llm_metrics.cost_estimate in sync so UIs that read from llm_metrics
+    # (e.g., HTML report) display the correct value
+    try:
+        metrics.llm_metrics.cost_estimate = metrics.cost_estimate
+    except Exception:
+        # Be defensive in case llm_metrics is missing or immutable
+        pass
 
     return metrics
 

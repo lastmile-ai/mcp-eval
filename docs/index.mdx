@@ -55,8 +55,11 @@ mcp-eval server add
 # Auto-generate tests with an LLM
 mcp-eval generate
 
-# Run tests
+# Run decorator/dataset tests
 mcp-eval run tests/
+
+# Run pytest tests (use pytest)
+uv run pytest -q tests
 ```
 
 ```bash pip
@@ -69,8 +72,11 @@ mcp-eval init
 # Add your MCP server
 mcp-eval server add
 
-# Run tests
+# Run decorator/dataset tests
 mcp-eval run tests/
+
+# Run pytest tests (use pytest)
+pytest -q tests
 ```
 </CodeGroup>
 

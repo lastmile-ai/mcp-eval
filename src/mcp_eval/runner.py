@@ -42,13 +42,7 @@ from mcp_eval.report_generation.console import (
     TestProgressDisplay,
 )
 
-app = typer.Typer(
-    context_settings={
-        "allow_interspersed_args": True,
-        "allow_extra_args": True,
-        "ignore_unknown_options": False,
-    }
-)
+app = typer.Typer()
 console = Console()
 
 
@@ -454,7 +448,7 @@ async def run_dataset_evaluations(
 def run_tests(
     ctx: typer.Context,
     test_dir: str = typer.Argument(
-        "tests", help="Directory/file or file::function to scan for tests and datasets"
+        "tests", help="Directory to scan for tests and datasets"
     ),
     format: str = typer.Option("auto", help="Output format (auto, decorator, dataset)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
@@ -467,18 +461,14 @@ def run_tests(
         None, "--max-concurrency", help="Maximum concurrent evaluations"
     ),
 ):
-    """Run MCP-Eval tests and datasets.
-
-    Supports multiple specs: pass additional paths after the first (e.g., tests/a tests/b).
-    Options can be placed before or after arguments.
-    """
+    """Run MCP-Eval tests and datasets."""
     if ctx.invoked_subcommand is None:
         # Collect any extra args (e.g., additional paths from shell globs)
         extra_specs = [arg for arg in (ctx.args or []) if not arg.startswith("-")]
         test_specs = [test_dir] + extra_specs if test_dir else extra_specs
 
         asyncio.run(
-            _run_async(
+            _run_async_multi(
                 test_specs,
                 format,
                 verbose,
@@ -491,7 +481,7 @@ def run_tests(
 
 
 async def _run_async(
-    test_specs: list[str],
+    test_dir: str,
     format: str,
     verbose: bool,
     json_report: str | None,
@@ -501,28 +491,22 @@ async def _run_async(
 ):
     """Async implementation of the run command."""
     console.print(pad("MCP-Eval", char="*", console=console), style="magenta")
-    # Normalize and validate all test specs
-    normalized_specs: list[str] = []
-    for spec in test_specs:
-        # Handle pytest-style function spec
-        if "::" in spec:
-            file_path, _ = spec.split("::", 1)
-            path = Path(file_path)
-        else:
-            path = Path(spec)
+    # Parse pytest-style test specifier for path validation
+    if "::" in test_dir:
+        file_path, _ = test_dir.split("::", 1)
+        test_path = Path(file_path)
+    else:
+        test_path = Path(test_dir)
 
-        if not path.exists():
-            console.print(f"[red]Error:[/] Test path '{path}' not found")
-            raise typer.Exit(1)
-        normalized_specs.append(spec)
+    if not test_path.exists():
+        console.print(f"[red]Error:[/] Test path '{test_path}' not found")
+        raise typer.Exit(1)
 
     console.print("[blue]Discovering tests and datasets...[/blue]")
-    tasks: list[Any] = []
-    datasets: list[Any] = []
-    for spec in normalized_specs:
-        discovered = discover_tests_and_datasets(spec)
-        tasks.extend(discovered["tasks"])
-        datasets.extend(discovered["datasets"])
+    discovered = discover_tests_and_datasets(test_dir)
+
+    tasks = discovered["tasks"]
+    datasets = discovered["datasets"]
 
     if not tasks and not datasets:
         console.print("[yellow]No tests or datasets found[/]")
@@ -638,6 +622,153 @@ async def _run_async(
         raise typer.Exit(1)
 
 
+async def _run_async_multi(
+    test_specs: List[str],
+    format: str,
+    verbose: bool,
+    json_report: str | None,
+    markdown_report: str | None,
+    html_report: str | None,
+    max_concurrency: int | None,
+):
+    """Run tests for multiple specs (dirs/files/file::func), aggregating discovery.
+
+    Skips common junk paths like __pycache__ when provided via shell globs.
+    """
+    console.print(pad("MCP-Eval", char="*", console=console), style="magenta")
+
+    normalized_specs: List[str] = []
+    for spec in test_specs:
+        # Handle pytest-style function spec
+        if "::" in spec:
+            file_path, _ = spec.split("::", 1)
+            path = Path(file_path)
+        else:
+            path = Path(spec)
+
+        if path.name == "__pycache__":
+            continue
+        if not path.exists():
+            console.print(f"[yellow]Skipping missing path:[/] {path}")
+            continue
+        normalized_specs.append(spec)
+
+    if not normalized_specs:
+        console.print("[yellow]No valid test paths provided[/]")
+        return
+
+    console.print("[blue]Discovering tests and datasets...[/blue]")
+    tasks: list[Any] = []
+    datasets: list[Any] = []
+    for spec in normalized_specs:
+        discovered = discover_tests_and_datasets(spec)
+        tasks.extend(discovered["tasks"])
+        datasets.extend(discovered["datasets"])
+
+    if not tasks and not datasets:
+        console.print("[yellow]No tests or datasets found[/]")
+        return
+
+    console.print(
+        f"[blue]Found {len(tasks)} test function(s) and {len(datasets)} dataset(s)[/blue]",
+    )
+
+    # Run tests and evaluations (reuse existing flow)
+    test_results = []
+    dataset_reports = []
+
+    if tasks and format in ["auto", "decorator"]:
+        test_cases = expand_parametrized_tests(tasks)
+        console.print(
+            f"\n[blue]Running {len(test_cases)} decorator-style test cases...[/blue]"
+        )
+
+        for setup_func in _setup_functions:
+            try:
+                setup_func()
+            except Exception as e:
+                console.print(
+                    f"[yellow]Warning: Setup function {setup_func.__name__} failed: {e}[/]"
+                )
+
+        test_results = await run_decorator_tests(test_cases, verbose)
+
+        for teardown_func in _teardown_functions:
+            try:
+                teardown_func()
+            except Exception as e:
+                console.print(
+                    f"[yellow]Warning: Teardown function {teardown_func.__name__} failed: {e}[/]"
+                )
+
+    if datasets and format in ["auto", "dataset"]:
+        console.print(f"\n[blue]Running {len(datasets)} dataset evaluations...[/blue]")
+        dataset_reports = await run_dataset_evaluations(
+            datasets, max_concurrency=max_concurrency, verbose=verbose
+        )
+
+    if test_results:
+        failed_tests = [r for r in test_results if not r.passed]
+        print_test_summary_info(console, failed_tests)
+        print_final_summary(console, test_results)
+
+    if dataset_reports:
+        for report in dataset_reports:
+            failed_cases = [case for case in report.results if not case.passed]
+            if failed_cases:
+                print_dataset_summary_info(console, failed_cases, report.dataset_name)
+
+        print_dataset_final_summary(console, dataset_reports)
+
+    if test_results or dataset_reports:
+        console.print(Text(console.width * "="))
+        generate_combined_summary(
+            test_results, dataset_reports, console, verbose=verbose
+        )
+
+    if json_report or markdown_report or html_report:
+        combined_report = {
+            "decorator_tests": [r.__dict__ for r in test_results],
+            "dataset_reports": [r.to_dict() for r in dataset_reports],
+            "summary": {
+                "total_decorator_tests": len(test_results),
+                "passed_decorator_tests": sum(1 for r in test_results if r.passed),
+                "total_dataset_cases": sum(r.total_cases for r in dataset_reports),
+                "passed_dataset_cases": sum(r.passed_cases for r in dataset_reports),
+            },
+        }
+
+        if json_report:
+            import json
+
+            with open(json_report, "w", encoding="utf-8") as f:
+                json.dump(combined_report, f, indent=2, default=str)
+            console.print(f"JSON report saved to {json_report}", style="blue")
+
+        config_info = load_config_info()
+        output_dir = "./test-reports"
+        if config_info and "reporting" in config_info:
+            output_dir = config_info["reporting"].get("output_dir", "./test-reports")
+
+        if markdown_report:
+            generate_combined_markdown_report(
+                combined_report, markdown_report, output_dir=output_dir
+            )
+            console.print(f"Markdown report saved to {markdown_report}", style="blue")
+
+        if html_report:
+            generate_combined_html_report(combined_report, html_report)
+            console.print(f"HTML report saved to {html_report}", style="blue")
+
+    await asyncio.sleep(0.2)
+
+    total_failed = sum(1 for r in test_results if not r.passed) + sum(
+        r.failed_cases for r in dataset_reports
+    )
+    if total_failed > 0:
+        raise typer.Exit(1)
+
+
 @app.command()
 def dataset(
     dataset_file: str = typer.Argument(..., help="Path to dataset file"),
@@ -651,12 +782,24 @@ def dataset(
             console.print(f"Loaded dataset: {dataset.name}")
             console.print(f"Cases: {len(dataset.cases)}")
 
-            # Mock task function for demo
-            async def mock_task(inputs):
-                return f"Mock response for: {inputs}"
+            # Use a real agent/session so tool/evaluator checks can pass
+            async def standard_task(inputs, agent: TestAgent, session: TestSession):
+                response = await agent.generate_str(inputs)
+                return response
 
-            report = await dataset.evaluate(mock_task)
-            report.print(include_input=True, include_output=True)
+            report = await dataset.evaluate(standard_task)
+            # Print a simple summary to the console
+            total = report.total_cases
+            passed = report.passed_cases
+            failed = report.failed_cases
+            success_rate = report.success_rate * 100.0
+            console.print(
+                f"Results: {passed}/{total} passed ({success_rate:.1f}%), failed: {failed}",
+                style="blue",
+            )
+            for r in report.results:
+                status = "[green]PASS[/green]" if r.passed else "[red]FAIL[/red]"
+                console.print(f"  {status} {r.case_name}")
 
             # Save reports
             import json

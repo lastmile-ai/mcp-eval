@@ -82,8 +82,11 @@ mcp-eval run tests/test_decorator_style.py --verbose
 # Run dataset evaluation (with uv)
 uv run python tests/test_dataset_style.py
 
-# Run from YAML dataset
-uv run mcp-eval run dataset datasets/basic_fetch_dataset.yaml
+# Run from YAML dataset (top-level dataset command)
+uv run mcp-eval dataset datasets/basic_fetch_dataset.yaml
+
+# Run dataset via CLI test (smoke test)
+uv run pytest tests/test_dataset_cli.py -q
 
 # Generate reports (note: arguments go before the test path)
 uv run mcp-eval run --json results.json --markdown results.md tests/test_dataset_style.py

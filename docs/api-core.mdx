@@ -378,11 +378,11 @@ def analyze_test_results(results: list[TestResult]):
 Prefer selecting tests with your runner and environment rather than custom decorators.
 
 ```bash
-# Run a single test function (pytest-style selector supported by the runner)
+# Run a single test function (pytest-style selector supported by the runner for decorator tests)
 mcp-eval run tests/test_fetch.py::test_fetch_case
 
-# Narrow to a file or directory
-mcp-eval run tests/test_fetch.py
+# Run pytest tests (use pytest)
+uv run pytest -q tests
 ```
 
 Using pytest marks for conditions (when running under pytest):

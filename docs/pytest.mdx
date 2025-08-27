@@ -6,6 +6,19 @@ icon: "flask"
 keywords: ["pytest","fixtures","markers","parametrize"]
 ---
 
+### How to run
+
+Use native pytest to execute pytest-style tests. With uv:
+
+```bash
+uv run pytest -q tests
+# Or a single file/function
+uv run pytest tests/test_pytest_style.py -v
+uv run pytest tests/test_pytest_style.py::test_basic_fetch -v
+```
+
+Note: `mcp-eval run` executes decorator- and dataset-style tests. Use `pytest` for plain pytest tests.
+
 ### Fixtures
 
 - `mcp_session`: access the session (metrics, assertions)

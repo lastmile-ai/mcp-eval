@@ -37,11 +37,13 @@ class ValidationResult:
         success: bool,
         message: str,
         details: Dict[str, Any] | None = None,
+        is_warning: bool = False,
     ):
         self.name = name
         self.success = success
         self.message = message
         self.details = details or {}
+        self.is_warning = is_warning
 
 
 async def validate_server(
@@ -258,31 +260,44 @@ def check_judge_config(config_path: Path | None) -> ValidationResult:
             message="No configuration file found",
         )
 
+    # Load typed settings to allow fallback behavior
+    settings = load_config(config_path)
     cfg = load_yaml(config_path)
     judge = cfg.get("judge", {})
 
-    if not judge:
+    model = (judge or {}).get("model")
+    min_score = (judge or {}).get("min_score", 0.8)
+    provider = (judge or {}).get("provider") or getattr(settings, "provider", None)
+    global_model = getattr(settings, "model", None)
+
+    if model:
         return ValidationResult(
             name="Judge",
-            success=False,
-            message="No judge configuration found",
+            success=True,
+            message=f"Model: {model}, Min score: {min_score}",
+            details={"model": model, "min_score": min_score},
         )
 
-    model = judge.get("model")
-    min_score = judge.get("min_score", 0.8)
-
-    if not model:
-        return ValidationResult(
-            name="Judge",
-            success=False,
-            message="No judge model specified",
-        )
+    # No explicit judge model; allow auto-selection
+    # We will use global model if present; otherwise the ModelSelector will pick one.
+    auto_msg_parts = []
+    if global_model:
+        auto_msg_parts.append(f"using global model {global_model}")
+    else:
+        auto_msg_parts.append("model auto-selected")
+    if provider:
+        auto_msg_parts.append(f"provider {provider}")
 
     return ValidationResult(
         name="Judge",
         success=True,
-        message=f"Model: {model}, Min score: {min_score}",
-        details={"model": model, "min_score": min_score},
+        message="No judge model specified - " + ", ".join(auto_msg_parts),
+        details={
+            "provider": provider,
+            "model": model or global_model or "auto",
+            "min_score": min_score,
+        },
+        is_warning=True,
     )
 
 
@@ -465,14 +480,20 @@ def validate(
 
     # Summary
     console.print("\n[bold]Validation Summary[/bold]")
-    success_count = sum(1 for r in results if r.success)
-    fail_count = len(results) - success_count
+    success_count = sum(1 for r in results if r.success and not r.is_warning)
+    warning_count = sum(1 for r in results if r.success and r.is_warning)
+    fail_count = len(results) - success_count - warning_count
 
     if fail_count == 0:
-        console.print(f"[green]✅ All {len(results)} checks passed![/green]")
+        if warning_count:
+            console.print(
+                f"[yellow]⚠️  {success_count} passed, {warning_count} warning(s)[/yellow]"
+            )
+        else:
+            console.print(f"[green]✅ All {len(results)} checks passed![/green]")
     else:
         console.print(
-            f"[yellow]⚠️  {success_count} passed, {fail_count} failed[/yellow]"
+            f"[yellow]⚠️  {success_count} passed, {warning_count} warning(s), {fail_count} failed[/yellow]"
         )
 
         # Show failed items
@@ -482,13 +503,20 @@ def validate(
             for r in failed:
                 console.print(f"  - {r.name}: {r.message}")
 
+        # Show warnings
+        warnings = [r for r in results if r.success and r.is_warning]
+        if warnings:
+            console.print("\n[yellow]Warnings:[/yellow]")
+            for r in warnings:
+                console.print(f"  - {r.name}: {r.message}")
+
         raise typer.Exit(1)
 
 
 def _print_result(result: ValidationResult):
     """Print a validation result."""
     if result.success:
-        icon = "[green]✓[/green]"
+        icon = "[yellow]![/yellow]" if result.is_warning else "[green]✓[/green]"
     else:
         icon = "[red]✗[/red]"
 

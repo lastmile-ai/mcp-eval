@@ -385,6 +385,15 @@ Now that you've run the example, let's write your very first custom test:
             response=response
         )
     ```
+    
+    Run with uv:
+    
+    ```bash
+    uv run pytest -q tests
+    # or a single file/function
+    uv run pytest tests/test_my_server.py -v
+    uv run pytest tests/test_my_server.py::test_my_server -v
+    ```
   </Tab>
 </Tabs>
 

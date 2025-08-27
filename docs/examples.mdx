@@ -227,6 +227,15 @@ Let's start with a simple but complete example testing a calculator MCP server:
                 response=response
             )
     ```
+    
+    Run with uv:
+    
+    ```bash
+    uv run pytest -q examples/mcp_server_fetch/tests/test_pytest_style.py
+    # Or a single file/function
+    uv run pytest examples/mcp_server_fetch/tests/test_pytest_style.py -v
+    uv run pytest examples/mcp_server_fetch/tests/test_pytest_style.py::TestCalculator::test_basic_addition -v
+    ```
   </Tab>
 </Tabs>
 
@@ -910,16 +919,16 @@ async def test_with_mock(agent, session):
 ### Command line
 
 ```bash
-# Run all examples
+# Run all examples (decorator/dataset)
 mcp-eval run examples/
 
-# Run specific test file
+# Run pytest examples
+uv run pytest -q examples/mcp_server_fetch/tests/test_pytest_style.py
+
+# Run specific test file (decorators)
 mcp-eval run examples/test_calculator.py
 
-# Run with specific configuration
-mcp-eval run examples/
-
-# Generate reports
+# Generate reports (decorators)
 mcp-eval run examples/ \
   --html reports/examples.html \
   --json reports/examples.json \

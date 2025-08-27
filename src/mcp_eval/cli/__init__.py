@@ -4,9 +4,8 @@ import typer
 from pathlib import Path
 from rich.console import Console
 
-from mcp_eval.runner import app as runner_app
+from mcp_eval.runner import run_tests, dataset
 from mcp_eval.cli.generator import (
-    add_app,
     init_project_cli,
     run_generator_cli,
     update_tests_cli,
@@ -22,11 +21,16 @@ app = typer.Typer(help="MCP-Eval: Comprehensive testing framework for MCP server
 console = Console()
 
 # Subcommands
-app.add_typer(runner_app, name="run", help="Run tests")
+app.command(
+    "run",
+    context_settings={
+        "allow_extra_args": True,
+        "ignore_unknown_options": True,
+    },
+)(run_tests)
 app.add_typer(list_app, name="list", help="List configured resources")
 app.add_typer(server_app, name="server", help="Manage MCP servers (add, list)")
 app.add_typer(agent_app, name="agent", help="Manage agents (add, list)")
-app.add_typer(add_app, name="add", help="Add servers or agents (legacy)")
 
 
 @app.command()
@@ -48,6 +52,9 @@ app.command("update")(update_tests_cli)
 app.command("validate")(validate)
 app.command("doctor")(doctor)
 app.command("issue")(issue)
+
+# Promote dataset to top-level command
+app.command("dataset")(dataset)
 
 
 # The generate command is now properly registered above
