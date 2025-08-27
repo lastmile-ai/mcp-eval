@@ -1,0 +1,62 @@
+name: Bug report
+description: File a bug report to help us improve
+labels: [bug]
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: Clear and concise description of the bug
+      placeholder: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps To Reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Go to '...'
+        2. Run '...'
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs/Traceback
+      description: Please copy and paste any relevant log output.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: mcpeval version
+      placeholder: e.g., 0.1.0
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: e.g., 3.11.8
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - macOS
+        - Linux
+        - Windows
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional Context

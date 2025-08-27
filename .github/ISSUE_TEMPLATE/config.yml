@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security reports
+    url: https://github.com/anthropics/mcp-eval3/security/policy
+    about: Please report security issues via our SECURITY policy.
