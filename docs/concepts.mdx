@@ -40,7 +40,7 @@ From the OTEL traces, TestSession extracts:
 - Performance breakdowns (LLM time vs tool time)
 - Error patterns and recovery sequences
 
-Source: [TestSession](../src/mcp_eval/session.py)
+Source: [TestSession](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/session.py)
 
 ## TestAgent
 
@@ -60,7 +60,7 @@ async with test_session("my-test") as session:
     await agent.assert_that(Expect.content.contains("done"), response=response)
 ```
 
-Source: [TestAgent](../src/mcp_eval/session.py)
+Source: [TestAgent](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/session.py)
 
 ## Unified assertion API
 
@@ -85,7 +85,7 @@ await session.assert_that(Expect.category.check(...), response=?, when=?)
 - Performance (`response_time_under`, `max_iterations`)
 - Path efficiency analysis
 
-Catalog source: [Expect catalog](../src/mcp_eval/catalog.py)
+Catalog source: [Expect catalog](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/catalog.py)
 
 ## Test styles
 
@@ -129,9 +129,9 @@ dataset = Dataset(
 ```
 
 Sources:
-- [Decorator core](../src/mcp_eval/core.py)
-- [Pytest plugin](../src/mcp_eval/pytest_plugin.py)
-- [Dataset API](../src/mcp_eval/datasets.py)
+- [Decorator core](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/core.py)
+- [Pytest plugin](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/pytest_plugin.py)
+- [Dataset API](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/datasets.py)
 
 ## LLM judges
 
@@ -157,8 +157,8 @@ judge = Expect.judge.multi_criteria(criteria)
 Configuration via `MCPEvalSettings` for judge model/provider defaults.
 
 Sources:
-- [LLMJudge](../src/mcp_eval/evaluators/llm_judge.py)
-- [MultiCriteriaJudge](../src/mcp_eval/evaluators/multi_criteria_judge.py)
+- [LLMJudge](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/evaluators/llm_judge.py)
+- [MultiCriteriaJudge](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/evaluators/multi_criteria_judge.py)
 
 ## Architecture flow
 

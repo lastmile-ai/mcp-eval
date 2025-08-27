@@ -7,7 +7,7 @@ mode: "wide"
 keywords: ["guide","deep dive","how it works","best practices"]
 ---
 
-This is a long-form guide adapted from and expanding on [GUIDE.md](../GUIDE.md). It’s organized for readers who prefer a single page.
+This is a long-form guide adapted from and expanding on [GUIDE.md](https://github.com/lastmile-ai/mcp-eval/blob/main/GUIDE.md). It’s organized for readers who prefer a single page.
 
 ## What is MCP‑Eval?
 
@@ -15,18 +15,18 @@ Think of MCP‑Eval as your “flight simulator” for tool‑using LLMs. You pl
 
 ### Core pieces
 
-- [TestSession and TestAgent](../src/mcp_eval/session.py)
-- [Decorators and task runner](../src/mcp_eval/core.py)
-- [Dataset and Case](../src/mcp_eval/datasets.py)
-- [Expect (assertion catalog)](../src/mcp_eval/catalog.py)
-- [Evaluators](../src/mcp_eval/evaluators/) and [Metrics](../src/mcp_eval/metrics.py)
-- [Runner](../src/mcp_eval/runner.py) and [CLI](../src/mcp_eval/cli/__init__.py)
+- [TestSession and TestAgent](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/session.py)
+- [Decorators and task runner](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/core.py)
+- [Dataset and Case](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/datasets.py)
+- [Expect (assertion catalog)](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/catalog.py)
+- [Evaluators](https://github.com/lastmile-ai/mcp-eval/tree/main/src/mcp_eval/evaluators/) and [Metrics](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/metrics.py)
+- [Runner](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/runner.py) and [CLI](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/cli/__init__.py)
 
 ## Getting Started
 
 Install (uv or pip), set API keys, then `mcp-eval init` to configure provider, secrets, servers, and a default agent. See the [Quickstart](./quickstart.mdx) page.
 
-<!-- TODO: Insert screenshots of init prompts and the first run summary. -->
+{/* TODO: Insert screenshots of init prompts and the first run summary. */}
 
 ## Styles of Tests
 
@@ -43,7 +43,7 @@ async def test_basic_fetch(agent, session):
     await session.assert_that(Expect.content.contains("Example Domain"), name="contains_domain", response=response)
 ```
 
-Full example: [test_decorator_style.py](../examples/mcp_server_fetch/tests/test_decorator_style.py)
+Full example: [test_decorator_style.py](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/tests/test_decorator_style.py)
 
 ### Pytest style
 
@@ -58,7 +58,7 @@ async def test_basic_fetch_with_pytest(mcp_agent):
     await mcp_agent.session.assert_that(Expect.content.contains("Example Domain"), name="contains_text", response=response)
 ```
 
-Full example: [test_pytest_style.py](../examples/mcp_server_fetch/tests/test_pytest_style.py)
+Full example: [test_pytest_style.py](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/tests/test_pytest_style.py)
 
 ### Dataset style
 
@@ -73,7 +73,7 @@ report = await dataset.evaluate(lambda inputs, agent, session: agent.generate_st
 report.print(include_input=True, include_output=True)
 ```
 
-Full example: [test_dataset_style.py](../examples/mcp_server_fetch/tests/test_dataset_style.py) and [basic_fetch_dataset.yaml](../examples/mcp_server_fetch/datasets/basic_fetch_dataset.yaml)
+Full example: [test_dataset_style.py](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/tests/test_dataset_style.py) and [basic_fetch_dataset.yaml](https://github.com/lastmile-ai/mcp-eval/blob/main/examples/mcp_server_fetch/datasets/basic_fetch_dataset.yaml)
 
 ## Assertions and Timing
 
@@ -81,7 +81,7 @@ Immediate vs deferred execution of evaluators is handled automatically based on 
 
 ## Agent Evaluation
 
-Define your agent as the system under test via [use_agent and with_agent](../src/mcp_eval/config.py). See [Agent Evaluation](./agent-evaluation.mdx) for patterns and metrics to watch.
+Define your agent as the system under test via [use_agent and with_agent](https://github.com/lastmile-ai/mcp-eval/blob/main/src/mcp_eval/config.py). See [Agent Evaluation](./agent-evaluation.mdx) for patterns and metrics to watch.
 
 ## Server Evaluation
 
@@ -110,6 +110,6 @@ Use `mcp-eval doctor`, `validate`, and `issue` for diagnosis. See [Troubleshooti
 - Use parametrization to widen coverage
 - Keep servers in mcp‑agent config; use `mcpeval.yaml` for eval knobs
 
-<!-- TODO: Add a closing diagram summarizing the MCP‑Eval lifecycle (init → write tests → run → metrics → reports). -->
+{/* TODO: Add a closing diagram summarizing the MCP‑Eval lifecycle (init → write tests → run → metrics → reports). */}
 
 
