@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any, Dict, Tuple
 import typer
 from rich.console import Console
-from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
 # Ensure mcp_eval is importable
@@ -81,19 +80,20 @@ def load_settings_class(
 ) -> Tuple[type[BaseSettings], Dict[str, Dict[str, str]], Dict[str, Any]]:
     # Simply import the module - it's already installed in the environment
     from mcp_eval.config import MCPEvalSettings
-    
+
     # Extract model info from the source file for documentation
     content = file_path.read_text(encoding="utf-8")
     model_info = extract_model_info(content)
-    
+
     # Build namespace with all classes from the module for potential future use
     import mcp_eval.config as config_module
+
     namespace = {
-        name: getattr(config_module, name) 
+        name: getattr(config_module, name)
         for name in dir(config_module)
         if not name.startswith("_")
     }
-    
+
     return MCPEvalSettings, model_info, namespace
 
 
