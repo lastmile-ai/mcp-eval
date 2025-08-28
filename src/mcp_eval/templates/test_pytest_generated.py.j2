@@ -1,6 +1,20 @@
 import pytest
+import mcp_eval
 from mcp_eval import Expect
 from mcp_eval.session import TestAgent
+from mcp_agent.agents.agent_spec import AgentSpec
+
+# Pin tests to the intended server by configuring a suite-level AgentSpec.
+# This avoids relying on whatever the current default agent is in mcpeval.yaml.
+@mcp_eval.setup
+def _configure_suite_agent():
+    mcp_eval.use_agent(
+        AgentSpec(
+            name="generated-pytest",
+            instruction="You are a helpful assistant that can use MCP servers effectively.",
+            server_names=[{{ server_name | tojson }}],
+        )
+    )
 
 {% for s in scenarios %}
 @pytest.mark.asyncio

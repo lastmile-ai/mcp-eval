@@ -1,6 +1,6 @@
 $schema: ../../schema/mcpeval.config.schema.json
-eval_name: "Sample Server Examples"
-eval_description: "Local examples for the sample server and fetch server"
+name: "Sample Server Examples"
+description: "Local examples for the sample server and fetch server"
 
 # MCP Server Configuration
 mcp:

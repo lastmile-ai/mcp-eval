@@ -14,8 +14,8 @@ You are an expert at configuring MCP-Eval projects, with deep knowledge of confi
 $schema: ../../schema/mcpeval.config.schema.json
 
 # Project metadata
-eval_name: "My MCP Test Suite"
-eval_description: "Comprehensive testing for my MCP servers"
+name: "My MCP Test Suite"
+description: "Comprehensive testing for my MCP servers"
 
 # Provider configuration (global defaults)
 provider: anthropic  # anthropic|openai|google|bedrock|vertex_ai|azure_ai

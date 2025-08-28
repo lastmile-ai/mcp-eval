@@ -5,6 +5,7 @@ allowing users to write mcp-eval tests that run natively in pytest.
 """
 
 import asyncio
+import gc
 import inspect
 from typing import AsyncGenerator
 from pathlib import Path
@@ -260,12 +261,31 @@ def event_loop():
         pass
     yield loop
     # Graceful shutdown to avoid 'Event loop is closed' during async client cleanup
+    # Ensure transports' __del__ run while loop is still open (avoids unraisable warnings)
+    try:
+        gc.collect()
+    except Exception:
+        pass
     try:
         loop.run_until_complete(asyncio.sleep(0))
     except Exception:
         pass
     try:
         loop.run_until_complete(loop.shutdown_asyncgens())
+    except Exception:
+        pass
+    # Give any pending callbacks scheduled by transport finalizers a chance to run
+    try:
+        loop.run_until_complete(asyncio.sleep(0))
+    except Exception:
+        pass
+    # Shut down default executor threads where supported (Py3.9+)
+    try:
+        loop.run_until_complete(loop.shutdown_default_executor())  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    try:
+        gc.collect()
     except Exception:
         pass
     try:

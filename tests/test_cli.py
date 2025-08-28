@@ -19,10 +19,10 @@ def test_cli_version(runner):
 def test_cli_list_servers_and_agents_empty_project(runner, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     # minimal configs created by conftest
-    res = runner.invoke(cli_app, ["list", "servers"])  # no servers configured
+    res = runner.invoke(cli_app, ["server", "list"])  # no servers configured
     assert res.exit_code == 0
 
-    res = runner.invoke(cli_app, ["list", "agents"])  # no agents configured
+    res = runner.invoke(cli_app, ["agent", "list"])  # no agents configured
     assert res.exit_code == 0
 
 

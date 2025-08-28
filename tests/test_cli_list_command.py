@@ -1,7 +1,7 @@
 import pytest
 from typer.testing import CliRunner
 
-from mcp_eval.cli.list_command import app as list_app
+from mcp_eval.cli import app as cli_app
 
 
 @pytest.fixture()
@@ -22,10 +22,10 @@ mcp:
         """.strip()
     )
 
-    res = runner.invoke(list_app, ["servers"])
+    res = runner.invoke(cli_app, ["server", "list"])
     assert res.exit_code == 0
     assert "Configured MCP Servers" in res.stdout
 
-    res2 = runner.invoke(list_app, ["servers", "--verbose"])
+    res2 = runner.invoke(cli_app, ["server", "list", "--verbose"])
     assert res2.exit_code == 0
     assert "demo" in res2.stdout

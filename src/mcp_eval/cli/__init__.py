@@ -12,7 +12,6 @@ from mcp_eval.cli.generator import (
     server_app,
     agent_app,
 )
-from mcp_eval.cli.list_command import app as list_app
 from mcp_eval.cli.validate import validate
 from mcp_eval.cli.doctor import doctor
 from mcp_eval.cli.issue import issue
@@ -28,7 +27,6 @@ app.command(
         "ignore_unknown_options": True,
     },
 )(run_tests)
-app.add_typer(list_app, name="list", help="List configured resources")
 app.add_typer(server_app, name="server", help="Manage MCP servers (add, list)")
 app.add_typer(agent_app, name="agent", help="Manage agents (add, list)")
 

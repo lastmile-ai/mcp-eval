@@ -4,7 +4,9 @@
 #     "rich",
 #     "typer",
 #     "pydantic>=2.10.4",
-#     "pydantic-settings>=2.7.0"
+#     "pydantic-settings>=2.7.0",
+#     "mcp-agent>=0.1.13",
+#     "pyyaml>=6.0.2"
 # ]
 # ///
 """
@@ -20,6 +22,9 @@ import typer
 from rich.console import Console
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
+
+# Ensure mcp_eval is importable
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 app = typer.Typer()
 console = Console()
@@ -68,48 +73,28 @@ def extract_model_info(content: str) -> Dict[str, Dict[str, str]]:
 
 
 class MockModule:
-    def __getattr__(self, _: str) -> Any:
-        return self
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return self
-
-
-def create_mock_modules() -> None:
-    mocked_modules = [
-        "opentelemetry",
-        "opentelemetry.sdk",
-        "opentelemetry.sdk.trace",
-        "opentelemetry.sdk.resources",
-        "opentelemetry.exporter.otlp.proto.http",
-        "opentelemetry.trace",
-        "mcp_agent.logging",
-        "mcp_agent.logging.logger",
-        "yaml",
-    ]
-    for module_name in mocked_modules:
-        if module_name not in sys.modules:
-            sys.modules[module_name] = MockModule()
+    pass
 
 
 def load_settings_class(
     file_path: Path,
-) -> Tuple[type[BaseSettings], Dict[str, Dict[str, str]]]:
-    src_dir = file_path.parent.parent / "src"
-    sys.path.insert(0, str(src_dir))
-    create_mock_modules()
-    namespace = {
-        "BaseModel": BaseModel,
-        "BaseSettings": BaseSettings,
-        "Path": Path,
-        "Dict": dict,
-        "List": list,
-        "Literal": str,
-    }
+) -> Tuple[type[BaseSettings], Dict[str, Dict[str, str]], Dict[str, Any]]:
+    # Simply import the module - it's already installed in the environment
+    from mcp_eval.config import MCPEvalSettings
+    
+    # Extract model info from the source file for documentation
     content = file_path.read_text(encoding="utf-8")
     model_info = extract_model_info(content)
-    exec(content, namespace)
-    return namespace["MCPEvalSettings"], model_info
+    
+    # Build namespace with all classes from the module for potential future use
+    import mcp_eval.config as config_module
+    namespace = {
+        name: getattr(config_module, name) 
+        for name in dir(config_module)
+        if not name.startswith("_")
+    }
+    
+    return MCPEvalSettings, model_info, namespace
 
 
 def apply_descriptions_to_schema(
@@ -146,7 +131,7 @@ def generate(
         help="Path to the MCP‑Eval config.py file",
     ),
     output: Path = typer.Option(
-        Path("schema/mcp-eval.config.schema.json"),
+        Path("schema/mcpeval.config.schema.json"),
         "--output",
         "-o",
         help="Output path for the schema file",
@@ -157,7 +142,8 @@ def generate(
         console.print(f"[red]Error:[/] File not found: {config_py}")
         raise typer.Exit(1)
     try:
-        Settings, model_info = load_settings_class(config_py)
+        Settings, model_info, namespace = load_settings_class(config_py)
+        # Forward refs are already resolved in load_settings_class
         schema = Settings.model_json_schema()
         schema.update(
             {

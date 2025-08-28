@@ -27,6 +27,10 @@ coverage-report:
 	uv run coverage run -m pytest
 	uv run coverage html
 
+.PHONY: schema
+schema:
+	uv run scripts/gen_schema.py
+
 .PHONY: prompt
 prompt:
 	rm -f prompt.md

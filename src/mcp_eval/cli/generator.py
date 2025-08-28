@@ -217,8 +217,6 @@ def _display_run_command(style: str, output_file: Path | None) -> None:
         console.print(f"  [cyan]pytest {output_file}[/cyan]")
         console.print("\n  Or with verbose output:")
         console.print(f"  [cyan]pytest -v {output_file}[/cyan]")
-        console.print("\n  Or with mcp-eval runner:")
-        console.print(f"  [cyan]mcp-eval run pytest --file {output_file}[/cyan]")
     elif style == "decorators":
         console.print(f"  [cyan]mcp-eval run decorators --file {output_file}[/cyan]")
     elif style == "dataset":
@@ -479,7 +477,7 @@ async def _write_mcpeval_configs(
     project: Path,
     settings: MCPEvalSettings,
     provider: str,
-    api_key: str,
+    api_key: str | None,
     model: str | None = None,
     context: Context | None = None,
 ) -> MCPEvalSettings:
@@ -519,22 +517,32 @@ async def _write_mcpeval_configs(
     settings.judge.model = judge_model
     settings.judge.provider = provider
     settings.judge.min_score = 0.8
-    # Also set global provider for clarity in reports (model left unchanged here)
+    # Also set global provider/model so TestSession can attach an LLM
     settings.provider = provider
+    settings.model = judge_model
 
     cfg_overlay = {
         "provider": provider,
+        "model": judge_model,
         "judge": {"provider": provider, "model": judge_model, "min_score": 0.8},
         "reporting": {"formats": ["json", "markdown"], "output_dir": "./test-reports"},
     }
-    if provider == "anthropic":
-        sec_overlay = {"anthropic": {"api_key": api_key}}
-    else:
-        sec_overlay = {"openai": {"api_key": api_key}}
 
     save_yaml(cfg_path, deep_merge(cfg, cfg_overlay))
-    save_yaml(sec_path, deep_merge(sec, sec_overlay))
-    console.print(f"[green]✓[/] Wrote {cfg_path} and {sec_path}")
+
+    # Only write/update secrets if an API key was provided
+    if api_key:
+        if provider == "anthropic":
+            sec_overlay = {"anthropic": {"api_key": api_key}}
+        elif provider == "openai":
+            sec_overlay = {"openai": {"api_key": api_key}}
+        else:
+            # Fallback: write under the provider name
+            sec_overlay = {provider: {"api_key": api_key}}
+        save_yaml(sec_path, deep_merge(sec, sec_overlay))
+        console.print(f"[green]✓[/] Wrote {cfg_path} and {sec_path}")
+    else:
+        console.print(f"[green]✓[/] Updated {cfg_path} (using existing secrets)")
 
     # Reload settings to get the merged config
     return load_config()
@@ -916,12 +924,10 @@ async def init_project(
     provider, api_key, model = _prompt_provider(
         existing_provider, existing_key, available_providers
     )
-    if api_key:
-        settings = await _write_mcpeval_configs(
-            project, settings, provider, api_key, model, context=context
-        )
-    else:
-        console.print("[green]Using existing secrets[/green]")
+    # Always persist provider/model to mcpeval.yaml; write secrets only if api_key provided
+    settings = await _write_mcpeval_configs(
+        project, settings, provider, api_key, model, context=context
+    )
 
     # Servers
     console.print("[cyan]Discovering servers...[/cyan]")
@@ -958,12 +964,23 @@ async def init_project(
         for n in sorted(merged_servers.keys()):
             console.print(f" - {n}")
     else:
-        console.print("[yellow]No servers found; let's add one[/yellow]")
+        console.print("[yellow]No servers found[/yellow]")
 
-    server_name, server_config = _prompt_server_settings(
-        merged_servers, server_name=None
-    )
-    write_server_to_mcpeval(project, server_config)
+    server_name: str | None = None
+    added_server_now = False
+    if Confirm.ask(
+        "Would you like to add a server now?",
+        default=(len(merged_servers) == 0),
+    ):
+        server_name, server_config = _prompt_server_settings(
+            merged_servers, server_name=None
+        )
+        write_server_to_mcpeval(project, server_config)
+        added_server_now = True
+    else:
+        console.print(
+            "[yellow]Skipping server add. You can add servers later with 'mcp-eval server add'.[/yellow]"
+        )
 
     # Default AgentSpec
     console.print("[cyan]Define default agent (will be stored in mcpeval.yaml)[/cyan]")
@@ -973,8 +990,16 @@ async def init_project(
         default="You are a helpful assistant that can use MCP servers effectively.",
     )
     # Allow multiple servers
+    default_servers_str = (
+        server_name
+        if (added_server_now and server_name)
+        else ",".join(sorted(merged_servers.keys()))
+        if merged_servers
+        else ""
+    )
     server_list_str = Prompt.ask(
-        "Server names for this agent (comma-separated)", default=server_name
+        "Server names for this agent (comma-separated)",
+        default=default_servers_str,
     )
     server_list = [s.strip() for s in server_list_str.split(",") if s.strip()]
 
@@ -1051,12 +1076,10 @@ async def run_generator(
         )
     # Use CLI model if provided, otherwise use prompted model
     final_model = model or prompted_model
-    if api_key:
-        settings = await _write_mcpeval_configs(
-            project, settings, selected_provider, api_key, final_model, context=context
-        )
-    else:
-        console.print("[green]Using existing secrets[/green]")
+    # Always persist provider/model to mcpeval.yaml; write secrets only if api_key provided
+    settings = await _write_mcpeval_configs(
+        project, settings, selected_provider, api_key, final_model, context=context
+    )
 
     # If no specific LLM model was chosen, select an intelligent one for generation
     generation_model = final_model
@@ -1375,10 +1398,9 @@ async def update_tests(
             existing_provider, existing_key, available_providers
         )
     final_model = model or prompted_model
-    if api_key:
-        settings = await _write_mcpeval_configs(
-            project, settings, selected_provider, api_key, final_model, context=context
-        )
+    settings = await _write_mcpeval_configs(
+        project, settings, selected_provider, api_key, final_model, context=context
+    )
 
     console.print(f"[cyan]Listing tools for '{server_name}'...[/cyan]")
     try:
@@ -1565,6 +1587,32 @@ def add_server(
     write_server_to_mcpeval(project, server_config)
     console.print(f"[green]✓ Added server '{server_name}'[/green]")
 
+    # If there is a default agent, offer to grant it access to the new server
+    cfg_path = ensure_mcpeval_yaml(project)
+    cfg = load_yaml(cfg_path)
+    default_agent = cfg.get("default_agent")
+    if default_agent:
+        if Confirm.ask(
+            f"Add server '{server_name}' to default agent '{default_agent}'?",
+            default=True,
+        ):
+            # Load existing agent definitions
+            agents = cfg.get("agents", {}).get("definitions", [])
+            updated = False
+            for a in agents:
+                if isinstance(a, dict) and a.get("name") == default_agent:
+                    servers = a.get("server_names", []) or []
+                    if server_name not in servers:
+                        servers.append(server_name)
+                        a["server_names"] = servers
+                    updated = True
+                    break
+            if updated:
+                save_yaml(cfg_path, cfg)
+                console.print(
+                    f"[green]✓ Added '{server_name}' to default agent '{default_agent}'[/green]"
+                )
+
 
 @agent_app.command("add")
 @add_app.command("agent")
@@ -1677,7 +1725,9 @@ def run_generator_cli(
         None, help="Test style: pytest|decorators|dataset"
     ),
     n_examples: int = typer.Option(6, help="Number of scenarios to generate"),
-    provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
+    provider: str | None = typer.Option(
+        None, help="LLM provider (anthropic|openai). If omitted, you'll be prompted."
+    ),
     model: str | None = typer.Option(None, help="Model id (optional)"),
     verbose: bool = typer.Option(False, help="Show detailed error messages"),
     output: str | None = typer.Option(
@@ -1719,7 +1769,9 @@ def update_tests_cli(
         "pytest", help="Test style for new tests: pytest|decorators|dataset"
     ),
     n_examples: int = typer.Option(4, help="Number of new scenarios to generate"),
-    provider: str = typer.Option("anthropic", help="LLM provider (anthropic|openai)"),
+    provider: str | None = typer.Option(
+        None, help="LLM provider (anthropic|openai). If omitted, you'll be prompted."
+    ),
     model: str | None = typer.Option(None, help="Model id (optional)"),
 ):
     """Append newly generated tests to an existing test file.
