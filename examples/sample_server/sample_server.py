@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-import pytz
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from mcp.server.fastmcp import FastMCP
 
 server = FastMCP(
@@ -12,10 +12,10 @@ server = FastMCP(
 @server.tool()
 def get_current_time(timezone: str = "UTC") -> str:
     try:
-        tz = pytz.timezone(timezone)
+        tz = ZoneInfo(timezone)
         current_time = datetime.now(tz)
         return f"The current time in {timezone} is {current_time.strftime('%H:%M:%S')}."
-    except pytz.UnknownTimeZoneError:
+    except ZoneInfoNotFoundError:
         return f"Error: Unknown timezone '{timezone}'."
 
 
