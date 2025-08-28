@@ -1026,6 +1026,11 @@ async def run_generator(
     output: str | None = typer.Option(
         None, help="Explicit output path for the generated file (.py or .yaml)"
     ),
+    update: str | None = typer.Option(
+        None,
+        "--update",
+        help="Append generated tests to an existing file instead of creating a new one",
+    ),
 ):
     """Generate scenarios and write a single test file.
 
@@ -1039,6 +1044,19 @@ async def run_generator(
     """
     project = Path(out_dir)
     project.mkdir(parents=True, exist_ok=True)
+
+    # If update mode is requested, delegate to update flow and return
+    if update:
+        console.print("[cyan]Update mode: appending tests to existing file[/cyan]")
+        return await update_tests(
+            out_dir=out_dir,
+            target_file=update,
+            server_name=None,
+            style=style or "pytest",
+            n_examples=n_examples,
+            provider=provider,
+            model=model,
+        )
 
     # Create a lightweight context for ModelSelector to avoid global fallback
     context = Context()
@@ -1733,6 +1751,11 @@ def run_generator_cli(
     output: str | None = typer.Option(
         None, help="Explicit output path for the generated file (.py or .yaml)"
     ),
+    update: str | None = typer.Option(
+        None,
+        "--update",
+        help="Append generated tests to an existing file instead of creating a new one",
+    ),
 ):
     """Generate test scenarios and write a test file for an MCP server.
 
@@ -1752,43 +1775,6 @@ def run_generator_cli(
             model=model,
             verbose=verbose,
             output=output,
-        )
-    )
-
-
-@app.command("update")
-def update_tests_cli(
-    out_dir: str = typer.Option(".", help="Project directory"),
-    target_file: str = typer.Option(
-        ..., help="Path to an existing test file to append to"
-    ),
-    server_name: str = typer.Option(
-        None, help="Server to generate against (prompted if omitted)"
-    ),
-    style: str = typer.Option(
-        "pytest", help="Test style for new tests: pytest|decorators|dataset"
-    ),
-    n_examples: int = typer.Option(4, help="Number of new scenarios to generate"),
-    provider: str | None = typer.Option(
-        None, help="LLM provider (anthropic|openai). If omitted, you'll be prompted."
-    ),
-    model: str | None = typer.Option(None, help="Model id (optional)"),
-):
-    """Append newly generated tests to an existing test file.
-
-    Generates additional test scenarios and appends them to the specified file.
-
-    Examples:
-        $ mcp-eval update --target-file tests/test_fetch.py --n-examples 4
-    """
-    return asyncio.run(
-        update_tests(
-            out_dir=out_dir,
-            target_file=target_file,
-            server_name=server_name,
-            style=style,
-            n_examples=n_examples,
-            provider=provider,
-            model=model,
+            update=update,
         )
     )

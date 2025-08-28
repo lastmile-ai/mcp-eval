@@ -48,8 +48,8 @@ mcp-eval generate \
   --extra-instructions "Focus on error handling and edge cases"
 
 # Update existing test file
-mcp-eval update \
-  --target-file tests/test_basic.py \
+mcp-eval generate \
+  --update tests/test_basic.py \
   --style pytest \
   --n-examples 5 \
   --provider anthropic

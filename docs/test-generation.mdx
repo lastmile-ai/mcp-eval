@@ -3,7 +3,7 @@ title: "Generating Tests with LLMs"
 description: "Use the generator to discover tools, create scenarios, refine assertions, and emit tests or datasets."
 sidebarTitle: "Generating Tests with LLMs"
 icon: "sparkles"
-keywords: ["generate","update","scenarios","assertions","model selector"]
+keywords: ["generate","scenarios","assertions","model selector","update"]
 ---
 
 We recommend Anthropic Sonnet/Opus for higher‑quality generation and judging.
@@ -24,7 +24,7 @@ What happens:
 ### Update an existing file
 
 ```bash
-mcp-eval update --target-file tests/test_fetch_generated.py --style pytest --n-examples 4
+mcp-eval generate --update tests/test_fetch_generated.py --style pytest --n-examples 4
 ```
 
 ### Implementation

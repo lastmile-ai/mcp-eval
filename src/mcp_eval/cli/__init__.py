@@ -8,7 +8,6 @@ from mcp_eval.runner import run_tests, dataset
 from mcp_eval.cli.generator import (
     init_project_cli,
     run_generator_cli,
-    update_tests_cli,
     server_app,
     agent_app,
 )
@@ -43,10 +42,9 @@ def version():
     console.print(f"MCP-Eval {version}")
 
 
-# Add init, generate and update commands from generator to top level
+# Add init and generate commands from generator to top level
 app.command("init")(init_project_cli)
 app.command("generate")(run_generator_cli)
-app.command("update")(update_tests_cli)
 app.command("validate")(validate)
 app.command("doctor")(doctor)
 app.command("issue")(issue)
