@@ -323,7 +323,9 @@ class Dataset(Generic[InputType, OutputType, MetadataType]):
             metadata=data.get("metadata", {}),
             # Inline dict AgentSpec overrides were removed. Accept only a spec name (str) or None.
             agent_spec=(
-                data.get("agent_spec") if isinstance(data.get("agent_spec"), str) else None
+                data.get("agent_spec")
+                if isinstance(data.get("agent_spec"), str)
+                else None
             ),
         )
 

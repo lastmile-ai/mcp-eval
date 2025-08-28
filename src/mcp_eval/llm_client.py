@@ -59,7 +59,9 @@ class JudgeLLMClient:
                     "Ensure judge.provider or provider and corresponding API key are configured; "
                     "or provide a valid model id."
                 )
-                raise RuntimeError(f"Failed to initialize LLM judge: {e}. {hint}") from e
+                raise RuntimeError(
+                    f"Failed to initialize LLM judge: {e}. {hint}"
+                ) from e
 
             # Store the actual configuration used
             self._actual_provider = provider

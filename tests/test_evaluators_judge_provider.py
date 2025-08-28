@@ -27,7 +27,9 @@ async def test_llm_judge_passes_judge_config_to_client(monkeypatch):
 
         async def generate_str(self, prompt: str):
             # Return valid JSON for judge
-            return '{"score": 0.9, "reasoning": "ok", "passed": true, "confidence": 0.9}'
+            return (
+                '{"score": 0.9, "reasoning": "ok", "passed": true, "confidence": 0.9}'
+            )
 
     def _get_client(model=None, provider=None):
         captured["provider"] = provider or settings.judge.provider or settings.provider
@@ -53,5 +55,3 @@ async def test_llm_judge_passes_judge_config_to_client(monkeypatch):
     assert res.passed is True
     assert captured["provider"] == "openai"
     assert captured["model"] == "gpt-4o-mini"
-
-

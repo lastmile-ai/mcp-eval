@@ -71,5 +71,3 @@ async def test_judge_client_raises_clear_error_when_unconfigured(monkeypatch):
         await client._get_llm()
     assert "Failed to initialize LLM judge" in str(exc.value)
     assert "Ensure judge.provider" in str(exc.value)
-
-

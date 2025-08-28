@@ -1268,7 +1268,7 @@ wheels = [
 
 [[package]]
 name = "mcpevals"
-version = "0.1.5"
+version = "0.1.7"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
