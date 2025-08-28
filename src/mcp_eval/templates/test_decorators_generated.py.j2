@@ -1,5 +1,5 @@
 from mcp_eval import task, setup, Expect
-from mcp_eval.session import TestAgent
+from mcp_eval.session import TestAgent, TestSession
 
 @setup
 def _cfg():
@@ -7,7 +7,7 @@ def _cfg():
 
 {% for s in scenarios %}
 @task("{{ s.name }}")
-async def {{ s.name | py_ident }}(agent: TestAgent, session):
+async def {{ s.name | py_ident }}(agent: TestAgent, session: TestSession):
     response = await agent.generate_str({{ s.prompt | tojson }})
     {% for a in s.assertions %}
     {% if a.kind == 'response_contains' %}

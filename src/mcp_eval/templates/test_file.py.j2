@@ -4,7 +4,7 @@ Test file for server: {{ server_name }}
 """
 
 from mcp_eval import task, Expect
-from mcp_eval.session import TestAgent
+from mcp_eval.session import TestAgent, TestSession
 import mcp_eval
 from mcp_agent.agents.agent_spec import AgentSpec
 from mcp_eval.core import with_agent
@@ -34,7 +34,7 @@ def configure_suite_agent():
     )
 )
 {% endif %}
-async def {{ test.test_name }}(agent: TestAgent, session):
+async def {{ test.test_name }}(agent: TestAgent, session: TestSession):
     """
     {{ test.description }}
     """
