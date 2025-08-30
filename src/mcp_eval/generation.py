@@ -27,6 +27,7 @@ from mcp_eval.evaluators import (
 # mcp-agent integration for agent-driven scenario generation
 from mcp_agent.app import MCPApp
 from mcp_agent.agents.agent import Agent
+from mcp_agent.workflows.llm.augmented_llm import RequestParams
 from mcp_agent.workflows.factory import _llm_factory
 from mcp_agent.config import LoggerSettings
 from jinja2 import Environment, FileSystemLoader
@@ -578,7 +579,9 @@ async def generate_scenarios_with_agent(
                         pass
 
             bundle = await llm.generate_structured(
-                prompt, response_model=ScenarioBundle
+                prompt,
+                response_model=ScenarioBundle,
+                request_params=RequestParams(maxTokens=21000),
             )
             # Filter out any assertions that reference unknown tools
             if allowed_names:
