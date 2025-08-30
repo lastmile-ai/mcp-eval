@@ -1,0 +1,90 @@
+name: "Generate MCP-Eval Badges"
+description: "Generate SVG badges from MCP-Eval JSON report showing test results and tool coverage"
+branding:
+  icon: award
+  color: green
+inputs:
+  report-path:
+    description: "Path to the MCP-Eval JSON report file"
+    required: true
+  output-dir:
+    description: "Directory to write generated badge files"
+    default: "mcpeval-reports/badges"
+    required: false
+  tests-label:
+    description: "Label text for the tests badge"
+    default: "mcp-tests"
+    required: false
+  coverage-label:
+    description: "Label text for the coverage badge"
+    default: "mcp-cov"
+    required: false
+  upload-artifacts:
+    description: "Upload badges as workflow artifacts"
+    default: "false"
+    required: false
+  artifact-name:
+    description: "Name for the uploaded badge artifacts"
+    default: "mcpeval-badges"
+    required: false
+outputs:
+  tests-badge-path:
+    description: "Path to the generated tests badge SVG"
+    value: ${{ steps.generate.outputs.tests_badge }}
+  coverage-badge-path:
+    description: "Path to the generated coverage badge SVG"
+    value: ${{ steps.generate.outputs.coverage_badge }}
+  badges-dir:
+    description: "Absolute path to the badges output directory"
+    value: ${{ steps.generate.outputs.badges_dir }}
+runs:
+  using: "composite"
+  steps:
+    - name: Verify report exists
+      id: verify
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ ! -f "${{ inputs.report-path }}" ]]; then
+          echo "::warning::Report file not found at ${{ inputs.report-path }}, skipping badge generation"
+          echo "report_exists=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "report_exists=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Generate badges
+      id: generate
+      if: ${{ steps.verify.outputs.report_exists == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        
+        # Ensure output directory exists
+        mkdir -p "${{ inputs.output-dir }}"
+        
+        # Generate badges using the Python script
+        uv run scripts/generate_badges.py \
+          --report "${{ inputs.report-path }}" \
+          --outdir "${{ inputs.output-dir }}" \
+          --label-tests "${{ inputs.tests-label }}" \
+          --label-cov "${{ inputs.coverage-label }}"
+        
+        # Set output paths
+        badges_dir="$(cd "${{ inputs.output-dir }}" && pwd)"
+        echo "badges_dir=$badges_dir" >> "$GITHUB_OUTPUT"
+        echo "tests_badge=$badges_dir/tests.svg" >> "$GITHUB_OUTPUT"
+        echo "coverage_badge=$badges_dir/coverage.svg" >> "$GITHUB_OUTPUT"
+        
+        # Display badge paths for debugging
+        echo "Generated badges:"
+        echo "  - Tests badge: $badges_dir/tests.svg"
+        echo "  - Coverage badge: $badges_dir/coverage.svg"
+
+    - name: Upload badge artifacts
+      if: ${{ steps.verify.outputs.report_exists == 'true' && inputs.upload-artifacts == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.output-dir }}
+        retention-days: 14
+        if-no-files-found: warn
