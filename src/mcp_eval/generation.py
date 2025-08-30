@@ -581,7 +581,7 @@ async def generate_scenarios_with_agent(
             bundle = await llm.generate_structured(
                 prompt,
                 response_model=ScenarioBundle,
-                request_params=RequestParams(maxTokens=4096),
+                request_params=RequestParams(maxTokens=21000),
             )
             # Filter out any assertions that reference unknown tools
             if allowed_names:
