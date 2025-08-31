@@ -250,10 +250,10 @@ runs:
           --html "${{ steps.compute-paths.outputs.html_path }}"
         ec=$?
         echo "exit_code=$ec" >> "$GITHUB_OUTPUT"
-        # Ensure report files exist even on failure
-        : > "${{ steps.compute-paths.outputs.md_path }}" || true
-        : > "${{ steps.compute-paths.outputs.json_path }}" || true
-        : > "${{ steps.compute-paths.outputs.html_path }}" || true
+        # Ensure report files exist even on failure (only if they don't already exist)
+        [[ ! -f "${{ steps.compute-paths.outputs.md_path }}" ]] && : > "${{ steps.compute-paths.outputs.md_path }}" || true
+        [[ ! -f "${{ steps.compute-paths.outputs.json_path }}" ]] && : > "${{ steps.compute-paths.outputs.json_path }}" || true
+        [[ ! -f "${{ steps.compute-paths.outputs.html_path }}" ]] && : > "${{ steps.compute-paths.outputs.html_path }}" || true
         exit 0
 
     - name: Append report to step summary
