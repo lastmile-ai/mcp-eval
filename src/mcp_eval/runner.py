@@ -524,7 +524,6 @@ async def _run_async(
             f"\n[blue]Running {len(test_cases)} decorator-style test cases...[/blue]"
         )
 
-        # Setup/teardown functions are now handled per-file in the task decorator
         test_results = await run_decorator_tests(test_cases, verbose)
 
     if datasets and format in ["auto", "dataset"]:
@@ -664,7 +663,6 @@ async def _run_async_multi(
             f"\n[blue]Running {len(test_cases)} decorator-style test cases...[/blue]"
         )
 
-        # Setup/teardown functions are now handled per-file in the task decorator
         test_results = await run_decorator_tests(test_cases, verbose)
 
     if datasets and format in ["auto", "dataset"]:
