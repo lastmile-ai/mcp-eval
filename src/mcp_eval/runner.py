@@ -21,8 +21,6 @@ from mcp_eval.session import TestAgent, TestSession
 from mcp_eval.core import (
     TestResult,
     generate_test_id,
-    _setup_functions,
-    _teardown_functions,
 )
 from mcp_eval.datasets import Dataset
 from mcp_eval.report_generation.models import EvaluationReport
@@ -526,25 +524,8 @@ async def _run_async(
             f"\n[blue]Running {len(test_cases)} decorator-style test cases...[/blue]"
         )
 
-        # Execute setup functions before running tests
-        for setup_func in _setup_functions:
-            try:
-                setup_func()
-            except Exception as e:
-                console.print(
-                    f"[yellow]Warning: Setup function {setup_func.__name__} failed: {e}[/]"
-                )
-
+        # Setup/teardown functions are now handled per-file in the task decorator
         test_results = await run_decorator_tests(test_cases, verbose)
-
-        # Execute teardown functions after running tests
-        for teardown_func in _teardown_functions:
-            try:
-                teardown_func()
-            except Exception as e:
-                console.print(
-                    f"[yellow]Warning: Teardown function {teardown_func.__name__} failed: {e}[/]"
-                )
 
     if datasets and format in ["auto", "dataset"]:
         console.print(f"\n[blue]Running {len(datasets)} dataset evaluations...[/blue]")
@@ -683,23 +664,8 @@ async def _run_async_multi(
             f"\n[blue]Running {len(test_cases)} decorator-style test cases...[/blue]"
         )
 
-        for setup_func in _setup_functions:
-            try:
-                setup_func()
-            except Exception as e:
-                console.print(
-                    f"[yellow]Warning: Setup function {setup_func.__name__} failed: {e}[/]"
-                )
-
+        # Setup/teardown functions are now handled per-file in the task decorator
         test_results = await run_decorator_tests(test_cases, verbose)
-
-        for teardown_func in _teardown_functions:
-            try:
-                teardown_func()
-            except Exception as e:
-                console.print(
-                    f"[yellow]Warning: Teardown function {teardown_func.__name__} failed: {e}[/]"
-                )
 
     if datasets and format in ["auto", "dataset"]:
         console.print(f"\n[blue]Running {len(datasets)} dataset evaluations...[/blue]")

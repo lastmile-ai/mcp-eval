@@ -1,7 +1,8 @@
 import asyncio
 import pytest
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
-
+import inspect
+from pathlib import Path
 from mcp_eval.core import (
     TestResult,
     generate_test_id,
@@ -43,8 +44,12 @@ def test_setup_decorator():
     def my_setup():
         pass
 
-    assert my_setup in _setup_functions
-    assert len(_setup_functions) == 1
+    # The setup function should be registered under the test file's path
+    source_file = str(Path(inspect.getfile(my_setup)).resolve())
+
+    assert source_file in _setup_functions
+    assert my_setup in _setup_functions[source_file]
+    assert len(_setup_functions[source_file]) >= 1
 
 
 def test_teardown_decorator():
@@ -56,8 +61,12 @@ def test_teardown_decorator():
     def my_teardown():
         pass
 
-    assert my_teardown in _teardown_functions
-    assert len(_teardown_functions) == 1
+    # The teardown function should be registered under the test file's path
+    source_file = str(Path(inspect.getfile(my_teardown)).resolve())
+
+    assert source_file in _teardown_functions
+    assert my_teardown in _teardown_functions[source_file]
+    assert len(_teardown_functions[source_file]) >= 1
 
 
 def test_parametrize_single_param():
