@@ -49,7 +49,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Generate and upload badges
-        uses: actions/mcp-eval/badges
+        uses: .github/actions/mcp-eval/badges
         with:
           report-path: ${{ steps.mcpeval.outputs.results-json-path }}
           output-dir: mcpeval-reports/badges
