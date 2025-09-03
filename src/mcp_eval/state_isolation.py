@@ -39,17 +39,6 @@ class IsolatedState:
         if state["settings"]:
             mcp_eval.config._current_settings = state["settings"]
 
-    def clear_state(self):
-        """Clear all state to defaults."""
-        ProgrammaticDefaults.set_default_agent(None)
-        ProgrammaticDefaults.set_default_agent_factory(None)
-        # Don't clear settings as they might be loaded from config files
-        # But we need to ensure no agent is set in the settings either
-        import mcp_eval.config
-
-        if mcp_eval.config._current_settings:
-            mcp_eval.config._current_settings.default_agent = None
-
 
 # Global instance
 _state_manager = IsolatedState()
@@ -70,9 +59,6 @@ def isolated_test_state(file_path: str):
     _state_manager.save_state("__global__")
 
     try:
-        # Clear state for this file
-        _state_manager.clear_state()
-
         # Load any file-specific saved state
         if file_path in _state_manager.saved_states:
             _state_manager.restore_state(file_path)
