@@ -49,11 +49,12 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Generate and upload badges
-        uses: .github/actions/mcp-eval/badges
+        uses: ./.github/actions/mcp-eval/badges
         with:
           report-path: ${{ steps.mcpeval.outputs.results-json-path }}
-          output-dir: mcpeval-reports/badges
-          upload-artifacts: true
+          output-dir: badges
+          format: 'both'
+          upload-artifacts: 'true'
           artifact-name: mcpeval-badges
 
       # Post the Markdown report as a sticky PR comment for easy review
@@ -86,9 +87,9 @@ jobs:
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
 
-  # Optional: Publish the HTML report to GitHub Pages on main/master pushes
+  # Optional: Publish the HTML report and badges to GitHub Pages on main/master pushes
   pages:
-    name: Publish Report to Pages
+    name: Publish report and badges to GitHub Pages
     needs: tests
     if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
     runs-on: ubuntu-latest
@@ -99,8 +100,20 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: "pages"
+      cancel-in-progress: false
     steps:
-      - name: Download artifacts
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Download badge artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mcpeval-badges
+          path: badges/
+
+      - name: Download report artifacts
         uses: actions/download-artifact@v4
         with:
           name: mcpeval-artifacts
@@ -110,18 +123,22 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p site
-          # Prefer the configured HTML filename; fallback to first HTML we find
+          
+          # Copy badges to site
+          if [[ -d badges ]]; then
+            cp -r badges site/
+          fi
+          
+          # Copy HTML report as index.html
           if [[ -f "mcpeval-artifacts/mcpeval-reports/mcpeval-results.html" ]]; then
             cp mcpeval-artifacts/mcpeval-reports/mcpeval-results.html site/index.html
           else
             file=$(find mcpeval-artifacts -name "*.html" | head -n 1 || true)
             if [[ -n "$file" ]]; then cp "$file" site/index.html; else echo '<h1>No report available</h1>' > site/index.html; fi
           fi
-          # Include badges if available
-          if [[ -d "mcpeval-artifacts/mcpeval-reports/badges" ]]; then
-            mkdir -p site/badges
-            cp -r mcpeval-artifacts/mcpeval-reports/badges/*.svg site/badges/ || true
-          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

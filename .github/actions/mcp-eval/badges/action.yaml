@@ -11,6 +11,10 @@ inputs:
     description: "Directory to write generated badge files (optional, for caching)"
     default: "mcpeval-reports/badges"
     required: false
+  format:
+    description: "Output format: svg, endpoint, or both (default: both)"
+    default: "both"
+    required: false
   tests-label:
     description: "Label text for the tests badge"
     default: "mcp-tests"
@@ -37,40 +41,47 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Fetch badge generation script
-      shell: bash
-      run: |
-        # Create a temporary directory for the mcp-eval script
-        mkdir -p .mcp-eval-action
-        cd .mcp-eval-action
-        
-        # Initialize git and configure sparse checkout
-        git init
-        git remote add origin https://github.com/lastmile-ai/mcp-eval.git
-        git config core.sparseCheckout true
-        
-        # Configure sparse checkout to only get the script we need
-        echo "scripts/generate_badges.py" >> .git/info/sparse-checkout
-        
-        # Fetch and checkout the specific file
-        git fetch --depth=1 origin main
-        git checkout origin/main
-        
-        # Move back to the workspace root
-        cd ..
-    
     - name: Generate badges
       id: generate
       shell: bash
       run: |
         set -euo pipefail
         
+        # Check if local script exists, otherwise fetch from upstream
+        if [ -f "scripts/generate_badges.py" ]; then
+          echo "Using local badge generation script"
+          SCRIPT_PATH="scripts/generate_badges.py"
+        else
+          echo "Fetching badge generation script from upstream"
+          # Create a temporary directory for the mcp-eval script
+          mkdir -p .mcp-eval-action
+          cd .mcp-eval-action
+          
+          # Initialize git and configure sparse checkout
+          git init
+          git remote add origin https://github.com/lastmile-ai/mcp-eval.git
+          git config core.sparseCheckout true
+          
+          # Configure sparse checkout to only get the script we need
+          echo "scripts/generate_badges.py" >> .git/info/sparse-checkout
+          
+          # Fetch and checkout the specific file (pinned to a stable commit)
+          # TODO: Update this to a specific tag/release when available
+          git fetch --depth=1 origin main
+          git checkout origin/main
+          
+          # Move back to the workspace root
+          cd ..
+          SCRIPT_PATH=".mcp-eval-action/scripts/generate_badges.py"
+        fi
+        
         # Run the badge generation script with uv
-        uv run .mcp-eval-action/scripts/generate_badges.py \
+        uv run "$SCRIPT_PATH" \
           --report "${{ inputs.report-path }}" \
           --outdir "${{ inputs.output-dir }}" \
           --label-tests "${{ inputs.tests-label }}" \
-          --label-cov "${{ inputs.coverage-label }}"
+          --label-cov "${{ inputs.coverage-label }}" \
+          --format "${{ inputs.format }}"
         
         # Set output paths if badges were generated
         if [ -n "${{ inputs.output-dir }}" ]; then

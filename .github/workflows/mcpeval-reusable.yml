@@ -79,15 +79,16 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Generate and upload badges
-        uses: .github/actions/mcp-eval/badges
+        uses: ./.github/actions/mcp-eval/badges
         with:
           report-path: ${{ steps.mcpeval.outputs.results-json-path }}
-          output-dir: mcpeval-reports/badges
-          upload-artifacts: true
+          output-dir: badges
+          format: 'both'
+          upload-artifacts: 'true'
           artifact-name: mcpeval-badges
 
   pages:
-    name: Publish Report to Pages
+    name: Publish report and badges to GitHub Pages
     needs: run
     if: ${{ inputs.deploy-pages }}
     runs-on: ubuntu-latest
@@ -98,8 +99,20 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: "pages"
+      cancel-in-progress: false
     steps:
-      - name: Download artifacts
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Download badge artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mcpeval-badges
+          path: badges/
+
+      - name: Download report artifacts
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.artifact-name }}
@@ -109,12 +122,22 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p site
+          
+          # Copy badges to site
+          if [[ -d badges ]]; then
+            cp -r badges site/
+          fi
+          
+          # Copy HTML report as index.html
           if [[ -f "mcpeval-artifacts/${{ inputs.reports-dir }}/${{ inputs.html-report }}" ]]; then
             cp mcpeval-artifacts/${{ inputs.reports-dir }}/${{ inputs.html-report }} site/index.html
           else
             file=$(find mcpeval-artifacts -name "*.html" | head -n 1 || true)
             if [[ -n "$file" ]]; then cp "$file" site/index.html; else echo '<h1>No report available</h1>' > site/index.html; fi
           fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
