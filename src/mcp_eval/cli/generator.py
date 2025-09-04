@@ -337,9 +337,9 @@ def _convert_servers_to_mcp_settings(
     return result
 
 
-def _load_existing_provider() -> tuple[
-    str | None, str | None, Dict[str, str], MCPEvalSettings
-]:
+def _load_existing_provider() -> (
+    tuple[str | None, str | None, Dict[str, str], MCPEvalSettings]
+):
     """Load existing provider configuration from environment and config files.
 
     Returns:
@@ -899,6 +899,17 @@ async def init_project(
 
     # Ensure mcpeval.yaml and secrets exist
     ensure_mcpeval_yaml(project)
+
+    # Create .gitignore if it doesn't exist
+    gitignore_path = project / ".gitignore"
+    if not gitignore_path.exists():
+        gitignore_content = """# mcp-eval
+mcpeval.secrets.yaml
+test-reports/
+.venv/
+"""
+        gitignore_path.write_text(gitignore_content.strip() + "\n", encoding="utf-8")
+        console.print(f"[green]✓[/] Created {gitignore_path}")
 
     # Copy packaged sample README if none exists
     readme_path = project / "README.md"
@@ -1733,6 +1744,11 @@ def init_project_cli(
         help="Bootstrap template: empty (no files), basic (config only), sample (examples + config)",
     ),
 ):
+    """Initialize an mcp-eval project with configuration files and usage examples.
+
+    Examples:
+        $ mcp-eval init
+    """
     return asyncio.run(init_project(out_dir=out_dir, template=template))
 
 
