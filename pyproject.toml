@@ -1,6 +1,6 @@
 [project]
 name = "mcpevals"
-version = "0.1.9"
+version = "0.1.10"
 description = "Pytest-style framework for evaluating Model Context Protocol (MCP) servers."
 license = { file = "LICENSE" }
 readme = "README.md"
