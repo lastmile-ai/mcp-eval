@@ -40,9 +40,10 @@ class TestResult:
     error: str | None = None
 
 
-# Global test configuration state
-_setup_functions: List[Callable] = []
-_teardown_functions: List[Callable] = []
+# File-scoped test configuration state
+# Maps file paths to their setup/teardown functions
+_setup_functions: Dict[str, List[Callable]] = {}
+_teardown_functions: Dict[str, List[Callable]] = {}
 
 
 def generate_test_id(file: str, test_name: str) -> str:
@@ -55,14 +56,40 @@ def generate_test_id(file: str, test_name: str) -> str:
 
 
 def setup(func: Callable):
-    """Register a setup function."""
-    _setup_functions.append(func)
+    """Register a setup function for the current file."""
+    # Get the source file of the function being decorated
+    try:
+        source_file = inspect.getfile(func)
+        # Normalize the path for consistency
+        source_file = str(Path(source_file).resolve())
+    except (TypeError, OSError):
+        # If we can't determine the source file, use a default key
+        source_file = "<unknown>"
+
+    # Initialize list for this file if needed
+    if source_file not in _setup_functions:
+        _setup_functions[source_file] = []
+
+    _setup_functions[source_file].append(func)
     return func
 
 
 def teardown(func: Callable):
-    """Register a teardown function."""
-    _teardown_functions.append(func)
+    """Register a teardown function for the current file."""
+    # Get the source file of the function being decorated
+    try:
+        source_file = inspect.getfile(func)
+        # Normalize the path for consistency
+        source_file = str(Path(source_file).resolve())
+    except (TypeError, OSError):
+        # If we can't determine the source file, use a default key
+        source_file = "<unknown>"
+
+    # Initialize list for this file if needed
+    if source_file not in _teardown_functions:
+        _teardown_functions[source_file] = []
+
+    _teardown_functions[source_file].append(func)
     return func
 
 
@@ -147,15 +174,16 @@ def task(description: str = ""):
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # Run setup functions
-            for setup_func in _setup_functions:
-                if asyncio.iscoroutinefunction(setup_func):
-                    await setup_func()
-                else:
-                    setup_func()
+            # Run setup functions only from the same file as this test
+            source_file = getattr(wrapper, "_source_file", None)
+            if source_file and source_file in _setup_functions:
+                for setup_func in _setup_functions[source_file]:
+                    if asyncio.iscoroutinefunction(setup_func):
+                        await setup_func()
+                    else:
+                        setup_func()
 
             # Get file name from the wrapper function (set during discovery)
-            source_file = getattr(wrapper, "_source_file", None)
             file_name = Path(source_file).name if source_file else "unknown"
             test_id = generate_test_id(file_name, func.__name__)
 
@@ -258,16 +286,26 @@ def task(description: str = ""):
                 )
 
             finally:
-                # Run teardown functions
-                for teardown_func in _teardown_functions:
-                    if asyncio.iscoroutinefunction(teardown_func):
-                        await teardown_func()
-                    else:
-                        teardown_func()
+                # Run teardown functions only from the same file as this test
+                if source_file and source_file in _teardown_functions:
+                    for teardown_func in _teardown_functions[source_file]:
+                        if asyncio.iscoroutinefunction(teardown_func):
+                            await teardown_func()
+                        else:
+                            teardown_func()
 
         # Mark as MCP eval task
         wrapper._is_mcpeval_task = True
         wrapper._description = description
+
+        # Preserve the source file from the original function if not already set
+        if not hasattr(wrapper, "_source_file"):
+            try:
+                # Get the source file of the original decorated function
+                original_source = str(Path(inspect.getfile(func)).resolve())
+                wrapper._source_file = original_source
+            except (TypeError, OSError):
+                pass
 
         return wrapper
 

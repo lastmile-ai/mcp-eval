@@ -1,7 +1,8 @@
 import asyncio
 import pytest
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
-
+import inspect
+from pathlib import Path
 from mcp_eval.core import (
     TestResult,
     generate_test_id,
@@ -16,6 +17,15 @@ from mcp_eval.core import (
 from mcp_eval.session import TestSession, TestAgent
 from mcp_eval.evaluators.shared import EvaluationRecord, EvaluatorResult
 from mcp_eval.metrics import TestMetrics, ToolCall, ToolCoverage, LLMMetrics
+
+
+def clear_local_setup_teardown():
+    """Clear setup and teardown functions for this test file only."""
+    this_file = str(Path(__file__).resolve())
+    if this_file in _setup_functions:
+        _setup_functions[this_file] = []
+    if this_file in _teardown_functions:
+        _teardown_functions[this_file] = []
 
 
 def test_generate_test_id():
@@ -36,28 +46,36 @@ def test_generate_test_id():
 
 def test_setup_decorator():
     """Test setup decorator registration."""
-    # Clear setup functions first
-    _setup_functions.clear()
+    # Clear setup functions for this file only
+    clear_local_setup_teardown()
 
     @setup
     def my_setup():
         pass
 
-    assert my_setup in _setup_functions
-    assert len(_setup_functions) == 1
+    # The setup function should be registered under the test file's path
+    source_file = str(Path(inspect.getfile(my_setup)).resolve())
+
+    assert source_file in _setup_functions
+    assert my_setup in _setup_functions[source_file]
+    assert len(_setup_functions[source_file]) >= 1
 
 
 def test_teardown_decorator():
     """Test teardown decorator registration."""
-    # Clear teardown functions first
-    _teardown_functions.clear()
+    # Clear teardown functions for this file only
+    clear_local_setup_teardown()
 
     @teardown
     def my_teardown():
         pass
 
-    assert my_teardown in _teardown_functions
-    assert len(_teardown_functions) == 1
+    # The teardown function should be registered under the test file's path
+    source_file = str(Path(inspect.getfile(my_teardown)).resolve())
+
+    assert source_file in _teardown_functions
+    assert my_teardown in _teardown_functions[source_file]
+    assert len(_teardown_functions[source_file]) >= 1
 
 
 def test_parametrize_single_param():
@@ -236,8 +254,7 @@ async def test_task_decorator_basic():
 @pytest.mark.asyncio
 async def test_task_decorator_with_session():
     """Test task decorator with TestSession."""
-    _setup_functions.clear()
-    _teardown_functions.clear()
+    clear_local_setup_teardown()
 
     setup_called = False
     teardown_called = False
@@ -284,8 +301,7 @@ async def test_task_decorator_with_session():
 @pytest.mark.asyncio
 async def test_task_decorator_with_error():
     """Test task decorator error handling."""
-    _setup_functions.clear()
-    _teardown_functions.clear()
+    clear_local_setup_teardown()
 
     @task(description="Error task")
     async def test_error_task(agent: TestAgent, session: TestSession):
@@ -330,8 +346,7 @@ async def test_task_decorator_with_params():
 @pytest.mark.asyncio
 async def test_task_decorator_sync_setup_teardown():
     """Test task decorator with sync setup/teardown functions."""
-    _setup_functions.clear()
-    _teardown_functions.clear()
+    clear_local_setup_teardown()
 
     setup_called = False
     teardown_called = False
@@ -370,8 +385,7 @@ async def test_task_decorator_sync_setup_teardown():
 @pytest.mark.asyncio
 async def test_task_with_evaluations():
     """Test task decorator with evaluation results."""
-    _setup_functions.clear()
-    _teardown_functions.clear()
+    clear_local_setup_teardown()
 
     @task(description="Evaluation task")
     async def test_eval_task(agent: TestAgent, session: TestSession):

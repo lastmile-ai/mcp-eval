@@ -18,12 +18,8 @@ from rich.text import Text
 from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.session import TestAgent, TestSession
 
-from mcp_eval.core import (
-    TestResult,
-    generate_test_id,
-    _setup_functions,
-    _teardown_functions,
-)
+from mcp_eval.core import TestResult, generate_test_id
+from mcp_eval.state_isolation import isolated_test_state
 from mcp_eval.datasets import Dataset
 from mcp_eval.report_generation.models import EvaluationReport
 from mcp_eval.report_generation import (
@@ -102,7 +98,8 @@ def discover_tests_and_datasets(test_spec: str) -> Dict[str, List]:
                         # If target_function is specified, only include matching function
                         if target_function is None or name == target_function:
                             # Add file path info to the task function
-                            obj._source_file = py_file
+                            obj._source_file = str(Path(py_file).resolve())
+                            obj._display_path = py_file
                             tasks.append(obj)
 
                 # Discover datasets (only if no specific function is targeted)
@@ -110,7 +107,8 @@ def discover_tests_and_datasets(test_spec: str) -> Dict[str, List]:
                     for name, obj in inspect.getmembers(module):
                         if isinstance(obj, Dataset):
                             # Add source file info to dataset
-                            obj._source_file = py_file
+                            obj._source_file = str(Path(py_file).resolve())
+                            obj._display_path = py_file
                             datasets.append(obj)
 
         except Exception as e:
@@ -133,6 +131,7 @@ def expand_parametrized_tests(tasks: List[callable]) -> List[Dict[str, Any]]:
                         "func": task_func,
                         "kwargs": kwargs,
                         "source_file": getattr(task_func, "_source_file", None),
+                        "display_path": getattr(task_func, "_display_path", None),
                     }
                 )
             continue
@@ -142,6 +141,7 @@ def expand_parametrized_tests(tasks: List[callable]) -> List[Dict[str, Any]]:
                     "func": task_func,
                     "kwargs": {},
                     "source_file": getattr(task_func, "_source_file", None),
+                    "display_path": getattr(task_func, "_display_path", None),
                 }
             )
             continue
@@ -155,10 +155,10 @@ def group_tests_by_file(
     """Group test cases by their source file."""
     grouped = {}
     for test_case in test_cases:
-        source_file = test_case.get("source_file")
-        if source_file not in grouped:
-            grouped[source_file] = []
-        grouped[source_file].append(test_case)
+        display_path = test_case.get("display_path")
+        if display_path not in grouped:
+            grouped[display_path] = []
+        grouped[display_path].append(test_case)
     return grouped
 
 
@@ -183,124 +183,128 @@ async def run_decorator_tests(
         for source_file, file_test_cases in grouped_tests.items():
             display.set_current_file(source_file)
 
-            for test_case in file_test_cases:
-                func = test_case["func"]
-                kwargs = test_case["kwargs"]
+            # Wrap each file's tests in isolated state context
+            with isolated_test_state(source_file):
+                for test_case in file_test_cases:
+                    func = test_case["func"]
+                    kwargs = test_case["kwargs"]
 
-                # Create test name with parameters
-                test_name = func.__name__
-                if kwargs:
-                    param_str = ",".join(f"{k}={v}" for k, v in kwargs.items())
-                    test_name += f"[{param_str}]"
+                    # Create test name with parameters
+                    test_name = func.__name__
+                    if kwargs:
+                        param_str = ",".join(f"{k}={v}" for k, v in kwargs.items())
+                        test_name += f"[{param_str}]"
 
-                # Set up log capture if verbose
-                log_stream = None
-                log_handler = None
-                if verbose:
-                    log_stream = io.StringIO()
-                    log_handler = logging.StreamHandler(log_stream)
-                    log_handler.setLevel(logging.INFO)
-                    # Add formatter to match pytest style
-                    formatter = logging.Formatter(
-                        "[%(levelname)s] %(asctime)s %(name)s - %(message)s",
-                        datefmt="%Y-%m-%d %H:%M:%S",
-                    )
-                    log_handler.setFormatter(formatter)
-                    # Get root logger and add handler
-                    root_logger = logging.getLogger()
-                    root_logger.addHandler(log_handler)
-
-                try:
-                    # Call task decorated function
-                    result: TestResult = await func(**kwargs)
-
-                    # Add session information if verbose mode
+                    # Set up log capture if verbose
+                    log_stream = None
+                    log_handler = None
                     if verbose:
-                        # Extract actual agent and session info from the result and config
-                        session_info = {}
-                        try:
-                            from mcp_eval.config import get_settings
-
-                            settings = get_settings()
-
-                            # Get provider and model (these are global settings)
-                            if settings.provider:
-                                session_info["provider"] = settings.provider
-                            if settings.model:
-                                session_info["model"] = settings.model
-
-                            # The actual agent info is already in the result
-                            # No need to get it from default_agent_spec
-                            # as it may have been overridden
-
-                            # Get LLM Judge configuration if available
-                            if hasattr(settings, "judge") and settings.judge:
-                                judge_config = {}
-                                if hasattr(settings.judge, "provider"):
-                                    judge_config["provider"] = settings.judge.provider
-                                if hasattr(settings.judge, "model"):
-                                    judge_config["model"] = settings.judge.model
-                                if hasattr(settings.judge, "temperature"):
-                                    judge_config["temperature"] = (
-                                        settings.judge.temperature
-                                    )
-                                if judge_config:
-                                    session_info["llm_judge"] = judge_config
-                        except Exception as e:
-                            console.print(f"  [red]ERROR[/] {test_name}: {e}")
-                            pass
-
-                        # Attach session info to result for verbose display
-                        if session_info:
-                            result._session_info = session_info
-
-                    if result.passed:
-                        display.add_result(passed=True)
-                    else:
-                        display.add_result(passed=False)
-                        failure_message = result.error or generate_failure_message(
-                            result.evaluation_results
+                        log_stream = io.StringIO()
+                        log_handler = logging.StreamHandler(log_stream)
+                        log_handler.setLevel(logging.INFO)
+                        # Add formatter to match pytest style
+                        formatter = logging.Formatter(
+                            "[%(levelname)s] %(asctime)s %(name)s - %(message)s",
+                            datefmt="%Y-%m-%d %H:%M:%S",
                         )
-                        result.error = failure_message
+                        log_handler.setFormatter(formatter)
+                        # Get root logger and add handler
+                        root_logger = logging.getLogger()
+                        root_logger.addHandler(log_handler)
+
+                    try:
+                        # Call task decorated function
+                        result: TestResult = await func(**kwargs)
+
+                        # Add session information if verbose mode
+                        if verbose:
+                            # Extract actual agent and session info from the result and config
+                            session_info = {}
+                            try:
+                                from mcp_eval.config import get_settings
+
+                                settings = get_settings()
+
+                                # Get provider and model (these are global settings)
+                                if settings.provider:
+                                    session_info["provider"] = settings.provider
+                                if settings.model:
+                                    session_info["model"] = settings.model
+
+                                # The actual agent info is already in the result
+                                # No need to get it from default_agent_spec
+                                # as it may have been overridden
+
+                                # Get LLM Judge configuration if available
+                                if hasattr(settings, "judge") and settings.judge:
+                                    judge_config = {}
+                                    if hasattr(settings.judge, "provider"):
+                                        judge_config["provider"] = (
+                                            settings.judge.provider
+                                        )
+                                    if hasattr(settings.judge, "model"):
+                                        judge_config["model"] = settings.judge.model
+                                    if hasattr(settings.judge, "temperature"):
+                                        judge_config["temperature"] = (
+                                            settings.judge.temperature
+                                        )
+                                    if judge_config:
+                                        session_info["llm_judge"] = judge_config
+                            except Exception as e:
+                                console.print(f"  [red]ERROR[/] {test_name}: {e}")
+                                pass
+
+                            # Attach session info to result for verbose display
+                            if session_info:
+                                result._session_info = session_info
+
+                        if result.passed:
+                            display.add_result(passed=True)
+                        else:
+                            display.add_result(passed=False)
+                            failure_message = result.error or generate_failure_message(
+                                result.evaluation_results
+                            )
+                            result.error = failure_message
+                            # Capture logs if verbose
+                            if verbose and log_stream:
+                                captured_logs[test_name] = log_stream.getvalue()
+                            failed_results.append(result)
+
+                    except Exception as e:
+                        display.add_result(passed=False, error=True)
+                        console.print(f"  [red]ERROR[/] {test_name}: {e}")
+                        file_name = Path(source_file).name
+                        test_id = generate_test_id(file_name, test_name)
+                        result = TestResult(
+                            id=test_id,
+                            test_name=test_name,
+                            description=getattr(func, "_description", ""),
+                            server_name=getattr(func, "_server", "unknown"),
+                            servers=[],
+                            agent_name="",
+                            parameters=kwargs,
+                            passed=False,
+                            evaluation_results=[],
+                            metrics=None,
+                            duration_ms=0,
+                            file=file_name,
+                            error=str(e),
+                        )
                         # Capture logs if verbose
                         if verbose and log_stream:
                             captured_logs[test_name] = log_stream.getvalue()
                         failed_results.append(result)
 
-                except Exception as e:
-                    display.add_result(passed=False, error=True)
-                    console.print(f"  [red]ERROR[/] {test_name}: {e}")
-                    file_name = Path(source_file).name
-                    test_id = generate_test_id(file_name, test_name)
-                    result = TestResult(
-                        id=test_id,
-                        test_name=test_name,
-                        description=getattr(func, "_description", ""),
-                        server_name=getattr(func, "_server", "unknown"),
-                        servers=[],
-                        agent_name="",
-                        parameters=kwargs,
-                        passed=False,
-                        evaluation_results=[],
-                        metrics=None,
-                        duration_ms=0,
-                        file=file_name,
-                        error=str(e),
-                    )
-                    # Capture logs if verbose
-                    if verbose and log_stream:
-                        captured_logs[test_name] = log_stream.getvalue()
-                    failed_results.append(result)
+                    finally:
+                        # Clean up log handler
+                        if log_handler:
+                            root_logger = logging.getLogger()
+                            root_logger.removeHandler(log_handler)
+                            log_handler.close()
 
-                finally:
-                    # Clean up log handler
-                    if log_handler:
-                        root_logger = logging.getLogger()
-                        root_logger.removeHandler(log_handler)
-                        log_handler.close()
-
-                results.append(result)
-                live.update(display.create_display(type="test"))
+                    results.append(result)
+                    live.update(display.create_display(type="test"))
 
     # Print detailed failures section if there are any failures
     print_failure_details(
@@ -526,25 +530,7 @@ async def _run_async(
             f"\n[blue]Running {len(test_cases)} decorator-style test cases...[/blue]"
         )
 
-        # Execute setup functions before running tests
-        for setup_func in _setup_functions:
-            try:
-                setup_func()
-            except Exception as e:
-                console.print(
-                    f"[yellow]Warning: Setup function {setup_func.__name__} failed: {e}[/]"
-                )
-
         test_results = await run_decorator_tests(test_cases, verbose)
-
-        # Execute teardown functions after running tests
-        for teardown_func in _teardown_functions:
-            try:
-                teardown_func()
-            except Exception as e:
-                console.print(
-                    f"[yellow]Warning: Teardown function {teardown_func.__name__} failed: {e}[/]"
-                )
 
     if datasets and format in ["auto", "dataset"]:
         console.print(f"\n[blue]Running {len(datasets)} dataset evaluations...[/blue]")
@@ -683,23 +669,7 @@ async def _run_async_multi(
             f"\n[blue]Running {len(test_cases)} decorator-style test cases...[/blue]"
         )
 
-        for setup_func in _setup_functions:
-            try:
-                setup_func()
-            except Exception as e:
-                console.print(
-                    f"[yellow]Warning: Setup function {setup_func.__name__} failed: {e}[/]"
-                )
-
         test_results = await run_decorator_tests(test_cases, verbose)
-
-        for teardown_func in _teardown_functions:
-            try:
-                teardown_func()
-            except Exception as e:
-                console.print(
-                    f"[yellow]Warning: Teardown function {teardown_func.__name__} failed: {e}[/]"
-                )
 
     if datasets and format in ["auto", "dataset"]:
         console.print(f"\n[blue]Running {len(datasets)} dataset evaluations...[/blue]")

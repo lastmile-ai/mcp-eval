@@ -11,10 +11,14 @@ from typing import AsyncGenerator
 from pathlib import Path
 import pytest
 import pytest_asyncio
-
 from mcp_eval import TestSession, TestAgent
 from mcp_eval.config import get_current_config
-from mcp_eval.core import TestResult, generate_test_id
+from mcp_eval.core import (
+    TestResult,
+    generate_test_id,
+    _setup_functions,
+    _teardown_functions,
+)
 from mcp_eval.core import _metrics_to_dict  # reuse consistent metrics shaping
 from mcp_eval.report_generation.console import generate_failure_message
 from mcp_eval.report_generation.summary import generate_combined_summary
@@ -228,12 +232,16 @@ def pytest_runtest_setup(item):
         # Mark that we're using mcp-eval and will need cleanup
         item.config._mcp_eval_needs_otel_cleanup = True
 
-        # Run any mcp-eval setup functions
-        from mcp_eval.core import _setup_functions
+        # Run any mcp-eval setup functions from the same file as the test
+        # Get the test's source file
+        test_file = (
+            str(Path(item.fspath).resolve()) if hasattr(item, "fspath") else None
+        )
 
-        for setup_func in _setup_functions:
-            if not asyncio.iscoroutinefunction(setup_func):
-                setup_func()
+        if test_file and test_file in _setup_functions:
+            for setup_func in _setup_functions[test_file]:
+                if not asyncio.iscoroutinefunction(setup_func):
+                    setup_func()
 
 
 def pytest_runtest_teardown(item):
@@ -243,12 +251,16 @@ def pytest_runtest_teardown(item):
         or "mcp-eval" in item.keywords
         or "mcp_eval" in item.keywords
     ):
-        # Run any mcp-eval teardown functions
-        from mcp_eval.core import _teardown_functions
+        # Run any mcp-eval teardown functions from the same file as the test
+        # Get the test's source file
+        test_file = (
+            str(Path(item.fspath).resolve()) if hasattr(item, "fspath") else None
+        )
 
-        for teardown_func in _teardown_functions:
-            if not asyncio.iscoroutinefunction(teardown_func):
-                teardown_func()
+        if test_file and test_file in _teardown_functions:
+            for teardown_func in _teardown_functions[test_file]:
+                if not asyncio.iscoroutinefunction(teardown_func):
+                    teardown_func()
 
 
 @pytest.fixture(scope="session")
