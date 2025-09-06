@@ -3,50 +3,82 @@ title: "CI/CD"
 description: "Run mcp-eval in GitHub Actions, publish artifacts, post PR comments, and add badges."
 sidebarTitle: "CI/CD"
 icon: "truck-fast"
-keywords: ["github actions","artifacts","pages","badges"]
+keywords: ["github actions", "artifacts", "pages", "badges"]
 ---
 
 ### Run action
 
-Use the uv‑based action to install, run, and upload artifacts.
+Use the uv‑based action to install, run, and upload artifacts. For the complete workflow configuration, visit [mcpeval.yml](https://github.com/lastmile-ai/mcp-eval/blob/main/.github/workflows/mcpeval.yml).
 
 ```yaml
 jobs:
   tests:
+    name: Run MCP-Eval
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/run@v1
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run MCP-Eval (uv)
+        id: mcpeval
+        uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/run
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+          working-directory: .
+          run-args: "-v"
           tests: tests/
-          run-args: '-v --max-concurrency 4'
-          pr-comment: 'true'
-          set-summary: 'true'
-          upload-artifacts: 'true'
+          reports-dir: mcpeval-reports
+          json-report: mcpeval-results.json
+          markdown-report: mcpeval-results.md
+          html-report: mcpeval-results.html
+          artifact-name: mcpeval-artifacts
+          pr-comment: "true"
+          set-summary: "true"
+          upload-artifacts: "true"
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Generate and upload badges
+        uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/badges
+        with:
+          report-path: ${{ steps.mcpeval.outputs.results-json-path }}
+          output-dir: badges
+          format: "both"
+          upload-artifacts: "true"
+          artifact-name: mcpeval-badges
 ```
 
 Sources:
+
 - Action: [action.yaml](https://github.com/lastmile-ai/mcp-eval/blob/main/.github/actions/mcp-eval/run/action.yaml)
 - README: [run/README.md](https://github.com/lastmile-ai/mcp-eval/blob/main/.github/actions/mcp-eval/run/README.md)
 - Workflows: [mcpeval.yml](https://github.com/lastmile-ai/mcp-eval/blob/main/.github/workflows/mcpeval.yml), [mcpeval-reusable.yml](https://github.com/lastmile-ai/mcp-eval/blob/main/.github/workflows/mcpeval-reusable.yml)
 
-### Publish HTML via Pages
+### Publish HTML and Badges via Pages
 
-Enable the Pages deploy job in the provided workflow.
+The workflow automatically deploys both the HTML report and badges to GitHub Pages when pushing to main/master branches. After deployment, badges are accessible at `https://<username>.github.io/<repo>/badges/`.
+
+To enable GitHub Pages deployment:
+
+1. Enable GitHub Pages in your repository settings
+2. The workflow will automatically deploy on pushes to main/master
+3. Badges and reports will be available at your Pages URL
 
 ### Badges
 
-Artifacts include badges under `mcpeval-reports/badges`. Embed in README:
+After deployment to GitHub Pages, reference badges using your Pages URL:
 
 ```markdown
-![MCP Tests](mcpeval-reports/badges/tests.svg)
-![MCP Tool Coverage](mcpeval-reports/badges/coverage.svg)
+[![mcp-tests](https://img.shields.io/endpoint?url=https://YOUR_USERNAME.github.io/YOUR_REPO/badges/mcp-tests.json&cacheSeconds=300)](https://YOUR_USERNAME.github.io/YOUR_REPO/)
+[![mcp-cov](https://img.shields.io/endpoint?url=https://YOUR_USERNAME.github.io/YOUR_REPO/badges/mcp-cov.json&cacheSeconds=300)](https://YOUR_USERNAME.github.io/YOUR_REPO/)
 ```
 
+For example,
+[![mcp-tests](https://img.shields.io/endpoint?url=https://lastmile-ai.github.io/mcp-eval/badges/mcp-tests.json&cacheSeconds=300)](https://lastmile-ai.github.io/mcp-eval/)
+[![mcp-cov](https://img.shields.io/endpoint?url=https://lastmile-ai.github.io/mcp-eval/badges/mcp-cov.json&cacheSeconds=300)](https://lastmile-ai.github.io/mcp-eval/)
+
 {/* TODO: Add screenshots of the PR comment, the summary, and the published HTML report on Pages. */}
-
-

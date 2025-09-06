@@ -300,72 +300,126 @@ Ensure your agent follows the optimal execution path:
     Create `.github/workflows/mcp-eval.yml`:
     
     ```yaml
-    name: mcp-eval Tests
+    name: MCP-Eval CI
     
     on:
       pull_request:
       push:
         branches: [main]
     
+    permissions:
+      contents: read
+      pull-requests: write
+    
     jobs:
       test:
         runs-on: ubuntu-latest
-        
         steps:
-        - uses: actions/checkout@v3
+        - uses: actions/checkout@v4
         
-        - name: Set up Python
-          uses: actions/setup-python@v4
+        - name: Run MCP-Eval
+          id: mcpeval
+          uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/run@v1
           with:
-            python-version: '3.10'
-        
-        - name: Install dependencies
-          run: |
-            pip install mcpevals
-            # Or using uv (faster!):
-            # uv add mcpevals
-            # Or from your repo:
-            # pip install -e .
-        
-        - name: Run mcp-eval tests
+            python-version: '3.11'
+            tests: tests/
+            run-args: '-v --max-concurrency 4'
+            pr-comment: 'true'
+            set-summary: 'true'
+            upload-artifacts: 'true'
           env:
             ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+            OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+        - name: Generate and upload badges
+          uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/badges@v1
+          with:
+            report-path: ${{ steps.mcpeval.outputs.results-json-path }}
+            output-dir: badges
+            format: 'both'
+            upload-artifacts: 'true'
+            artifact-name: mcpeval-badges
+      
+      # Deploy badges and report to GitHub Pages
+      pages:
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        needs: test
+        runs-on: ubuntu-latest
+        permissions:
+          pages: write
+          id-token: write
+          contents: read
+        environment:
+          name: github-pages
+          url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+        - uses: actions/checkout@v4
+        
+        - name: Download badge artifacts
+          uses: actions/download-artifact@v4
+          with:
+            name: mcpeval-badges
+            path: badges/
+        
+        - name: Download report artifacts
+          uses: actions/download-artifact@v4
+          with:
+            name: mcpeval-artifacts
+            path: ./mcpeval-artifacts
+        
+        - name: Prepare site
           run: |
-            mcp-eval run tests/ \
-              --json test-reports/results.json \
-              --markdown test-reports/results.md \
-              --html test-reports/index.html
+            set -euo pipefail
+            mkdir -p site
+            
+            # Copy badges to site
+            if [[ -d badges ]]; then
+              cp -r badges site/
+            fi
+            
+            # Copy HTML report as index.html
+            if [[ -f "mcpeval-artifacts/mcpeval-reports/mcpeval-results.html" ]]; then
+              cp mcpeval-artifacts/mcpeval-reports/mcpeval-results.html site/index.html
+            else
+              file=$(find mcpeval-artifacts -name "*.html" | head -n 1 || true)
+              if [[ -n "$file" ]]; then cp "$file" site/index.html; else echo '<h1>No report available</h1>' > site/index.html; fi
+            fi
         
-        - name: Upload test reports
-          if: always()
-          uses: actions/upload-artifact@v3
-          with:
-            name: mcp-eval-reports
-            path: test-reports/
+        - name: Setup Pages
+          uses: actions/configure-pages@v5
         
-        - name: Comment PR with results
-          if: github.event_name == 'pull_request'
-          uses: actions/github-script@v6
+        - name: Upload Pages artifact
+          uses: actions/upload-pages-artifact@v3
           with:
-            script: |
-              const fs = require('fs');
-              const markdown = fs.readFileSync('test-reports/results.md', 'utf8');
-              
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: `## mcp-eval Test Results\n\n${markdown}`
-              });
+            path: ./site
+        
+        - name: Deploy to GitHub Pages
+          id: deployment
+          uses: actions/deploy-pages@v4
     ```
   </Step>
   
-  <Step title="Add test badges">
-    In your README.md:
+  <Step title="Enable GitHub Pages">
+    In your repository settings:
+    1. Go to Settings → Pages
+    2. Source: Deploy from a branch
+    3. Branch: gh-pages (created automatically by the workflow)
+    4. Save the settings
+    
+    Your badges and reports will be available at:
+    - Badges: `https://YOUR_USERNAME.github.io/YOUR_REPO/badges/`
+    - Report: `https://YOUR_USERNAME.github.io/YOUR_REPO/`
+  </Step>
+
+  <Step title="Add test badges from GitHub Pages">
+    After deploying to GitHub Pages, you may add badges to your README.md to show users your mcp-eval test and coverage status:
     
     ```markdown
-    ![mcp-eval Tests](https://github.com/YOUR_ORG/YOUR_REPO/actions/workflows/mcp-eval.yml/badge.svg)
+    [![mcp-tests](https://img.shields.io/endpoint?url=https://YOUR_USERNAME.github.io/YOUR_REPO/badges/mcp-tests.json&cacheSeconds=300)](https://YOUR_USERNAME.github.io/YOUR_REPO/)
+    [![mcp-cov](https://img.shields.io/endpoint?url=https://YOUR_USERNAME.github.io/YOUR_REPO/badges/mcp-cov.json&cacheSeconds=300)](https://YOUR_USERNAME.github.io/YOUR_REPO/)
     ```
+    
+    These badges will automatically update after each push to main.
   </Step>
   
   <Step title="Configure failure conditions">
