@@ -8,48 +8,64 @@ keywords: ["github actions", "artifacts", "pages", "badges"]
 
 ### Run action
 
-Use the uv‑based action to install, run, and upload artifacts. For the complete workflow configuration, visit [mcpeval.yml](https://github.com/lastmile-ai/mcp-eval/blob/main/.github/workflows/mcpeval.yml).
+The recommended approach is to use the reusable workflow which handles all the setup, testing, and deployment. For the complete workflow configuration, visit [mcpeval.yml](https://github.com/lastmile-ai/mcp-eval/blob/main/.github/workflows/mcpeval.yml).
 
 ```yaml
+name: MCP-Eval CI
+
+on:
+  push:
+    branches: [main, master, trunk]
+  workflow_dispatch:
+
 jobs:
-  tests:
-    name: Run MCP-Eval
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+  call-mcpeval:
+    uses: lastmile-ai/mcp-eval/.github/workflows/mcpeval-reusable.yml
+    with:
+      deploy-pages: true
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      pull-requests: write
+    secrets: inherit
+```
 
-      - name: Run MCP-Eval (uv)
-        id: mcpeval
-        uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/run
-        with:
-          python-version: "3.11"
-          working-directory: .
-          run-args: "-v"
-          tests: tests/
-          reports-dir: mcpeval-reports
-          json-report: mcpeval-results.json
-          markdown-report: mcpeval-results.md
-          html-report: mcpeval-results.html
-          artifact-name: mcpeval-artifacts
-          pr-comment: "true"
-          set-summary: "true"
-          upload-artifacts: "true"
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+Alternatively, you can directly use the action in your workflow:
 
-      - name: Generate and upload badges
-        uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/badges
-        with:
-          report-path: ${{ steps.mcpeval.outputs.results-json-path }}
-          output-dir: badges
-          format: "both"
-          upload-artifacts: "true"
-          artifact-name: mcpeval-badges
+```yaml
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
+
+  - name: Run MCP-Eval (uv)
+    id: mcpeval
+    uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/run
+    with:
+      python-version: "3.11"
+      working-directory: .
+      run-args: "-v"
+      tests: tests/
+      reports-dir: mcpeval-reports
+      json-report: mcpeval-results.json
+      markdown-report: mcpeval-results.md
+      html-report: mcpeval-results.html
+      artifact-name: mcpeval-artifacts
+      pr-comment: "true"
+      set-summary: "true"
+      upload-artifacts: "true"
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+  - name: Generate and upload badges
+    uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/badges
+    with:
+      report-path: ${{ steps.mcpeval.outputs.results-json-path }}
+      output-dir: badges
+      format: "both"
+      upload-artifacts: "true"
+      artifact-name: mcpeval-badges
 ```
 
 Sources:

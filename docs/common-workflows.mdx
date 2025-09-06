@@ -297,106 +297,44 @@ Ensure your agent follows the optimal execution path:
 
 <Steps>
   <Step title="Add GitHub Actions workflow">
-    Create `.github/workflows/mcp-eval.yml`:
+    Create `.github/workflows/mcp-eval.yml` using the reusable workflow:
     
     ```yaml
     name: MCP-Eval CI
     
     on:
-      pull_request:
       push:
-        branches: [main]
+        branches: [main, master, trunk]
+      pull_request:
+      workflow_dispatch:
     
-    permissions:
-      contents: read
-      pull-requests: write
+    # Cancel redundant runs on the same ref
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     
     jobs:
-      test:
-        runs-on: ubuntu-latest
-        steps:
-        - uses: actions/checkout@v4
-        
-        - name: Run MCP-Eval
-          id: mcpeval
-          uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/run@v1
-          with:
-            python-version: '3.11'
-            tests: tests/
-            run-args: '-v --max-concurrency 4'
-            pr-comment: 'true'
-            set-summary: 'true'
-            upload-artifacts: 'true'
-          env:
-            ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-            OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-        - name: Generate and upload badges
-          uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/badges@v1
-          with:
-            report-path: ${{ steps.mcpeval.outputs.results-json-path }}
-            output-dir: badges
-            format: 'both'
-            upload-artifacts: 'true'
-            artifact-name: mcpeval-badges
-      
-      # Deploy badges and report to GitHub Pages
-      pages:
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        needs: test
-        runs-on: ubuntu-latest
+      call-mcpeval:
+        uses: lastmile-ai/mcp-eval/.github/workflows/mcpeval-reusable.yml
+        with:
+          deploy-pages: true
+          # Optional: customize test configuration
+          # python-version: '3.11'
+          # tests: 'tests/'
+          # run-args: '-v --max-concurrency 4'
         permissions:
+          contents: read
           pages: write
           id-token: write
-          contents: read
-        environment:
-          name: github-pages
-          url: ${{ steps.deployment.outputs.page_url }}
-        steps:
-        - uses: actions/checkout@v4
-        
-        - name: Download badge artifacts
-          uses: actions/download-artifact@v4
-          with:
-            name: mcpeval-badges
-            path: badges/
-        
-        - name: Download report artifacts
-          uses: actions/download-artifact@v4
-          with:
-            name: mcpeval-artifacts
-            path: ./mcpeval-artifacts
-        
-        - name: Prepare site
-          run: |
-            set -euo pipefail
-            mkdir -p site
-            
-            # Copy badges to site
-            if [[ -d badges ]]; then
-              cp -r badges site/
-            fi
-            
-            # Copy HTML report as index.html
-            if [[ -f "mcpeval-artifacts/mcpeval-reports/mcpeval-results.html" ]]; then
-              cp mcpeval-artifacts/mcpeval-reports/mcpeval-results.html site/index.html
-            else
-              file=$(find mcpeval-artifacts -name "*.html" | head -n 1 || true)
-              if [[ -n "$file" ]]; then cp "$file" site/index.html; else echo '<h1>No report available</h1>' > site/index.html; fi
-            fi
-        
-        - name: Setup Pages
-          uses: actions/configure-pages@v5
-        
-        - name: Upload Pages artifact
-          uses: actions/upload-pages-artifact@v3
-          with:
-            path: ./site
-        
-        - name: Deploy to GitHub Pages
-          id: deployment
-          uses: actions/deploy-pages@v4
+          pull-requests: write
+        secrets: inherit
     ```
+    
+    This reusable workflow automatically:
+    - Runs tests and generates reports
+    - Posts PR comments with results
+    - Uploads artifacts
+    - Deploys badges and HTML reports to GitHub Pages (on main branch)
   </Step>
   
   <Step title="Enable GitHub Pages">
