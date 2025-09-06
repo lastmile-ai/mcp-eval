@@ -63,7 +63,7 @@ jobs:
 
       - name: Run MCP-Eval
         id: mcpeval
-        uses: ./.github/actions/mcp-eval/run
+        uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/run
         with:
           python-version: ${{ inputs.python-version }}
           working-directory: ${{ inputs.working-directory }}
@@ -79,7 +79,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Generate and upload badges
-        uses: ./.github/actions/mcp-eval/badges
+        uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/badges
         with:
           report-path: ${{ steps.mcpeval.outputs.results-json-path }}
           output-dir: badges

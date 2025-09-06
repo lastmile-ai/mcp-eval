@@ -29,7 +29,7 @@ jobs:
       # Settings discovery follows mcp-agent/mcpeval configs in your repo.
       - name: Run MCP-Eval (uv)
         id: mcpeval
-        uses: ./.github/actions/mcp-eval/run
+        uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/run
         with:
           python-version: "3.11"
           working-directory: .
@@ -49,7 +49,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Generate and upload badges
-        uses: ./.github/actions/mcp-eval/badges
+        uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/badges
         with:
           report-path: ${{ steps.mcpeval.outputs.results-json-path }}
           output-dir: badges
