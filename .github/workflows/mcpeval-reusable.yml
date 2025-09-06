@@ -59,6 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
     outputs:
       json: ${{ steps.mcpeval.outputs.results-json-path }}
       md: ${{ steps.mcpeval.outputs.results-md-path }}
