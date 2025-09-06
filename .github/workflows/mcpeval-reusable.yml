@@ -43,6 +43,10 @@ on:
         required: false
         type: boolean
         default: false
+      deploy-pages-branch:
+        required: false
+        type: string
+        default: 'refs/heads/main'
     secrets:
       ANTHROPIC_API_KEY:
         required: false
@@ -53,6 +57,8 @@ jobs:
   run:
     name: Run MCP-Eval
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       json: ${{ steps.mcpeval.outputs.results-json-path }}
       md: ${{ steps.mcpeval.outputs.results-md-path }}
@@ -86,11 +92,41 @@ jobs:
           format: 'both'
           upload-artifacts: 'true'
           artifact-name: mcpeval-badges
+      
+      # Post the Markdown report as a sticky PR comment for easy review
+      - name: Comment PR with MCP-Eval report
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        env:
+          REPORT_PATH: ${{ steps.mcpeval.outputs.results-md-path }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = process.env.REPORT_PATH;
+            let body = '<!-- mcpeval-report -->\n';
+            body += '## MCP-Eval Report\n\n';
+            try {
+              const content = fs.readFileSync(path, 'utf8');
+              body += content;
+            } catch (e) {
+              body += '_No report found at ' + path + '_\n';
+            }
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            // Find existing sticky comment
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+            const previous = comments.find(c => c.user.type === 'Bot' && c.body.startsWith('<!-- mcpeval-report -->'));
+            if (previous) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
 
   pages:
     name: Publish report and badges to GitHub Pages
     needs: run
-    if: ${{ inputs.deploy-pages }}
+    if: ${{ inputs.deploy-pages && github.event_name == 'push' && github.ref == inputs.deploy-pages-branch }}
     runs-on: ubuntu-latest
     permissions:
       pages: write
