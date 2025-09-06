@@ -43,6 +43,10 @@ on:
         required: false
         type: boolean
         default: false
+      deploy-pages-branch:
+        required: false
+        type: string
+        default: 'refs/heads/main'
     secrets:
       ANTHROPIC_API_KEY:
         required: false
@@ -53,6 +57,9 @@ jobs:
   run:
     name: Run MCP-Eval
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     outputs:
       json: ${{ steps.mcpeval.outputs.results-json-path }}
       md: ${{ steps.mcpeval.outputs.results-md-path }}
@@ -63,7 +70,7 @@ jobs:
 
       - name: Run MCP-Eval
         id: mcpeval
-        uses: ./.github/actions/mcp-eval/run
+        uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/run@main
         with:
           python-version: ${{ inputs.python-version }}
           working-directory: ${{ inputs.working-directory }}
@@ -78,21 +85,49 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Generate badges
-        run: |
-          set -euo pipefail
-          uv run scripts/generate_badges.py --report "${{ steps.mcpeval.outputs.results-json-path }}" --outdir mcpeval-reports/badges
-
-      - name: Upload badge artifacts
-        uses: actions/upload-artifact@v4
+      - name: Generate and upload badges
+        uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/badges@main
         with:
-          name: mcpeval-badges
-          path: mcpeval-reports/badges
+          report-path: ${{ steps.mcpeval.outputs.results-json-path }}
+          output-dir: badges
+          format: 'both'
+          upload-artifacts: 'true'
+          artifact-name: mcpeval-badges
+      
+      # Post the Markdown report as a sticky PR comment for easy review
+      - name: Comment PR with MCP-Eval report
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        env:
+          REPORT_PATH: ${{ steps.mcpeval.outputs.results-md-path }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = process.env.REPORT_PATH;
+            let body = '<!-- mcpeval-report -->\n';
+            body += '## MCP-Eval Report\n\n';
+            try {
+              const content = fs.readFileSync(path, 'utf8');
+              body += content;
+            } catch (e) {
+              body += '_No report found at ' + path + '_\n';
+            }
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            // Find existing sticky comment
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+            const previous = comments.find(c => c.user.type === 'Bot' && c.body.startsWith('<!-- mcpeval-report -->'));
+            if (previous) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
 
   pages:
-    name: Publish Report to Pages
+    name: Publish report and badges to GitHub Pages
     needs: run
-    if: ${{ inputs.deploy-pages }}
+    if: ${{ inputs.deploy-pages && github.event_name == 'push' && github.ref == inputs.deploy-pages-branch }}
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -101,8 +136,20 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: "pages"
+      cancel-in-progress: false
     steps:
-      - name: Download artifacts
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Download badge artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mcpeval-badges
+          path: badges/
+
+      - name: Download report artifacts
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.artifact-name }}
@@ -112,12 +159,22 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p site
+          
+          # Copy badges to site
+          if [[ -d badges ]]; then
+            cp -r badges site/
+          fi
+          
+          # Copy HTML report as index.html
           if [[ -f "mcpeval-artifacts/${{ inputs.reports-dir }}/${{ inputs.html-report }}" ]]; then
             cp mcpeval-artifacts/${{ inputs.reports-dir }}/${{ inputs.html-report }} site/index.html
           else
             file=$(find mcpeval-artifacts -name "*.html" | head -n 1 || true)
             if [[ -n "$file" ]]; then cp "$file" site/index.html; else echo '<h1>No report available</h1>' > site/index.html; fi
           fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

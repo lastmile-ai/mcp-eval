@@ -938,43 +938,35 @@ mcp-eval run examples/ \
 ### CI/CD integration
 
 ```yaml
-# .github/workflows/test.yml
-name: Run mcp-eval Tests
-
-on: [push, pull_request]
+name: mcp-eval PR Tests
+on:
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
-  test:
+  tests:
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
     runs-on: ubuntu-latest
-    
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run MCP-Eval
+        id: mcpeval
+        uses: lastmile-ai/mcp-eval/.github/actions/mcp-eval/run
         with:
           python-version: '3.11'
-      
-      - name: Install dependencies
-        run: |
-          # We recommend using uv:
-          # uv add mcpevals
-          pip install mcpevals
-          pip install -r requirements.txt
-      
-      - name: Run tests
+          tests: tests/
+          run-args: '-v --max-concurrency 4'
+          pr-comment: 'true'
+          set-summary: 'true'
+          upload-artifacts: 'true'
+          commit-reports: 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          mcp-eval run examples/ \
-            --html test-results/report.html \
-            --junit test-results/junit.xml
-      
-      - name: Upload results
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-results
-          path: test-results/
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
 {/* TODO: Screenshot of CI/CD test results in GitHub Actions */}

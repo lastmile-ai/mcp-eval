@@ -297,75 +297,67 @@ Ensure your agent follows the optimal execution path:
 
 <Steps>
   <Step title="Add GitHub Actions workflow">
-    Create `.github/workflows/mcp-eval.yml`:
+    Create `.github/workflows/mcp-eval.yml` using the reusable workflow:
     
     ```yaml
-    name: mcp-eval Tests
+    name: MCP-Eval CI
     
     on:
-      pull_request:
       push:
-        branches: [main]
+        branches: [main, master, trunk]
+      pull_request:
+      workflow_dispatch:
+    
+    # Cancel redundant runs on the same ref
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     
     jobs:
-      test:
-        runs-on: ubuntu-latest
-        
-        steps:
-        - uses: actions/checkout@v3
-        
-        - name: Set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: '3.10'
-        
-        - name: Install dependencies
-          run: |
-            pip install mcpevals
-            # Or using uv (faster!):
-            # uv add mcpevals
-            # Or from your repo:
-            # pip install -e .
-        
-        - name: Run mcp-eval tests
-          env:
-            ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          run: |
-            mcp-eval run tests/ \
-              --json test-reports/results.json \
-              --markdown test-reports/results.md \
-              --html test-reports/index.html
-        
-        - name: Upload test reports
-          if: always()
-          uses: actions/upload-artifact@v3
-          with:
-            name: mcp-eval-reports
-            path: test-reports/
-        
-        - name: Comment PR with results
-          if: github.event_name == 'pull_request'
-          uses: actions/github-script@v6
-          with:
-            script: |
-              const fs = require('fs');
-              const markdown = fs.readFileSync('test-reports/results.md', 'utf8');
-              
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: `## mcp-eval Test Results\n\n${markdown}`
-              });
+      call-mcpeval:
+        uses: lastmile-ai/mcp-eval/.github/workflows/mcpeval-reusable.yml
+        with:
+          deploy-pages: true
+          # Optional: customize test configuration
+          # python-version: '3.11'
+          # tests: 'tests/'
+          # run-args: '-v --max-concurrency 4'
+        permissions:
+          contents: read
+          pages: write
+          id-token: write
+          pull-requests: write
+        secrets: inherit
     ```
+    
+    This reusable workflow automatically:
+    - Runs tests and generates reports
+    - Posts PR comments with results
+    - Uploads artifacts
+    - Deploys badges and HTML reports to GitHub Pages (on main branch)
   </Step>
   
-  <Step title="Add test badges">
-    In your README.md:
+  <Step title="Enable GitHub Pages">
+    In your repository settings:
+    1. Go to Settings → Pages
+    2. Source: Deploy from a branch
+    3. Branch: gh-pages (created automatically by the workflow)
+    4. Save the settings
+    
+    Your badges and reports will be available at:
+    - Badges: `https://YOUR_USERNAME.github.io/YOUR_REPO/badges/`
+    - Report: `https://YOUR_USERNAME.github.io/YOUR_REPO/`
+  </Step>
+
+  <Step title="Add test badges from GitHub Pages">
+    After deploying to GitHub Pages, you may add badges to your README.md to show users your mcp-eval test and coverage status:
     
     ```markdown
-    ![mcp-eval Tests](https://github.com/YOUR_ORG/YOUR_REPO/actions/workflows/mcp-eval.yml/badge.svg)
+    [![mcp-tests](https://img.shields.io/endpoint?url=https://YOUR_USERNAME.github.io/YOUR_REPO/badges/mcp-tests.json&cacheSeconds=300)](https://YOUR_USERNAME.github.io/YOUR_REPO/)
+    [![mcp-cov](https://img.shields.io/endpoint?url=https://YOUR_USERNAME.github.io/YOUR_REPO/badges/mcp-cov.json&cacheSeconds=300)](https://YOUR_USERNAME.github.io/YOUR_REPO/)
     ```
+    
+    These badges will automatically update after each push to main.
   </Step>
   
   <Step title="Configure failure conditions">
