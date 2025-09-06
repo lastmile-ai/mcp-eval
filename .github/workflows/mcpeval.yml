@@ -34,7 +34,7 @@ jobs:
           python-version: "3.11"
           working-directory: .
           run-args: "-v"
-          tests: tests/
+          tests: examples/mcp_server_fetch/tests/
           reports-dir: mcpeval-reports
           json-report: mcpeval-results.json
           markdown-report: mcpeval-results.md
