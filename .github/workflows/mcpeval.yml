@@ -15,6 +15,7 @@ jobs:
     uses: lastmile-ai/mcp-eval/.github/workflows/mcpeval-reuseable.yml
     with:
       deploy-pages: true
+      tests: examples/mcp_server_fetch/tests/test_simple_decorator.py
     permissions:
       contents: read
       pages: write
