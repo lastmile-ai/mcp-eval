@@ -1,7 +1,5 @@
 #!/usr/bin/env uv run
 import os
-import sys
-import json
 import asyncio
 import logging
 from typing import Dict, Any, List, Optional, Literal
@@ -526,9 +524,8 @@ async def clinical_trials_search(
                         logger.error(f"ClinicalTrials.gov API error: {response.status} - {error_text}")
                         fallback_results = _generate_fallback_clinical_trials(condition)
                         return {
-                            "status": "success",
-                            "condition": condition,
                             "status": status,
+                            "condition": condition,
                             "total_results": len(fallback_results),
                             "trials": fallback_results,
                             "note": f"Using fallback data due to API error: {response.status}"
@@ -550,9 +547,8 @@ async def clinical_trials_search(
                         logger.error(f"Error parsing clinical trials JSON: {str(e)}")
                         fallback_results = _generate_fallback_clinical_trials(condition)
                         return {
-                            "status": "success",
-                            "condition": condition,
                             "status": status,
+                            "condition": condition,
                             "total_results": len(fallback_results),
                             "trials": fallback_results,
                             "note": f"Using fallback data due to JSON parsing error: {str(e)}"
@@ -561,9 +557,8 @@ async def clinical_trials_search(
                     try:
                         fallback_results = _generate_fallback_clinical_trials(condition)
                         return {
-                            "status": "success",
-                            "condition": condition,
                             "status": status,
+                            "condition": condition,
                             "total_results": len(fallback_results),
                             "trials": fallback_results,
                             "note": "Using fallback data while debugging API integration"
@@ -572,9 +567,8 @@ async def clinical_trials_search(
                         logger.error(f"Error processing clinical trials data: {str(e)}")
                         fallback_results = _generate_fallback_clinical_trials(condition)
                         return {
-                            "status": "success",
-                            "condition": condition,
                             "status": status,
+                            "condition": condition,
                             "total_results": len(fallback_results),
                             "trials": fallback_results,
                             "note": f"Using fallback data due to processing error: {str(e)}"
@@ -583,9 +577,8 @@ async def clinical_trials_search(
                 logger.error(f"Error in clinical trials API call: {str(e)}")
                 fallback_results = _generate_fallback_clinical_trials(condition)
                 return {
-                    "status": "success",
-                    "condition": condition,
                     "status": status,
+                    "condition": condition,
                     "total_results": len(fallback_results),
                     "trials": fallback_results,
                     "note": f"Using fallback data due to error: {str(e)}"
@@ -597,9 +590,8 @@ async def clinical_trials_search(
         logger.error(f"Error in clinical trials search: {str(e)}")
         fallback_results = _generate_fallback_clinical_trials(condition)
         return {
-            "status": "success",
-            "condition": condition,
             "status": status,
+            "condition": condition,
             "total_results": len(fallback_results),
             "trials": fallback_results,
             "note": f"Using fallback data due to outer function error: {str(e)}"
@@ -815,7 +807,7 @@ async def medical_terminology_lookup(
                         "codes": results
                     }
             except asyncio.TimeoutError:
-                logger.error(f"Timeout error connecting to ICD-10 API")
+                logger.error("Timeout error connecting to ICD-10 API")
                 return {
                     "status": "error",
                     "error_message": "Timeout error connecting to medical terminology database"

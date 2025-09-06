@@ -13,10 +13,10 @@ mcp:
         NPS_API_KEY: JrE4X9TtvoNopzA1AGQeAmvhHggUMDP9Tak4QOxX
 provider: anthropic
 model: claude-sonnet-4-20250514
-default_agent: default
+default_agent: nationalparks_agent
 agents:
   definitions:
-  - name: default
+  - name: nationalparks_agent
     instruction: 'you are a helpful assistant that provides information about national
       parks.
 

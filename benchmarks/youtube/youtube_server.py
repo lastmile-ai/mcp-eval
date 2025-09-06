@@ -1,13 +1,11 @@
 #!/usr/bin/env uv run
 import os
-import sys
 import json
 import asyncio
 import logging
 import time
 import re
-from typing import Dict, Any, List, Optional, Union
-import urllib.parse
+from typing import Dict, Any, List, Union
 import aiohttp
 import ssl
 
@@ -683,7 +681,6 @@ async def shutdown():
 
 if __name__ == "__main__":
     import uvloop
-    import sys
     
     # Use uvloop for better performance if available
     try:

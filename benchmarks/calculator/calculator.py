@@ -61,10 +61,10 @@ if __name__ == "__main__":
     if transport == "streamable-http":
         # Note: FastMCP currently defaults to port 8000 for streamable-http transport
         actual_port = 8000  # FastMCP hardcoded default
-        print(f"🚀 Starting Special Calculator MCP Server on HTTP")
+        print("🚀 Starting Special Calculator MCP Server on HTTP")
         print(f"   Server URL: http://127.0.0.1:{actual_port}/mcp")
-        print(f"   Available tools: special_add, special_subtract, special_multiply, special_divide")
-        print(f"   Test with: uv run test_http_mcp.py")
+        print("   Available tools: special_add, special_subtract, special_multiply, special_divide")
+        print("   Test with: uv run test_http_mcp.py")
         if port != 8000:
             print(f"   Note: --port {port} requested, but FastMCP uses port {actual_port}")
     
