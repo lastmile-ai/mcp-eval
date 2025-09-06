@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   call-mcpeval:
-    uses: lastmile-ai/mcp-eval/.github/workflows/mcpeval-reuseable.yml
+    uses: lastmile-ai/mcp-eval/.github/workflows/mcpeval-reuseable.yml@main
     with:
       deploy-pages: true
       tests: examples/mcp_server_fetch/tests/test_simple_decorator.py
