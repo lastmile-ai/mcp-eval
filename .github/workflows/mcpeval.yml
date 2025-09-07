@@ -16,7 +16,7 @@ jobs:
     with:
       deploy-pages: true
       working-directory: examples/mcp_server_fetch
-      tests: examples/mcp_server_fetch/tests/test_simple_decorator.py
+      tests: tests/test_simple_decorator.py
     permissions:
       contents: read
       pages: write
