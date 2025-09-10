@@ -1,0 +1,69 @@
+$schema: ../../schema/mcpeval.config.schema.json
+name: Healthcare Server Test Generation
+description: Configuration for generating tests for the custom healthcare MCP server
+mcp:
+  servers:
+    youtube:
+      transport: stdio
+      command: uv
+      args:
+      - run
+      - youtube_server.py
+      env:
+        UV_NO_PROGRESS: '1'
+        VERIFY_SSL: 'false'
+provider: anthropic
+model: claude-sonnet-4-20250514
+default_agent: youtube_agent
+agents:
+  definitions:
+  - name: youtube_agent
+    instruction: ' you are a video content assistant that can perform youtube operations, '
+    server_names:
+    - youtube
+    max_iterations: 8
+judge:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+  min_score: 0.8
+  max_tokens: 3000
+  system_prompt: 'You are an expert video content evaluator. Assess the accuracy,
+    completeness,
+
+    and appropriateness of youtube-related responses. Consider content accuracy, proper
+    citation of sources, and appropriate disclaimers. '
+metrics:
+  collect:
+  - response_time
+  - total_duration
+  - iteration_count
+  - tool_coverage
+  - tool_success_rate
+  - unique_tools_used
+  - unique_servers_used
+  - parallel_tool_calls
+  - max_concurrent_operations
+  - token_usage
+  - input_tokens
+  - output_tokens
+  - cost_estimate
+  - llm_time
+  - tool_time
+  - reasoning_time
+  - idle_time
+  - error_count
+  - error_rate
+  - success_rate
+  - path_efficiency_score
+  - content_extraction_quality
+  - error_recovery
+reporting:
+  formats:
+  - json
+  - markdown
+  output_dir: ./test-reports
+  include_traces: true
+execution:
+  max_concurrency: 5
+  timeout_seconds: 300
+  retry_failed: true
