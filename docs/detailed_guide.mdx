@@ -25,9 +25,10 @@ Think of `mcp-eval` as your “flight simulator” for tool‑using LLMs. You pl
 ## Getting Started
 
 1. **Install mcp-eval globally**: `uv tool install mcpevals` (recommended) or `pip install mcpevals`
-2. **Initialize your project**: `mcp-eval init` - interactive setup for API keys and configuration
-3. **Add your MCP server**: `mcp-eval server add` - configure the server you want to test
-4. **Run tests**: `mcp-eval run tests/` - execute your test suite
+2. **If needed, install provider dependencies**:  `uv add mcpevals "mcp-agent[anthropic,azure,openai]"` or `pip install mcpevals "mcp-agent[anthropic,azure,openai]"`
+3. **Initialize your project**: `mcp-eval init` - interactive setup for API keys and configuration
+4. **Add your MCP server**: `mcp-eval server add` - configure the server you want to test
+5. **Run tests**: `mcp-eval run tests/` - execute your test suite
 
 <Note>
   **Test servers written in any language:** Your MCP server can be written in Python, TypeScript, Go, Rust, Java, or any other language. `mcp-eval` connects to it via the MCP protocol, making testing completely language-agnostic.
@@ -120,5 +121,3 @@ Use `mcp-eval doctor`, `validate`, and `issue` for diagnosis. See [Troubleshooti
 - Keep servers in mcp‑agent config; use `mcpeval.yaml` for eval knobs
 
 {/* TODO: Add a closing diagram summarizing the `mcp-eval` lifecycle (init → write tests → run → metrics → reports). */}
-
-

@@ -18,7 +18,7 @@ name: "My MCP Test Suite"
 description: "Comprehensive testing for my MCP servers"
 
 # Provider configuration (global defaults)
-provider: anthropic  # anthropic|openai|google|bedrock|vertex_ai|azure_ai
+provider: anthropic  # anthropic|openai|google|bedrock|vertex_ai|azure
 model: claude-3-5-sonnet-20241022  # Or gpt-4-turbo-preview, gemini-pro, etc.
 
 # MCP Server Configuration (REQUIRED for mcp-agent)
