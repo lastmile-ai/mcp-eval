@@ -75,12 +75,16 @@ Let's make sure you have everything ready:
     
     ```bash
     uv add mcpevals
+    # Or, with optional provider dependencies
+    uv add mcpevals "mcp-agent[anthropic,azure,openai]"
     ```
     
     Alternatively:
     
     ```bash
     pip install mcpevals
+    # Or, with optional provider dependencies
+    pip install mcpevals "mcp-agent[anthropic,azure,openai]"
     ```
     
     Now set up your API key for the best experience:
